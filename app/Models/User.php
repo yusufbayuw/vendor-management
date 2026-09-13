@@ -3,19 +3,22 @@
 namespace App\Models;
 
 use App\Enums\SystemRole;
+use App\Support\Auth\LoginIdentifier;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'username', 'email', 'phone', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser
 {
@@ -60,6 +63,31 @@ class User extends Authenticatable implements FilamentUser
             ]),
             default => false,
         };
+    }
+
+    protected function username(): Attribute
+    {
+        return Attribute::make(
+            set: static fn (?string $value): ?string => filled($value)
+                ? Str::lower(trim($value))
+                : null,
+        );
+    }
+
+    protected function email(): Attribute
+    {
+        return Attribute::make(
+            set: static fn (?string $value): ?string => filled($value)
+                ? Str::lower(trim($value))
+                : null,
+        );
+    }
+
+    protected function phone(): Attribute
+    {
+        return Attribute::make(
+            set: static fn (?string $value): ?string => LoginIdentifier::normalizePhone($value),
+        );
     }
 
     /** @return array<string, string> */
