@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PrivateVendorFileController;
 use App\Http\Controllers\ProcurementReportController;
 use App\Http\Controllers\TransactionDocumentController;
 use Illuminate\Support\Facades\Route;
@@ -19,5 +20,18 @@ Route::middleware('auth')->group(function (): void {
             ->name('goods-receipts.show');
         Route::get('/invoices/{invoice}', [TransactionDocumentController::class, 'invoice'])
             ->name('invoices.show');
+    });
+
+    Route::prefix('files')->name('files.')->group(function (): void {
+        Route::get('/supplier-documents/{supplierDocument}', [PrivateVendorFileController::class, 'supplierDocument'])
+            ->name('supplier-documents.show');
+        Route::get('/goods-receipt-attachments/{goodsReceiptAttachment}', [PrivateVendorFileController::class, 'goodsReceiptAttachment'])
+            ->name('goods-receipt-attachments.show');
+        Route::get('/payment-attachments/{paymentAttachment}', [PrivateVendorFileController::class, 'paymentAttachment'])
+            ->name('payment-attachments.show');
+        Route::get('/delivery-notes/{deliverySchedule}', [PrivateVendorFileController::class, 'deliveryNote'])
+            ->name('delivery-notes.show');
+        Route::get('/invoice-files/{invoice}', [PrivateVendorFileController::class, 'invoice'])
+            ->name('invoice-files.show');
     });
 });
