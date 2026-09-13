@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\Suppliers;
 
+use App\Actions\Auth\ManuallyVerifyPhoneAction;
 use App\Actions\Supplier\ApproveSupplierAction;
 use App\Actions\Supplier\RequestSupplierRevisionAction;
 use App\Actions\Supplier\StartSupplierReviewAction;
@@ -10,9 +11,11 @@ use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Suppliers\Pages\ManageSuppliers;
 use App\Models\Supplier;
+use App\Models\User;
 use App\Services\Access\UserAccessService;
 use DomainException;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -54,6 +57,23 @@ class SupplierResource extends Resource
                         SupplierStatus::Suspended, SupplierStatus::Rejected => 'danger',
                         default => 'gray',
                     }),
+                TextColumn::make('pic_phone_status')
+                    ->label('HP PIC')
+                    ->badge()
+                    ->state(static function (Supplier $record): string {
+                        $activeUsers = $record->users->filter(
+                            static fn (User $user): bool => (bool) $user->pivot?->is_active,
+                        );
+                        $owners = $activeUsers->filter(
+                            static fn (User $user): bool => (bool) $user->pivot?->is_owner,
+                        );
+                        $candidates = $owners->isNotEmpty() ? $owners : $activeUsers;
+
+                        return $candidates->contains(static fn (User $user): bool => $user->hasVerifiedPhone())
+                            ? 'Terverifikasi'
+                            : 'Belum';
+                    })
+                    ->color(static fn (string $state): string => $state === 'Terverifikasi' ? 'success' : 'warning'),
                 TextColumn::make('email')->label('Email')->searchable()->toggleable(),
                 TextColumn::make('phone')->label('Telepon')->toggleable(),
                 TextColumn::make('documents_count')->label('Dokumen')->sortable(),
@@ -67,6 +87,63 @@ class SupplierResource extends Resource
                     ->action(static function (Supplier $record): void {
                         static::requirePermission(SystemPermission::SupplierVerify);
                         static::runDomainAction(fn () => app(StartSupplierReviewAction::class)->execute($record), 'Verifikasi supplier dimulai.');
+                    }),
+                Action::make('verifyPicPhone')
+                    ->label('Verifikasi HP PIC')
+                    ->icon('heroicon-o-device-phone-mobile')
+                    ->color('warning')
+                    ->visible(static function (Supplier $record): bool {
+                        if (! static::canVerify()) {
+                            return false;
+                        }
+
+                        return $record->users->contains(
+                            static fn (User $user): bool => (bool) $user->pivot?->is_active
+                                && filled($user->phone)
+                                && ! $user->hasVerifiedPhone(),
+                        );
+                    })
+                    ->schema([
+                        Select::make('user_id')
+                            ->label('PIC / Pengguna Supplier')
+                            ->options(static function (Supplier $record): array {
+                                return $record->users
+                                    ->filter(static fn (User $user): bool => (bool) $user->pivot?->is_active && filled($user->phone))
+                                    ->mapWithKeys(static function (User $user): array {
+                                        $owner = (bool) $user->pivot?->is_owner ? ' (Owner)' : '';
+                                        $verified = $user->hasVerifiedPhone() ? ' - terverifikasi' : '';
+
+                                        return [$user->getKey() => $user->name.' - +'.$user->phone.$owner.$verified];
+                                    })
+                                    ->all();
+                            })
+                            ->required(),
+                        Textarea::make('reason')
+                            ->label('Dasar verifikasi')
+                            ->helperText('Contoh: dikonfirmasi saat review dokumen melalui telepon atau pertemuan langsung. Tindakan ini masuk audit log.')
+                            ->required()
+                            ->rows(3),
+                    ])
+                    ->requiresConfirmation()
+                    ->action(static function (Supplier $record, array $data): void {
+                        static::requirePermission(SystemPermission::SupplierVerify);
+
+                        static::runDomainAction(function () use ($record, $data): void {
+                            $user = $record->users()
+                                ->wherePivot('is_active', true)
+                                ->whereKey((int) $data['user_id'])
+                                ->first();
+
+                            if (! $user) {
+                                throw new DomainException('PIC supplier tidak ditemukan atau sudah tidak aktif.');
+                            }
+
+                            app(ManuallyVerifyPhoneAction::class)->execute(
+                                $user,
+                                auth()->user(),
+                                (string) $data['reason'],
+                            );
+                        }, 'Nomor HP PIC berhasil diverifikasi.');
                     }),
                 Action::make('requestRevision')
                     ->label('Minta Perbaikan')
@@ -104,7 +181,9 @@ class SupplierResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->withCount(['documents', 'products']);
+        $query = parent::getEloquentQuery()
+            ->with('users')
+            ->withCount(['documents', 'products']);
         $user = auth()->user();
 
         return $user
