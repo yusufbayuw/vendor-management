@@ -16,8 +16,8 @@ class CommodityAnalyticsService
      */
     public function query(User $user, array $filters = []): Builder
     {
-        $from = $filters['from'] ?? today()->subMonths(3)->toDateString();
-        $to = $filters['to'] ?? today()->toDateString();
+        $from = $filters['from'] ?? null;
+        $to = $filters['to'] ?? null;
         $kitchenIds = $this->access->accessibleKitchenIds($user);
 
         return PurchaseOrderItem::query()
