@@ -6,6 +6,7 @@ use App\Enums\PurchaseOrderStatus;
 use App\Models\PurchaseOrderItem;
 use App\Models\User;
 use App\Services\Access\UserAccessService;
+use App\Services\Analytics\Support\RobustOutlierDetector;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -46,11 +47,9 @@ class PriceAnomalyAnalyticsService
             return $this->analysisCache[$item->getKey()];
         }
 
-        $baseline = $this->historicalBaseline($item);
-
         return $this->analysisCache[$item->getKey()] = $this->analyzeValues(
             (float) $item->unit_price,
-            $baseline,
+            $this->historicalBaseline($item),
         );
     }
 
@@ -60,84 +59,28 @@ class PriceAnomalyAnalyticsService
      */
     public function analyzeValues(float $currentPrice, Collection $baseline): array
     {
-        $values = $baseline
-            ->map(fn ($value): float => (float) $value)
-            ->filter(fn (float $value): bool => $value > 0)
-            ->sort()
-            ->values();
-
-        $count = $values->count();
-        $median = $this->median($values);
-
-        if ($count < self::MIN_BASELINE_OBSERVATIONS || $median === null) {
-            return [
-                'status' => 'insufficient',
-                'is_anomaly' => false,
-                'baseline_count' => $count,
-                'median' => $median,
-                'mad' => null,
-                'deviation_percentage' => $median !== null && $median > 0
-                    ? round(100 * ($currentPrice - $median) / $median, 2)
-                    : null,
-                'robust_z' => null,
-                'reason' => 'Baseline belum cukup: minimum '.self::MIN_BASELINE_OBSERVATIONS.' transaksi historis diperlukan.',
-            ];
-        }
-
-        $absoluteDeviations = $values
-            ->map(fn (float $value): float => abs($value - $median))
-            ->sort()
-            ->values();
-        $mad = $this->median($absoluteDeviations) ?? 0.0;
-        $deviationPercentage = round(100 * ($currentPrice - $median) / $median, 2);
-
-        if ($mad <= 0.0001) {
-            $isDifferent = abs($currentPrice - $median) > 0.01;
-
-            if (! $isDifferent) {
-                return [
-                    'status' => 'normal',
-                    'is_anomaly' => false,
-                    'baseline_count' => $count,
-                    'median' => round($median, 2),
-                    'mad' => 0.0,
-                    'deviation_percentage' => $deviationPercentage,
-                    'robust_z' => null,
-                    'reason' => 'Harga sama dengan baseline historis yang tidak memiliki dispersi.',
-                ];
-            }
-
-            $status = $currentPrice > $median ? 'high' : 'low';
-
-            return [
-                'status' => $status,
-                'is_anomaly' => true,
-                'baseline_count' => $count,
-                'median' => round($median, 2),
-                'mad' => 0.0,
-                'deviation_percentage' => $deviationPercentage,
-                'robust_z' => null,
-                'reason' => 'Harga berbeda dari baseline historis yang seluruh nilainya identik.',
-            ];
-        }
-
-        $robustZ = 0.6745 * ($currentPrice - $median) / $mad;
-        $isAnomaly = abs($robustZ) >= self::ROBUST_Z_THRESHOLD;
-        $status = $isAnomaly
-            ? ($robustZ > 0 ? 'high' : 'low')
-            : 'normal';
+        $result = RobustOutlierDetector::analyze(
+            $currentPrice,
+            $baseline->filter(fn ($value): bool => (float) $value > 0)->values(),
+            self::MIN_BASELINE_OBSERVATIONS,
+            self::ROBUST_Z_THRESHOLD,
+        );
 
         return [
-            'status' => $status,
-            'is_anomaly' => $isAnomaly,
-            'baseline_count' => $count,
-            'median' => round($median, 2),
-            'mad' => round($mad, 2),
-            'deviation_percentage' => $deviationPercentage,
-            'robust_z' => round($robustZ, 2),
-            'reason' => $isAnomaly
-                ? 'Harga melewati threshold robust z-score '.self::ROBUST_Z_THRESHOLD.' terhadap baseline historis.'
-                : 'Harga masih berada dalam variasi historis yang wajar.',
+            'status' => $result['status'],
+            'is_anomaly' => $result['is_anomaly'],
+            'baseline_count' => $result['baseline_count'],
+            'median' => $result['median'],
+            'mad' => $result['mad'],
+            'deviation_percentage' => $result['deviation_percentage'],
+            'robust_z' => $result['robust_z'],
+            'reason' => match ($result['reason_code']) {
+                'insufficient_baseline' => 'Baseline belum cukup: minimum '.self::MIN_BASELINE_OBSERVATIONS.' transaksi historis diperlukan.',
+                'zero_dispersion_equal' => 'Harga sama dengan baseline historis yang tidak memiliki dispersi.',
+                'zero_dispersion_changed' => 'Harga berbeda dari baseline historis yang seluruh nilainya identik.',
+                'threshold_exceeded' => 'Harga melewati threshold robust z-score '.self::ROBUST_Z_THRESHOLD.' terhadap baseline historis.',
+                default => 'Harga masih berada dalam variasi historis yang wajar.',
+            },
         ];
     }
 
@@ -167,24 +110,6 @@ class PriceAnomalyAnalyticsService
             ->pluck('unit_price')
             ->map(fn ($value): float => (float) $value)
             ->values();
-    }
-
-    /** @param Collection<int, float> $values */
-    private function median(Collection $values): ?float
-    {
-        $count = $values->count();
-
-        if ($count === 0) {
-            return null;
-        }
-
-        $middle = intdiv($count, 2);
-
-        if ($count % 2 === 1) {
-            return (float) $values->get($middle);
-        }
-
-        return ((float) $values->get($middle - 1) + (float) $values->get($middle)) / 2;
     }
 
     /** @return array<string> */
