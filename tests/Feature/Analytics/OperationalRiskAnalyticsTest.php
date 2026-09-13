@@ -3,6 +3,7 @@
 namespace Tests\Feature\Analytics;
 
 use App\Enums\InvoiceStatus;
+use App\Enums\PurchaseOrderStatus;
 use App\Models\Invoice;
 use App\Models\SppgKitchen;
 use App\Models\User;
@@ -48,6 +49,12 @@ class OperationalRiskAnalyticsTest extends TestCase
         $user = User::query()->where('email', 'sppg.bandung@example.test')->firstOrFail();
         $bandung = SppgKitchen::query()->where('code', 'SPPG-BDG-001')->firstOrFail();
         $service = app(OperationalRiskAnalyticsService::class);
+
+        $service->query($user)->firstOrFail()->update([
+            'status' => PurchaseOrderStatus::Issued,
+            'acknowledged_at' => null,
+        ]);
+
         $orders = $service->query($user)->get();
 
         $this->assertNotEmpty($orders);
@@ -104,6 +111,11 @@ class OperationalRiskAnalyticsTest extends TestCase
         $user = User::query()->where('email', 'sppg.bandung@example.test')->firstOrFail();
         $bandung = SppgKitchen::query()->where('code', 'SPPG-BDG-001')->firstOrFail();
         $service = app(OperationalRiskAnalyticsService::class);
+
+        $service->query($user)->firstOrFail()->update([
+            'status' => PurchaseOrderStatus::Issued,
+            'acknowledged_at' => null,
+        ]);
 
         $orders = $service->applyNeedsAttention($service->query($user))->get();
 
