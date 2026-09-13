@@ -13,6 +13,10 @@ class PurchaseRequest extends Model
 {
     use HasFactory;
 
+    protected $attributes = [
+        'status' => 'draft',
+    ];
+
     protected $fillable = [
         'number',
         'sppg_kitchen_id',
