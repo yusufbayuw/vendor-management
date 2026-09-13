@@ -2,10 +2,14 @@
 
 namespace App\Services\Analytics;
 
+use App\Enums\AccessScopeType;
 use App\Enums\ApprovalActionType;
 use App\Enums\ApprovalStatus;
 use App\Models\ApprovalRequest;
-use App\Models\Organization;
+use App\Models\Invoice;
+use App\Models\Payment;
+use App\Models\PurchaseOrder;
+use App\Models\PurchaseRequest;
 use App\Models\User;
 use App\Services\Access\UserAccessService;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,11 +20,7 @@ class GovernanceAnalyticsService
 
     public function query(User $user): Builder
     {
-        $organizationIds = $this->access
-            ->applyOrganizationScope(Organization::query(), $user)
-            ->pluck('id');
-
-        return ApprovalRequest::query()
+        $query = ApprovalRequest::query()
             ->with([
                 'organization',
                 'requester',
@@ -38,8 +38,43 @@ class GovernanceAnalyticsService
                 'actions as override_actions_count' => fn (Builder $query): Builder => $query
                     ->whereNotNull('override_reason')
                     ->where('override_reason', '!=', ''),
-            ])
-            ->whereIn('organization_id', $organizationIds);
+            ]);
+
+        if ($this->access->hasGlobalAccess($user)) {
+            return $query;
+        }
+
+        $organizationIds = $this->access->scopeIds($user, AccessScopeType::Organization);
+        $kitchenIds = $this->access->accessibleKitchenIds($user);
+
+        return $query->where(function (Builder $scopeQuery) use ($organizationIds, $kitchenIds): void {
+            if ($organizationIds->isNotEmpty()) {
+                $scopeQuery->whereIn('organization_id', $organizationIds);
+            } else {
+                $scopeQuery->whereRaw('1 = 0');
+            }
+
+            if ($kitchenIds->isEmpty()) {
+                return;
+            }
+
+            $scopeQuery->orWhere(function (Builder $kitchenScope) use ($kitchenIds): void {
+                $kitchenScope
+                    ->whereHasMorph(
+                        'approvable',
+                        [PurchaseRequest::class, PurchaseOrder::class, Invoice::class],
+                        fn (Builder $approvableQuery): Builder => $approvableQuery->whereIn('sppg_kitchen_id', $kitchenIds),
+                    )
+                    ->orWhereHasMorph(
+                        'approvable',
+                        [Payment::class],
+                        fn (Builder $paymentQuery): Builder => $paymentQuery->whereHas(
+                            'invoice',
+                            fn (Builder $invoiceQuery): Builder => $invoiceQuery->whereIn('sppg_kitchen_id', $kitchenIds),
+                        ),
+                    );
+            });
+        });
     }
 
     public function decisionHours(ApprovalRequest $request): ?float
