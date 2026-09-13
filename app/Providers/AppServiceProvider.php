@@ -2,23 +2,55 @@
 
 namespace App\Providers;
 
+use App\Models\ApprovalAction;
+use App\Models\ApprovalRequest;
+use App\Models\DeliverySchedule;
+use App\Models\FulfillmentDiscrepancy;
+use App\Models\GoodsReceipt;
+use App\Models\GovernancePolicy;
+use App\Models\Invoice;
+use App\Models\InvoiceAdjustment;
+use App\Models\Payment;
+use App\Models\PurchaseAllocation;
+use App\Models\PurchaseOrder;
+use App\Models\PurchaseRequest;
+use App\Models\Supplier;
+use App\Models\SupplierBankAccount;
+use App\Observers\AuditableObserver;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
-        //
+        foreach ($this->auditedModels() as $model) {
+            $model::observe(AuditableObserver::class);
+        }
+    }
+
+    /** @return array<class-string> */
+    private function auditedModels(): array
+    {
+        return [
+            Supplier::class,
+            SupplierBankAccount::class,
+            GovernancePolicy::class,
+            PurchaseRequest::class,
+            ApprovalRequest::class,
+            ApprovalAction::class,
+            PurchaseAllocation::class,
+            PurchaseOrder::class,
+            DeliverySchedule::class,
+            GoodsReceipt::class,
+            FulfillmentDiscrepancy::class,
+            Invoice::class,
+            InvoiceAdjustment::class,
+            Payment::class,
+        ];
     }
 }
