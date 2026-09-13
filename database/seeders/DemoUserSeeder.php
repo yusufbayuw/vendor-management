@@ -134,7 +134,7 @@ class DemoUserSeeder extends Seeder
     }
 
     /**
-     * @param array<int, array{0: AccessScopeType, 1: int}> $scopes
+     * @param  array<int, array{0: AccessScopeType, 1: int}>  $scopes
      */
     private function internalUser(
         string $username,
@@ -216,7 +216,7 @@ class DemoUserSeeder extends Seeder
     }
 
     /**
-     * @param array<int, array{0: AccessScopeType, 1: int}> $scopes
+     * @param  array<int, array{0: AccessScopeType, 1: int}>  $scopes
      */
     private function replaceScopes(User $user, array $scopes): void
     {
