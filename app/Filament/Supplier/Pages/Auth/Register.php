@@ -102,10 +102,12 @@ class Register extends BaseRegister
             return $user;
         });
 
-        try {
-            app(PhoneVerificationService::class)->send($user, request()->ip());
-        } catch (Throwable $exception) {
-            report($exception);
+        if (config('phone-verification.mode', 'manual') === 'otp') {
+            try {
+                app(PhoneVerificationService::class)->send($user, request()->ip());
+            } catch (Throwable $exception) {
+                report($exception);
+            }
         }
 
         return $user;
