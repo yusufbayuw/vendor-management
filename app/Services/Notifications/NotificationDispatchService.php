@@ -10,6 +10,7 @@ use App\Notifications\SystemNotification;
 use App\Services\Access\UserAccessService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
+use Spatie\Permission\Models\Permission;
 
 class NotificationDispatchService
 {
@@ -25,10 +26,15 @@ class NotificationDispatchService
         string $severity = 'info',
         ?string $url = null,
     ): int {
+        $permissionName = $permission instanceof SystemPermission ? $permission->value : $permission;
+
+        if (! $this->permissionExists($permissionName)) {
+            return 0;
+        }
+
         $kitchenModel = $kitchen instanceof SppgKitchen
             ? $kitchen
             : SppgKitchen::query()->findOrFail($kitchen);
-        $permissionName = $permission instanceof SystemPermission ? $permission->value : $permission;
 
         $recipients = User::permission($permissionName)
             ->get()
@@ -47,6 +53,10 @@ class NotificationDispatchService
         ?string $url = null,
     ): int {
         $permissionName = $permission instanceof SystemPermission ? $permission->value : $permission;
+
+        if (! $this->permissionExists($permissionName)) {
+            return 0;
+        }
 
         return $this->send(
             User::permission($permissionName)->get(),
@@ -124,5 +134,13 @@ class NotificationDispatchService
         ));
 
         return $recipients->count();
+    }
+
+    private function permissionExists(string $permission): bool
+    {
+        return Permission::query()
+            ->where('name', $permission)
+            ->where('guard_name', 'web')
+            ->exists();
     }
 }
