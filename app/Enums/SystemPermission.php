@@ -4,7 +4,14 @@ namespace App\Enums;
 
 enum SystemPermission: string
 {
+    case OrganizationView = 'organization.view';
+    case OrganizationManage = 'organization.manage';
+    case KitchenView = 'kitchen.view';
+    case KitchenManage = 'kitchen.manage';
+    case MasterDataView = 'master_data.view';
+    case MasterDataManage = 'master_data.manage';
     case GovernanceManage = 'governance.manage';
+    case SupplierView = 'supplier.view';
     case SupplierVerify = 'supplier.verify';
     case SupplierSuspend = 'supplier.suspend';
     case SupplierProfileManage = 'supplier.profile.manage';
