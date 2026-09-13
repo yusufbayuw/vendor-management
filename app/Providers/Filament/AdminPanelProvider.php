@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
@@ -30,7 +31,7 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login(Login::class)
             ->passwordReset()
-            ->profile(isSimple: false)
+            ->profile(EditProfile::class, isSimple: false)
             ->brandName('SPPG Vendor Management')
             ->colors([
                 'primary' => Color::Amber,
