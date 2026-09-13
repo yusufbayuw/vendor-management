@@ -25,6 +25,10 @@ class User extends Authenticatable implements FilamentUser
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable;
 
+    protected $attributes = [
+        'is_active' => true,
+    ];
+
     protected static function booted(): void
     {
         static::updating(function (User $user): void {
