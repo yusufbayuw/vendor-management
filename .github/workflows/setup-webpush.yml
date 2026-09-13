@@ -1,0 +1,48 @@
+name: Setup WebPush Dependency
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/setup-webpush.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, gd
+          coverage: none
+
+      - name: Install current dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Install Web Push dependency
+        run: composer require laravel-notification-channels/webpush:^13.0 --no-interaction --with-all-dependencies --no-progress
+
+      - name: Apply Pint to pending PHP changes
+        run: vendor/bin/pint app/Services/Analytics/DemandForecastAnalyticsService.php
+
+      - name: Commit deterministic dependency lock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add composer.json composer.lock app/Services/Analytics/DemandForecastAnalyticsService.php
+          if git diff --cached --quiet; then
+            echo "No dependency changes to commit."
+            exit 0
+          fi
+          git commit -m "build: install webpush dependency and format forecast"
+          git push origin HEAD:main
