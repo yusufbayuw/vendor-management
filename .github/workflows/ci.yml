@@ -23,6 +23,13 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Verify Filament assets
+        run: |
+          test -f public/css/filament/filament/app.css
+          test -f public/js/filament/filament/app.js
+          test -f public/js/filament/schemas/schemas.js
+          test -f public/js/filament/tables/tables.js
+
       - name: Prepare environment
         run: |
           cp .env.example .env
