@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Pages;
 
 use App\Enums\SystemPermission;
+use App\Filament\Exports\CommodityAnalyticsExporter;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\PurchaseOrderItem;
@@ -11,6 +12,8 @@ use App\Models\Supplier;
 use App\Services\Access\UserAccessService;
 use App\Services\Analytics\CommodityAnalyticsService;
 use BackedEnum;
+use Filament\Actions\ExportAction;
+use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Pages\Page;
@@ -62,6 +65,17 @@ class CommodityAnalytics extends Page implements HasTable
             ->query(app(CommodityAnalyticsService::class)->query($user))
             ->heading('Realisasi Pengadaan Komoditas')
             ->description('Default periode tiga bulan terakhir. Gunakan grouping untuk membandingkan SPPG, kategori, komoditas, atau supplier.')
+            ->headerActions([
+                ExportAction::make('export')
+                    ->label('Export CSV / XLSX')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->exporter(CommodityAnalyticsExporter::class)
+                    ->formats([
+                        ExportFormat::Csv,
+                        ExportFormat::Xlsx,
+                    ])
+                    ->maxRows(50_000),
+            ])
             ->columns([
                 TextColumn::make('purchaseOrder.order_date')
                     ->label('Tanggal PO')
