@@ -8,6 +8,8 @@ enum SystemPermission: string
     case OrganizationManage = 'organization.manage';
     case KitchenView = 'kitchen.view';
     case KitchenManage = 'kitchen.manage';
+    case UserView = 'user.view';
+    case UserManage = 'user.manage';
     case MasterDataView = 'master_data.view';
     case MasterDataManage = 'master_data.manage';
     case GovernanceManage = 'governance.manage';
