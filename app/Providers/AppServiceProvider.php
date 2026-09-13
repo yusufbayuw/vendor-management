@@ -18,6 +18,7 @@ use App\Models\PurchaseRequest;
 use App\Models\Supplier;
 use App\Models\SupplierBankAccount;
 use App\Observers\AuditableObserver;
+use App\Observers\TransactionNotificationObserver;
 use App\Policies\RolePolicy;
 use App\Services\Auth\LogOtpChannel;
 use Illuminate\Support\Facades\Gate;
@@ -44,6 +45,10 @@ class AppServiceProvider extends ServiceProvider
         foreach ($this->auditedModels() as $model) {
             $model::observe(AuditableObserver::class);
         }
+
+        foreach ($this->notificationModels() as $model) {
+            $model::observe(TransactionNotificationObserver::class);
+        }
     }
 
     /** @return array<class-string> */
@@ -63,6 +68,19 @@ class AppServiceProvider extends ServiceProvider
             FulfillmentDiscrepancy::class,
             Invoice::class,
             InvoiceAdjustment::class,
+            Payment::class,
+        ];
+    }
+
+    /** @return array<class-string> */
+    private function notificationModels(): array
+    {
+        return [
+            Supplier::class,
+            PurchaseRequest::class,
+            PurchaseOrder::class,
+            GoodsReceipt::class,
+            Invoice::class,
             Payment::class,
         ];
     }
