@@ -32,7 +32,7 @@ class VerifyPhone extends Page implements HasForms
 
         abort_unless($user !== null, 403);
 
-        if ($user->hasVerifiedPhone()) {
+        if (config('phone-verification.mode', 'manual') !== 'otp' || $user->hasVerifiedPhone()) {
             $this->redirect('/supplier');
 
             return;
@@ -59,6 +59,15 @@ class VerifyPhone extends Page implements HasForms
 
     public function sendCode(): void
     {
+        if (config('phone-verification.mode', 'manual') !== 'otp') {
+            Notification::make()
+                ->warning()
+                ->title('Verifikasi nomor HP dilakukan oleh admin.')
+                ->send();
+
+            return;
+        }
+
         $user = auth()->user();
 
         if (! $user || blank($user->phone)) {
@@ -93,6 +102,15 @@ class VerifyPhone extends Page implements HasForms
 
     public function verify(): void
     {
+        if (config('phone-verification.mode', 'manual') !== 'otp') {
+            Notification::make()
+                ->warning()
+                ->title('Verifikasi nomor HP dilakukan oleh admin.')
+                ->send();
+
+            return;
+        }
+
         $state = $this->form->getState();
         $user = auth()->user();
 
