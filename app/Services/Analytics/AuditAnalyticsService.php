@@ -16,8 +16,6 @@ use App\Models\Payment;
 use App\Models\PurchaseAllocation;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
-use App\Models\Supplier;
-use App\Models\SupplierBankAccount;
 use App\Models\User;
 use App\Services\Access\UserAccessService;
 use Illuminate\Database\Eloquent\Builder;
@@ -117,12 +115,17 @@ class AuditAnalyticsService
                     ->query($user)
                     ->select('approval_requests.id');
 
-                $this->orModelIds($scopeQuery, ApprovalRequest::class, clone $approvalIds);
+                $this->orModelIds($scopeQuery, ApprovalRequest::class, $approvalIds);
                 $this->orModelIds(
                     $scopeQuery,
                     ApprovalAction::class,
                     ApprovalAction::query()
-                        ->whereIn('approval_request_id', clone $approvalIds)
+                        ->whereIn(
+                            'approval_request_id',
+                            $this->governanceAnalytics
+                                ->query($user)
+                                ->select('approval_requests.id'),
+                        )
                         ->select('id'),
                 );
 
@@ -204,7 +207,7 @@ class AuditAnalyticsService
 
     private function orModelIds(Builder $query, string $modelClass, Builder $ids): void
     {
-        $morphClass = (new $modelClass)->getMorphClass();
+        $morphClass = (new $modelClass())->getMorphClass();
 
         $query->orWhere(function (Builder $modelQuery) use ($morphClass, $ids): void {
             $modelQuery
