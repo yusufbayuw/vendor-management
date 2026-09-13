@@ -25,9 +25,23 @@ class User extends Authenticatable implements FilamentUser
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable;
 
+    protected static function booted(): void
+    {
+        static::updating(function (User $user): void {
+            if ($user->isDirty('phone')) {
+                $user->phone_verified_at = null;
+            }
+        });
+    }
+
     public function accessScopes(): HasMany
     {
         return $this->hasMany(UserAccessScope::class);
+    }
+
+    public function phoneVerificationCodes(): HasMany
+    {
+        return $this->hasMany(PhoneVerificationCode::class);
     }
 
     public function suppliers(): BelongsToMany
@@ -35,6 +49,11 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsToMany(Supplier::class, 'supplier_users')
             ->withPivot(['is_owner', 'is_active'])
             ->withTimestamps();
+    }
+
+    public function hasVerifiedPhone(): bool
+    {
+        return filled($this->phone) && $this->phone_verified_at !== null;
     }
 
     public function canAccessPanel(Panel $panel): bool
@@ -95,6 +114,7 @@ class User extends Authenticatable implements FilamentUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
