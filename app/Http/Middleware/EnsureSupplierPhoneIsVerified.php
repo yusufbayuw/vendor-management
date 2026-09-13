@@ -10,6 +10,10 @@ class EnsureSupplierPhoneIsVerified
 {
     public function handle(Request $request, Closure $next): Response
     {
+        if (config('phone-verification.mode', 'manual') !== 'otp') {
+            return $next($request);
+        }
+
         $user = $request->user();
 
         if (! $user || $user->hasVerifiedPhone()) {
