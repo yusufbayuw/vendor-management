@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Supplier;
 
+use App\Actions\Auth\ManuallyVerifyPhoneAction;
 use App\Actions\Supplier\ApproveSupplierAction;
 use App\Actions\Supplier\RequestSupplierRevisionAction;
 use App\Actions\Supplier\StartSupplierReviewAction;
@@ -27,6 +28,14 @@ class SupplierLifecycleTest extends TestCase
             'phone' => '08123456789',
         ]);
         $reviewer = User::factory()->create();
+        $owner = User::factory()->create([
+            'phone' => '081234567890',
+        ]);
+        $owner->forceFill(['phone_verified_at' => now()])->save();
+        $supplier->users()->attach($owner->getKey(), [
+            'is_owner' => true,
+            'is_active' => true,
+        ]);
 
         app(SubmitSupplierAction::class)->execute($supplier);
         $this->assertSame(SupplierStatus::Submitted, $supplier->refresh()->status);
@@ -37,6 +46,45 @@ class SupplierLifecycleTest extends TestCase
         app(ApproveSupplierAction::class)->execute($supplier, $reviewer);
         $this->assertSame(SupplierStatus::Active, $supplier->refresh()->status);
         $this->assertSame($reviewer->id, $supplier->verified_by);
+    }
+
+    public function test_supplier_approval_is_blocked_until_owner_phone_is_manually_verified(): void
+    {
+        $supplier = Supplier::query()->create([
+            'code' => 'SUP-MANUAL',
+            'legal_name' => 'CV Pangan Manual',
+            'phone' => '081277700000',
+        ]);
+        $reviewer = User::factory()->create();
+        $owner = User::factory()->create([
+            'phone' => '081277700001',
+            'phone_verified_at' => null,
+        ]);
+        $supplier->users()->attach($owner->getKey(), [
+            'is_owner' => true,
+            'is_active' => true,
+        ]);
+
+        app(SubmitSupplierAction::class)->execute($supplier);
+        app(StartSupplierReviewAction::class)->execute($supplier);
+
+        try {
+            app(ApproveSupplierAction::class)->execute($supplier, $reviewer);
+            $this->fail('Approval should be blocked before phone verification.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('Nomor HP PIC/owner supplier harus diverifikasi', $exception->getMessage());
+        }
+
+        app(ManuallyVerifyPhoneAction::class)->execute(
+            $owner,
+            $reviewer,
+            'Nomor dikonfirmasi melalui panggilan saat review supplier.',
+        );
+
+        app(ApproveSupplierAction::class)->execute($supplier, $reviewer);
+
+        $this->assertNotNull($owner->fresh()->phone_verified_at);
+        $this->assertSame(SupplierStatus::Active, $supplier->refresh()->status);
     }
 
     public function test_supplier_without_email_can_be_submitted_using_phone(): void
