@@ -10,8 +10,11 @@ use App\Enums\PaymentAttachmentType;
 use App\Enums\PaymentStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Payments\Pages\ManagePayments;
+use App\Filament\Support\SecureFileGalleryModal;
 use App\Models\Payment;
+use App\Models\PaymentAttachment;
 use App\Services\Access\UserAccessService;
+use App\Services\Files\VendorFileStorage;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
@@ -56,6 +59,25 @@ class PaymentResource extends Resource
                     default => 'gray',
                 }),
         ])->recordActions([
+            SecureFileGalleryModal::make(
+                'viewProofs',
+                static function (Payment $record): array {
+                    $record->loadMissing('attachments');
+
+                    return $record->attachments
+                        ->map(static fn (PaymentAttachment $attachment): array => [
+                            'label' => $attachment->caption ?: basename($attachment->file_path),
+                            'path' => $attachment->file_path,
+                            'inlineUrl' => route('files.payment-attachments.show', $attachment),
+                            'downloadUrl' => route('files.payment-attachments.show', [
+                                'paymentAttachment' => $attachment,
+                                'download' => 1,
+                            ]),
+                        ])
+                        ->all();
+                },
+                'Lihat Bukti',
+            ),
             Action::make('proof')->label('Upload Bukti')->color('primary')
                 ->visible(fn (Payment $record) => in_array($record->status, [PaymentStatus::Draft, PaymentStatus::Submitted, PaymentStatus::UnderReview], true) && static::allowed($record, SystemPermission::PaymentCreate))
                 ->schema([
@@ -64,16 +86,26 @@ class PaymentResource extends Resource
                         PaymentAttachmentType::BankStatement->value => 'Rekening Koran',
                         PaymentAttachmentType::Other->value => 'Lainnya',
                     ])->default(PaymentAttachmentType::PaymentProof->value)->required(),
-                    FileUpload::make('files')->label('File')->disk('local')->directory('payments')->visibility('private')
-                        ->multiple()->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])->maxSize(10240)->required(),
+                    FileUpload::make('files')
+                        ->label('File')
+                        ->disk(VendorFileStorage::DISK)
+                        ->directory('payments')
+                        ->visibility('private')
+                        ->multiple()
+                        ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+                        ->maxSize(10240)
+                        ->required(),
                     Textarea::make('caption')->label('Keterangan')->rows(2),
                 ])->action(function (Payment $record, array $data): void {
                     static::guard(SystemPermission::PaymentCreate);
                     static::run(function () use ($record, $data): void {
-                        $disk = Storage::disk('local');
+                        $disk = Storage::disk(VendorFileStorage::DISK);
                         foreach ((array) $data['files'] as $path) {
                             app(AttachPaymentProofAction::class)->execute(
-                                $record, $path, auth()->user(), PaymentAttachmentType::from($data['type']),
+                                $record,
+                                $path,
+                                auth()->user(),
+                                PaymentAttachmentType::from($data['type']),
                                 $disk->exists($path) ? $disk->mimeType($path) : null,
                                 $disk->exists($path) ? $disk->size($path) : null,
                                 $data['caption'] ?? null,
