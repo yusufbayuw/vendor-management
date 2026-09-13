@@ -7,6 +7,7 @@ use App\Actions\Supplier\VerifySupplierDocumentAction;
 use App\Enums\SupplierDocumentStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\SupplierDocuments\Pages\ManageSupplierDocuments;
+use App\Filament\Support\SecureFileModal;
 use App\Models\SupplierDocument;
 use App\Services\Access\UserAccessService;
 use DomainException;
@@ -40,6 +41,19 @@ class SupplierDocumentResource extends Resource
             TextColumn::make('supplier.display_name')->label('Supplier')->searchable()->sortable(),
             TextColumn::make('document_type')->label('Jenis')->searchable(),
             TextColumn::make('document_number')->label('Nomor')->searchable(),
+            TextColumn::make('file_path')
+                ->label('File')
+                ->icon('heroicon-o-paper-clip')
+                ->formatStateUsing(fn (?string $state): string => filled($state) ? basename($state) : '-')
+                ->action(SecureFileModal::make(
+                    'previewSupplierDocument',
+                    fn (SupplierDocument $record): string => route('files.supplier-documents.show', $record),
+                    fn (SupplierDocument $record): string => route('files.supplier-documents.show', [
+                        'supplierDocument' => $record,
+                        'download' => 1,
+                    ]),
+                    fn (SupplierDocument $record): ?string => $record->file_path,
+                )),
             TextColumn::make('issued_at')->label('Terbit')->date('d/m/Y')->toggleable(),
             TextColumn::make('expires_at')->label('Berlaku Sampai')->date('d/m/Y')->sortable(),
             TextColumn::make('status')->label('Status')->badge()
