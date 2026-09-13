@@ -23,11 +23,20 @@ class RoleAndPermissionSeeder extends Seeder
             Role::findOrCreate($role->value, 'web');
         }
 
+        $this->sync(SystemRole::SuperAdmin, SystemPermission::cases());
+        $this->sync(SystemRole::PanelUser, []);
+
         $this->sync(SystemRole::CentralManager, [
-            SystemPermission::GovernanceManage,
+            SystemPermission::OrganizationView,
+            SystemPermission::OrganizationManage,
+            SystemPermission::KitchenView,
+            SystemPermission::KitchenManage,
+            SystemPermission::MasterDataView,
+            SystemPermission::SupplierView,
             SystemPermission::SupplierVerify,
             SystemPermission::SupplierSuspend,
             SystemPermission::PurchaseRequestApprove,
+            SystemPermission::PurchaseRequestAllocate,
             SystemPermission::PurchaseOrderApprove,
             SystemPermission::PurchaseOrderExceptionClose,
             SystemPermission::InvoiceApprove,
@@ -37,16 +46,24 @@ class RoleAndPermissionSeeder extends Seeder
         ]);
 
         $this->sync(SystemRole::SppgManager, [
+            SystemPermission::KitchenView,
+            SystemPermission::MasterDataView,
+            SystemPermission::SupplierView,
             SystemPermission::PurchaseRequestApprove,
             SystemPermission::PurchaseOrderExceptionClose,
             SystemPermission::ReportsView,
         ]);
 
         $this->sync(SystemRole::Requester, [
+            SystemPermission::KitchenView,
+            SystemPermission::MasterDataView,
             SystemPermission::PurchaseRequestSubmit,
         ]);
 
         $this->sync(SystemRole::Procurement, [
+            SystemPermission::KitchenView,
+            SystemPermission::MasterDataView,
+            SystemPermission::SupplierView,
             SystemPermission::PurchaseRequestAllocate,
             SystemPermission::PurchaseOrderCreate,
             SystemPermission::PurchaseOrderIssue,
@@ -54,6 +71,9 @@ class RoleAndPermissionSeeder extends Seeder
         ]);
 
         $this->sync(SystemRole::ProcurementManager, [
+            SystemPermission::KitchenView,
+            SystemPermission::MasterDataView,
+            SystemPermission::SupplierView,
             SystemPermission::PurchaseRequestAllocate,
             SystemPermission::PurchaseOrderCreate,
             SystemPermission::PurchaseOrderApprove,
@@ -65,20 +85,28 @@ class RoleAndPermissionSeeder extends Seeder
         ]);
 
         $this->sync(SystemRole::Receiver, [
+            SystemPermission::KitchenView,
+            SystemPermission::MasterDataView,
             SystemPermission::GoodsReceiptCreate,
         ]);
 
         $this->sync(SystemRole::QualityControl, [
+            SystemPermission::KitchenView,
+            SystemPermission::MasterDataView,
             SystemPermission::GoodsReceiptInspect,
             SystemPermission::GoodsReceiptReject,
         ]);
 
         $this->sync(SystemRole::Finance, [
+            SystemPermission::KitchenView,
+            SystemPermission::SupplierView,
             SystemPermission::InvoiceReview,
             SystemPermission::PaymentCreate,
         ]);
 
         $this->sync(SystemRole::FinanceManager, [
+            SystemPermission::KitchenView,
+            SystemPermission::SupplierView,
             SystemPermission::InvoiceReview,
             SystemPermission::InvoiceApprove,
             SystemPermission::PaymentVerify,
@@ -99,6 +127,10 @@ class RoleAndPermissionSeeder extends Seeder
         ]);
 
         $this->sync(SystemRole::Auditor, [
+            SystemPermission::OrganizationView,
+            SystemPermission::KitchenView,
+            SystemPermission::MasterDataView,
+            SystemPermission::SupplierView,
             SystemPermission::AuditView,
             SystemPermission::ReportsView,
         ]);
@@ -110,7 +142,7 @@ class RoleAndPermissionSeeder extends Seeder
     private function sync(SystemRole $role, array $permissions): void
     {
         Role::findByName($role->value, 'web')->syncPermissions(
-            array_map(static fn (SystemPermission $permission) => $permission->value, $permissions),
+            array_map(static fn (SystemPermission $permission): string => $permission->value, $permissions),
         );
     }
 }
