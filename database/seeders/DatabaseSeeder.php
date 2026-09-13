@@ -12,5 +12,9 @@ class DatabaseSeeder extends Seeder
             RoleAndPermissionSeeder::class,
             MasterDataSeeder::class,
         ]);
+
+        if (! app()->environment('production')) {
+            $this->call(DemoDataSeeder::class);
+        }
     }
 }
