@@ -50,7 +50,7 @@ class FinanceAnalyticsService
             return 0;
         }
 
-        return $invoice->due_date->diffInDays(today());
+        return (int) floor($invoice->due_date->diffInDays(today()));
     }
 
     public function agingBucket(Invoice $invoice): string
