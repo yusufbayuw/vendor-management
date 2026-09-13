@@ -14,8 +14,8 @@ class SubmitSupplierAction
             throw new DomainException('Supplier hanya dapat diajukan dari status draft atau perlu perbaikan.');
         }
 
-        if (blank($supplier->legal_name) || blank($supplier->email) || blank($supplier->phone)) {
-            throw new DomainException('Nama legal, email, dan nomor telepon supplier wajib dilengkapi sebelum pengajuan.');
+        if (blank($supplier->legal_name) || blank($supplier->phone)) {
+            throw new DomainException('Nama legal dan nomor HP supplier wajib dilengkapi sebelum pengajuan.');
         }
 
         $supplier->forceFill([
