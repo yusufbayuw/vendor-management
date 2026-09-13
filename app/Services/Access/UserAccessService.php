@@ -6,6 +6,8 @@ use App\Enums\AccessScopeType;
 use App\Models\SppgKitchen;
 use App\Models\User;
 use App\Models\UserAccessScope;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 class UserAccessService
 {
@@ -16,8 +18,18 @@ class UserAccessService
 
     public function canAccessOrganization(User $user, int $organizationId): bool
     {
-        return $this->hasGlobalAccess($user)
-            || $this->hasScope($user, AccessScopeType::Organization, $organizationId);
+        if ($this->hasGlobalAccess($user)) {
+            return true;
+        }
+
+        if ($this->hasScope($user, AccessScopeType::Organization, $organizationId)) {
+            return true;
+        }
+
+        return SppgKitchen::query()
+            ->where('organization_id', $organizationId)
+            ->whereIn('id', $this->scopeIds($user, AccessScopeType::SppgKitchen))
+            ->exists();
     }
 
     public function canAccessKitchen(User $user, SppgKitchen|int $kitchen): bool
@@ -35,6 +47,64 @@ class UserAccessService
     {
         return $this->hasGlobalAccess($user)
             || $this->hasScope($user, AccessScopeType::Supplier, $supplierId);
+    }
+
+    public function applyOrganizationScope(Builder $query, User $user): Builder
+    {
+        if ($this->hasGlobalAccess($user)) {
+            return $query;
+        }
+
+        $organizationIds = $this->scopeIds($user, AccessScopeType::Organization);
+        $kitchenOrganizationIds = SppgKitchen::query()
+            ->whereIn('id', $this->scopeIds($user, AccessScopeType::SppgKitchen))
+            ->pluck('organization_id');
+
+        return $query->whereIn(
+            'id',
+            $organizationIds->merge($kitchenOrganizationIds)->unique()->values(),
+        );
+    }
+
+    public function applyKitchenScope(Builder $query, User $user): Builder
+    {
+        if ($this->hasGlobalAccess($user)) {
+            return $query;
+        }
+
+        $organizationIds = $this->scopeIds($user, AccessScopeType::Organization);
+        $kitchenIds = $this->scopeIds($user, AccessScopeType::SppgKitchen);
+
+        return $query->where(function (Builder $scopeQuery) use ($organizationIds, $kitchenIds): void {
+            $scopeQuery
+                ->whereIn('organization_id', $organizationIds)
+                ->orWhereIn('id', $kitchenIds);
+        });
+    }
+
+    public function applySupplierScope(Builder $query, User $user): Builder
+    {
+        if ($this->hasGlobalAccess($user)) {
+            return $query;
+        }
+
+        $supplierIds = $this->scopeIds($user, AccessScopeType::Supplier);
+
+        if ($supplierIds->isNotEmpty()) {
+            return $query->whereIn('id', $supplierIds);
+        }
+
+        return $query;
+    }
+
+    /** @return Collection<int, int> */
+    public function scopeIds(User $user, AccessScopeType $type): Collection
+    {
+        return UserAccessScope::query()
+            ->where('user_id', $user->getKey())
+            ->where('scope_type', $type->value)
+            ->pluck('scope_id')
+            ->map(static fn ($id): int => (int) $id);
     }
 
     private function hasScope(User $user, AccessScopeType $type, int $scopeId): bool
