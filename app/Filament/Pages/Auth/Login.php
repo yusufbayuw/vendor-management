@@ -5,7 +5,6 @@ namespace App\Filament\Pages\Auth;
 use App\Support\Auth\LoginIdentifier;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
 use Illuminate\Validation\ValidationException;
 use SensitiveParameter;
