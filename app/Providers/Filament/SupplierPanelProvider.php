@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Supplier\Pages\Auth\Register;
 use Filament\Http\Middleware\Authenticate;
@@ -30,7 +31,7 @@ class SupplierPanelProvider extends PanelProvider
             ->login(Login::class)
             ->registration(Register::class)
             ->passwordReset()
-            ->profile(isSimple: false)
+            ->profile(EditProfile::class, isSimple: false)
             ->brandName('Portal Supplier SPPG')
             ->colors([
                 'primary' => Color::Emerald,
