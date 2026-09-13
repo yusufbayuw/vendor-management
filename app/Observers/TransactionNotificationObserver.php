@@ -22,6 +22,13 @@ class TransactionNotificationObserver
 {
     public function __construct(private readonly NotificationDispatchService $notifications) {}
 
+    public function created(Model $model): void
+    {
+        if ($model instanceof GoodsReceipt && $model->status === GoodsReceiptStatus::PendingInspection) {
+            $this->goodsReceiptPendingInspection($model);
+        }
+    }
+
     public function updated(Model $model): void
     {
         if (! $model->wasChanged('status')) {
@@ -160,6 +167,11 @@ class TransactionNotificationObserver
             return;
         }
 
+        $this->goodsReceiptPendingInspection($receipt);
+    }
+
+    private function goodsReceiptPendingInspection(GoodsReceipt $receipt): void
+    {
         $receipt->loadMissing('kitchen');
         $this->notifications->toKitchenPermission(
             $receipt->kitchen,
