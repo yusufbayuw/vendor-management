@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\OtpChannel;
 use App\Models\ApprovalAction;
 use App\Models\ApprovalRequest;
 use App\Models\DeliverySchedule;
@@ -18,15 +19,22 @@ use App\Models\Supplier;
 use App\Models\SupplierBankAccount;
 use App\Observers\AuditableObserver;
 use App\Policies\RolePolicy;
+use App\Services\Auth\LogOtpChannel;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 use Spatie\Permission\Models\Role;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->singleton(OtpChannel::class, function ($app): OtpChannel {
+            return match (config('phone-verification.driver', 'log')) {
+                'log' => $app->make(LogOtpChannel::class),
+                default => throw new InvalidArgumentException('OTP_CHANNEL belum didukung.'),
+            };
+        });
     }
 
     public function boot(): void
