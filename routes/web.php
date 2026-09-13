@@ -2,12 +2,17 @@
 
 use App\Http\Controllers\PrivateVendorFileController;
 use App\Http\Controllers\ProcurementReportController;
+use App\Http\Controllers\PwaIconController;
 use App\Http\Controllers\TransactionDocumentController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/pwa/icon/{size}.png', PwaIconController::class)
+    ->whereNumber('size')
+    ->name('pwa.icon');
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/reports/procurement.csv', [ProcurementReportController::class, 'csv'])
