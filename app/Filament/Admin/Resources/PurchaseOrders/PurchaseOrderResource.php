@@ -2,17 +2,27 @@
 
 namespace App\Filament\Admin\Resources\PurchaseOrders;
 
+use App\Actions\Fulfillment\ApprovePurchaseOrderExceptionCloseAction;
+use App\Actions\Fulfillment\CreateDeliveryScheduleAction;
+use App\Actions\Fulfillment\RequestPurchaseOrderExceptionCloseAction;
 use App\Actions\Procurement\ApprovePurchaseOrderAction;
 use App\Actions\Procurement\IssuePurchaseOrderAction;
 use App\Actions\Procurement\SubmitPurchaseOrderForApprovalAction;
+use App\Enums\DeliveryScheduleStatus;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\PurchaseOrders\Pages\ManagePurchaseOrders;
+use App\Models\DeliveryScheduleItem;
 use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderItem;
 use App\Services\Access\UserAccessService;
 use DomainException;
 use Filament\Actions\Action;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
@@ -52,7 +62,7 @@ class PurchaseOrderResource extends Resource
             ->recordActions([
                 Action::make('submitApproval')
                     ->label('Ajukan Approval')
-                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::Draft && static::canCreatePo($record))
+                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::Draft && static::hasScopedPermission($record, SystemPermission::PurchaseOrderCreate))
                     ->requiresConfirmation()
                     ->action(static function (PurchaseOrder $record): void {
                         static::requirePermission(SystemPermission::PurchaseOrderCreate);
@@ -61,7 +71,7 @@ class PurchaseOrderResource extends Resource
                 Action::make('approve')
                     ->label('Setujui')
                     ->color('success')
-                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::PendingApproval && static::canApprovePo($record))
+                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::PendingApproval && static::hasScopedPermission($record, SystemPermission::PurchaseOrderApprove))
                     ->schema([
                         Textarea::make('comments')->label('Catatan approval')->rows(3),
                         Textarea::make('override_reason')->label('Alasan override (jika self approval)')->rows(3),
@@ -76,11 +86,103 @@ class PurchaseOrderResource extends Resource
                 Action::make('issue')
                     ->label('Terbitkan PO')
                     ->color('primary')
-                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::Approved && static::canIssuePo($record))
+                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::Approved && static::hasScopedPermission($record, SystemPermission::PurchaseOrderIssue))
                     ->requiresConfirmation()
                     ->action(static function (PurchaseOrder $record): void {
                         static::requirePermission(SystemPermission::PurchaseOrderIssue);
                         static::runDomainAction(fn () => app(IssuePurchaseOrderAction::class)->execute($record), 'PO berhasil diterbitkan dan siap dikonfirmasi supplier.');
+                    }),
+                Action::make('schedule')
+                    ->label('Jadwalkan Pengiriman')
+                    ->color('warning')
+                    ->visible(static fn (PurchaseOrder $record): bool => in_array($record->status, [
+                        PurchaseOrderStatus::Acknowledged,
+                        PurchaseOrderStatus::Scheduled,
+                        PurchaseOrderStatus::PartiallyDelivered,
+                    ], true) && static::hasScopedPermission($record, SystemPermission::DeliverySchedule))
+                    ->schema(static fn (PurchaseOrder $record): array => [
+                        DateTimePicker::make('planned_delivery_at')
+                            ->label('Jadwal pengiriman')
+                            ->native(false)
+                            ->seconds(false)
+                            ->required(),
+                        Repeater::make('items')
+                            ->label('Item yang dikirim')
+                            ->schema([
+                                Select::make('purchase_order_item_id')
+                                    ->label('Item PO')
+                                    ->options(static::schedulableItemOptions($record))
+                                    ->searchable()
+                                    ->required(),
+                                TextInput::make('quantity')
+                                    ->label('Jumlah')
+                                    ->numeric()
+                                    ->minValue(0.0001)
+                                    ->required(),
+                            ])
+                            ->columns(2)
+                            ->minItems(1)
+                            ->defaultItems(1)
+                            ->required(),
+                        Textarea::make('supplier_notes')->label('Catatan pengiriman')->rows(3),
+                    ])
+                    ->action(static function (PurchaseOrder $record, array $data): void {
+                        static::requirePermission(SystemPermission::DeliverySchedule);
+
+                        static::runDomainAction(function () use ($record, $data): void {
+                            $items = [];
+
+                            foreach ($data['items'] ?? [] as $row) {
+                                $itemId = (int) ($row['purchase_order_item_id'] ?? 0);
+                                if ($itemId <= 0 || isset($items[$itemId])) {
+                                    throw new DomainException('Setiap item PO hanya boleh dipilih satu kali dalam satu jadwal.');
+                                }
+
+                                $items[$itemId] = (float) ($row['quantity'] ?? 0);
+                            }
+
+                            app(CreateDeliveryScheduleAction::class)->execute(
+                                $record,
+                                $items,
+                                $data['planned_delivery_at'],
+                                auth()->user(),
+                                $data['supplier_notes'] ?? null,
+                            );
+                        }, 'Jadwal pengiriman berhasil dibuat.');
+                    }),
+                Action::make('requestExceptionClose')
+                    ->label('Ajukan Close Exception')
+                    ->color('danger')
+                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::PartiallyDelivered && static::hasScopedPermission($record, SystemPermission::PurchaseOrderExceptionClose))
+                    ->schema([
+                        Textarea::make('reason')->label('Alasan penutupan dengan selisih')->required()->rows(4),
+                    ])
+                    ->action(static function (PurchaseOrder $record, array $data): void {
+                        static::requirePermission(SystemPermission::PurchaseOrderExceptionClose);
+                        static::runDomainAction(
+                            fn () => app(RequestPurchaseOrderExceptionCloseAction::class)->execute($record, auth()->user(), $data['reason']),
+                            'Permohonan close with exception berhasil diajukan.',
+                        );
+                    }),
+                Action::make('approveExceptionClose')
+                    ->label('Setujui Close Exception')
+                    ->color('danger')
+                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::PendingExceptionClosure && static::hasScopedPermission($record, SystemPermission::PurchaseOrderExceptionClose))
+                    ->schema([
+                        Textarea::make('resolution_notes')->label('Catatan penyelesaian discrepancy')->required()->rows(4),
+                        Textarea::make('override_reason')->label('Alasan override (jika self approval)')->rows(3),
+                    ])
+                    ->action(static function (PurchaseOrder $record, array $data): void {
+                        static::requirePermission(SystemPermission::PurchaseOrderExceptionClose);
+                        static::runDomainAction(
+                            fn () => app(ApprovePurchaseOrderExceptionCloseAction::class)->execute(
+                                $record,
+                                auth()->user(),
+                                $data['resolution_notes'],
+                                $data['override_reason'] ?? null,
+                            ),
+                            'Close with exception berhasil diproses.',
+                        );
                     }),
             ]);
     }
@@ -101,14 +203,15 @@ class PurchaseOrderResource extends Resource
     {
         $user = auth()->user();
 
-        return $user !== null && (
-            $user->can(SystemPermission::PurchaseOrderCreate->value)
-            || $user->can(SystemPermission::PurchaseOrderApprove->value)
-            || $user->can(SystemPermission::PurchaseOrderIssue->value)
-            || $user->can(SystemPermission::DeliverySchedule->value)
-            || $user->can(SystemPermission::PurchaseOrderExceptionClose->value)
-            || $user->can(SystemPermission::InvoiceReview->value)
-        );
+        return $user !== null && collect([
+            SystemPermission::PurchaseOrderCreate,
+            SystemPermission::PurchaseOrderApprove,
+            SystemPermission::PurchaseOrderIssue,
+            SystemPermission::DeliverySchedule,
+            SystemPermission::PurchaseOrderExceptionClose,
+            SystemPermission::InvoiceReview,
+            SystemPermission::InvoiceApprove,
+        ])->contains(static fn (SystemPermission $permission): bool => $user->can($permission->value));
     }
 
     public static function canCreate(): bool
@@ -126,21 +229,6 @@ class PurchaseOrderResource extends Resource
         return false;
     }
 
-    private static function canCreatePo(PurchaseOrder $record): bool
-    {
-        return static::hasScopedPermission($record, SystemPermission::PurchaseOrderCreate);
-    }
-
-    private static function canApprovePo(PurchaseOrder $record): bool
-    {
-        return static::hasScopedPermission($record, SystemPermission::PurchaseOrderApprove);
-    }
-
-    private static function canIssuePo(PurchaseOrder $record): bool
-    {
-        return static::hasScopedPermission($record, SystemPermission::PurchaseOrderIssue);
-    }
-
     private static function hasScopedPermission(PurchaseOrder $record, SystemPermission $permission): bool
     {
         $user = auth()->user();
@@ -148,6 +236,41 @@ class PurchaseOrderResource extends Resource
         return $user !== null
             && $user->can($permission->value)
             && app(UserAccessService::class)->canAccessKitchen($user, $record->sppg_kitchen_id);
+    }
+
+    private static function schedulableItemOptions(PurchaseOrder $record): array
+    {
+        return PurchaseOrderItem::query()
+            ->where('purchase_order_id', $record->getKey())
+            ->with('unit')
+            ->get()
+            ->filter(function (PurchaseOrderItem $item): bool {
+                return static::remainingSchedulableQty($item) > 0.0001;
+            })
+            ->mapWithKeys(static function (PurchaseOrderItem $item): array {
+                $remaining = static::remainingSchedulableQty($item);
+                $unit = $item->unit_name_snapshot ?: $item->unit?->symbol ?: $item->unit?->name;
+
+                return [
+                    $item->getKey() => sprintf('%s — sisa %s %s', $item->product_name_snapshot, static::formatQty($remaining), $unit),
+                ];
+            })
+            ->all();
+    }
+
+    private static function remainingSchedulableQty(PurchaseOrderItem $item): float
+    {
+        $alreadyScheduled = (float) DeliveryScheduleItem::query()
+            ->where('purchase_order_item_id', $item->getKey())
+            ->whereHas('deliverySchedule', fn (Builder $query) => $query->where('status', '!=', DeliveryScheduleStatus::Cancelled->value))
+            ->sum('planned_qty');
+
+        return max(0, (float) $item->ordered_qty - $alreadyScheduled);
+    }
+
+    private static function formatQty(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 4, '.', ''), '0'), '.');
     }
 
     private static function requirePermission(SystemPermission $permission): void
@@ -193,8 +316,17 @@ class PurchaseOrderResource extends Resource
         $status = $state instanceof PurchaseOrderStatus ? $state : PurchaseOrderStatus::tryFrom((string) $state);
 
         return match ($status) {
-            PurchaseOrderStatus::Fulfilled, PurchaseOrderStatus::Paid, PurchaseOrderStatus::Closed => 'success',
-            PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Scheduled, PurchaseOrderStatus::PartiallyDelivered, PurchaseOrderStatus::PendingExceptionClosure => 'warning',
+            PurchaseOrderStatus::Approved,
+            PurchaseOrderStatus::Acknowledged,
+            PurchaseOrderStatus::Fulfilled,
+            PurchaseOrderStatus::Paid,
+            PurchaseOrderStatus::Closed => 'success',
+            PurchaseOrderStatus::PendingApproval,
+            PurchaseOrderStatus::Issued,
+            PurchaseOrderStatus::Scheduled,
+            PurchaseOrderStatus::PartiallyDelivered,
+            PurchaseOrderStatus::PendingExceptionClosure,
+            PurchaseOrderStatus::Invoiced => 'warning',
             PurchaseOrderStatus::Cancelled => 'danger',
             PurchaseOrderStatus::ClosedWithException => 'info',
             default => 'gray',
