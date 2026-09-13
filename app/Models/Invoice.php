@@ -81,6 +81,11 @@ class Invoice extends Model
         return $this->hasMany(InvoiceAdjustment::class);
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
     public function approvalRequests(): MorphMany
     {
         return $this->morphMany(ApprovalRequest::class, 'approvable');

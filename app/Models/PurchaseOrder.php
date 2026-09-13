@@ -32,6 +32,8 @@ class PurchaseOrder extends Model
         'approved_by',
         'issued_at',
         'acknowledged_at',
+        'paid_at',
+        'closed_at',
         'notes',
         'created_by',
     ];
@@ -51,6 +53,8 @@ class PurchaseOrder extends Model
             'approved_at' => 'datetime',
             'issued_at' => 'datetime',
             'acknowledged_at' => 'datetime',
+            'paid_at' => 'datetime',
+            'closed_at' => 'datetime',
         ];
     }
 
