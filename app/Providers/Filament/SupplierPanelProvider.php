@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\Login;
 use App\Filament\Supplier\Pages\Auth\Register;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -26,7 +27,7 @@ class SupplierPanelProvider extends PanelProvider
         return $panel
             ->id('supplier')
             ->path('supplier')
-            ->login()
+            ->login(Login::class)
             ->registration(Register::class)
             ->passwordReset()
             ->profile(isSimple: false)
