@@ -22,6 +22,8 @@ use App\Observers\TransactionNotificationObserver;
 use App\Policies\RolePolicy;
 use App\Services\Access\UserAccessService;
 use App\Services\Analytics\PriceAnomalyAnalyticsService;
+use App\Services\Analytics\ProcessBottleneckAnalyticsService;
+use App\Services\Analytics\ProcessPerformanceAnalyticsService;
 use App\Services\Auth\LogOtpChannel;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -43,6 +45,14 @@ class AppServiceProvider extends ServiceProvider
             PriceAnomalyAnalyticsService::class,
             fn ($app): PriceAnomalyAnalyticsService => new PriceAnomalyAnalyticsService(
                 $app->make(UserAccessService::class),
+            ),
+        );
+
+        $this->app->scoped(
+            ProcessBottleneckAnalyticsService::class,
+            fn ($app): ProcessBottleneckAnalyticsService => new ProcessBottleneckAnalyticsService(
+                $app->make(UserAccessService::class),
+                $app->make(ProcessPerformanceAnalyticsService::class),
             ),
         );
     }
