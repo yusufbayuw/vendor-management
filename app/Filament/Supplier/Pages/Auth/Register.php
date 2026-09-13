@@ -52,10 +52,10 @@ class Register extends BaseRegister
             $supplier = Supplier::query()->create([
                 'code' => $this->generateSupplierCode(),
                 'legal_name' => $data['legal_name'],
-                'display_name' => $data['display_name'] ?: $data['legal_name'],
+                'display_name' => ($data['display_name'] ?? null) ?: $data['legal_name'],
                 'supplier_type' => $data['supplier_type'],
-                'npwp' => $data['npwp'] ?: null,
-                'nib' => $data['nib'] ?: null,
+                'npwp' => ($data['npwp'] ?? null) ?: null,
+                'nib' => ($data['nib'] ?? null) ?: null,
                 'email' => $data['email'],
                 'phone' => $data['supplier_phone'],
                 'status' => SupplierStatus::Draft,
