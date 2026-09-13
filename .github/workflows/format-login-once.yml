@@ -1,0 +1,42 @@
+name: Format login changes once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/format-login-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Format and remove one-time workflow
+        run: |
+          vendor/bin/pint
+          rm .github/workflows/format-login-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "style: format multi identifier authentication"
+            git push origin main
+          fi
