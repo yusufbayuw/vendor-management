@@ -20,6 +20,8 @@ use App\Models\SupplierBankAccount;
 use App\Observers\AuditableObserver;
 use App\Observers\TransactionNotificationObserver;
 use App\Policies\RolePolicy;
+use App\Services\Access\UserAccessService;
+use App\Services\Analytics\PriceAnomalyAnalyticsService;
 use App\Services\Auth\LogOtpChannel;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -36,6 +38,13 @@ class AppServiceProvider extends ServiceProvider
                 default => throw new InvalidArgumentException('OTP_CHANNEL belum didukung.'),
             };
         });
+
+        $this->app->scoped(
+            PriceAnomalyAnalyticsService::class,
+            fn ($app): PriceAnomalyAnalyticsService => new PriceAnomalyAnalyticsService(
+                $app->make(UserAccessService::class),
+            ),
+        );
     }
 
     public function boot(): void
