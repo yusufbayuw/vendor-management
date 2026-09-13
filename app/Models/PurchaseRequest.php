@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class PurchaseRequest extends Model
 {
@@ -65,9 +66,13 @@ class PurchaseRequest extends Model
         return $this->hasMany(PurchaseRequestItem::class);
     }
 
-    public function approvalRequests(): HasMany
+    public function purchaseOrders(): HasMany
     {
-        return $this->hasMany(ApprovalRequest::class, 'approvable_id')
-            ->where('approvable_type', $this->getMorphClass());
+        return $this->hasMany(PurchaseOrder::class);
+    }
+
+    public function approvalRequests(): MorphMany
+    {
+        return $this->morphMany(ApprovalRequest::class, 'approvable');
     }
 }

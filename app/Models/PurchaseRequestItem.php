@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\PurchaseAllocationStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseRequestItem extends Model
 {
@@ -46,5 +48,11 @@ class PurchaseRequestItem extends Model
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);
+    }
+
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(PurchaseAllocation::class)
+            ->where('status', '!=', PurchaseAllocationStatus::Cancelled->value);
     }
 }
