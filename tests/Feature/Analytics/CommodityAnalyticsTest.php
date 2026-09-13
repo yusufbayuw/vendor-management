@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\Analytics\CommodityAnalyticsService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class CommodityAnalyticsTest extends TestCase
@@ -28,7 +29,10 @@ class CommodityAnalyticsTest extends TestCase
             ->assertOk()
             ->assertSee('Analitik Komoditas')
             ->assertSee('Realisasi Pengadaan Komoditas')
-            ->assertSee('Diterima QC');
+            ->assertSee('Diterima QC')
+            ->assertSee('Export CSV / XLSX');
+
+        $this->assertTrue(Schema::hasTable('exports'));
     }
 
     public function test_supplier_cannot_open_internal_commodity_analytics_page(): void
