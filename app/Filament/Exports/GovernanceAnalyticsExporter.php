@@ -3,6 +3,7 @@
 namespace App\Filament\Exports;
 
 use App\Enums\ApprovalStatus;
+use App\Enums\GovernanceProcess;
 use App\Models\ApprovalRequest;
 use App\Services\Analytics\GovernanceAnalyticsService;
 use Filament\Actions\Exports\ExportColumn;
@@ -21,7 +22,7 @@ class GovernanceAnalyticsExporter extends Exporter
             ExportColumn::make('organization.name')->label('Organisasi'),
             ExportColumn::make('process')
                 ->label('Proses')
-                ->formatStateUsing(fn ($state): string => $state?->label() ?? (string) $state),
+                ->formatStateUsing(fn ($state): string => self::processLabel($state)),
             ExportColumn::make('approvable_label')
                 ->label('Objek Approval')
                 ->state(fn (ApprovalRequest $record): string => self::metrics()->approvableLabel($record)),
@@ -69,6 +70,13 @@ class GovernanceAnalyticsExporter extends Exporter
     private static function metrics(): GovernanceAnalyticsService
     {
         return app(GovernanceAnalyticsService::class);
+    }
+
+    private static function processLabel($state): string
+    {
+        $process = $state instanceof GovernanceProcess ? $state : GovernanceProcess::tryFrom((string) $state);
+
+        return $process?->label() ?? (string) $state;
     }
 
     private static function statusLabel($state): string
