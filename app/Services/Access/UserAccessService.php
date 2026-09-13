@@ -49,6 +49,17 @@ class UserAccessService
             || $this->hasScope($user, AccessScopeType::Supplier, $supplierId);
     }
 
+    public function canAccessUser(User $actor, User $target): bool
+    {
+        if ($actor->is($target) || $this->hasGlobalAccess($actor)) {
+            return true;
+        }
+
+        return $this->applyUserScope(User::query(), $actor)
+            ->whereKey($target->getKey())
+            ->exists();
+    }
+
     public function applyOrganizationScope(Builder $query, User $user): Builder
     {
         if ($this->hasGlobalAccess($user)) {
@@ -88,18 +99,7 @@ class UserAccessService
             return $query;
         }
 
-        $organizationIds = $this->scopeIds($user, AccessScopeType::Organization);
-        $directKitchenIds = $this->scopeIds($user, AccessScopeType::SppgKitchen);
-
-        $accessibleKitchenIds = SppgKitchen::query()
-            ->where(function (Builder $kitchenQuery) use ($organizationIds, $directKitchenIds): void {
-                $kitchenQuery
-                    ->whereIn('organization_id', $organizationIds)
-                    ->orWhereIn('id', $directKitchenIds);
-            })
-            ->pluck('id');
-
-        return $query->whereIn($kitchenColumn, $accessibleKitchenIds);
+        return $query->whereIn($kitchenColumn, $this->accessibleKitchenIds($user));
     }
 
     public function applySupplierScope(Builder $query, User $user): Builder
@@ -117,6 +117,34 @@ class UserAccessService
         return $query;
     }
 
+    public function applyUserScope(Builder $query, User $user): Builder
+    {
+        if ($this->hasGlobalAccess($user)) {
+            return $query;
+        }
+
+        $organizationIds = $this->scopeIds($user, AccessScopeType::Organization);
+        $kitchenIds = $this->accessibleKitchenIds($user);
+
+        return $query->where(function (Builder $userQuery) use ($user, $organizationIds, $kitchenIds): void {
+            $userQuery
+                ->whereKey($user->getKey())
+                ->orWhereHas('accessScopes', function (Builder $scopeQuery) use ($organizationIds, $kitchenIds): void {
+                    $scopeQuery
+                        ->where(function (Builder $organizationQuery) use ($organizationIds): void {
+                            $organizationQuery
+                                ->where('scope_type', AccessScopeType::Organization->value)
+                                ->whereIn('scope_id', $organizationIds);
+                        })
+                        ->orWhere(function (Builder $kitchenQuery) use ($kitchenIds): void {
+                            $kitchenQuery
+                                ->where('scope_type', AccessScopeType::SppgKitchen->value)
+                                ->whereIn('scope_id', $kitchenIds);
+                        });
+                });
+        });
+    }
+
     /** @return Collection<int, int> */
     public function scopeIds(User $user, AccessScopeType $type): Collection
     {
@@ -124,6 +152,26 @@ class UserAccessService
             ->where('user_id', $user->getKey())
             ->where('scope_type', $type->value)
             ->pluck('scope_id')
+            ->map(static fn ($id): int => (int) $id);
+    }
+
+    /** @return Collection<int, int> */
+    public function accessibleKitchenIds(User $user): Collection
+    {
+        if ($this->hasGlobalAccess($user)) {
+            return SppgKitchen::query()->pluck('id')->map(static fn ($id): int => (int) $id);
+        }
+
+        $organizationIds = $this->scopeIds($user, AccessScopeType::Organization);
+        $directKitchenIds = $this->scopeIds($user, AccessScopeType::SppgKitchen);
+
+        return SppgKitchen::query()
+            ->where(function (Builder $kitchenQuery) use ($organizationIds, $directKitchenIds): void {
+                $kitchenQuery
+                    ->whereIn('organization_id', $organizationIds)
+                    ->orWhereIn('id', $directKitchenIds);
+            })
+            ->pluck('id')
             ->map(static fn ($id): int => (int) $id);
     }
 
