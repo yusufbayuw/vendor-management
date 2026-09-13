@@ -6,8 +6,10 @@ use App\Enums\SupplierDocumentStatus;
 use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Supplier\Resources\Documents\Pages\ManageSupplierDocuments;
+use App\Filament\Support\SecureFileModal;
 use App\Models\Supplier;
 use App\Models\SupplierDocument;
+use App\Services\Files\VendorFileStorage;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
@@ -49,8 +51,14 @@ class SupplierDocumentResource extends Resource
             TextInput::make('document_number')->label('Nomor Dokumen')->maxLength(255),
             DatePicker::make('issued_at')->label('Tanggal Terbit')->native(false),
             DatePicker::make('expires_at')->label('Berlaku Sampai')->native(false)->afterOrEqual('issued_at'),
-            FileUpload::make('file_path')->label('Dokumen')->disk('local')->directory('supplier-documents')->visibility('private')
-                ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])->maxSize(10240)->required(),
+            FileUpload::make('file_path')
+                ->label('Dokumen')
+                ->disk(VendorFileStorage::DISK)
+                ->directory('supplier-documents')
+                ->visibility('private')
+                ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+                ->maxSize(10240)
+                ->required(),
             Hidden::make('status')->default(SupplierDocumentStatus::Uploaded->value),
         ])->columns(2);
     }
@@ -61,6 +69,19 @@ class SupplierDocumentResource extends Resource
             TextColumn::make('supplier.display_name')->label('Supplier'),
             TextColumn::make('document_type')->label('Jenis')->searchable(),
             TextColumn::make('document_number')->label('Nomor')->searchable(),
+            TextColumn::make('file_path')
+                ->label('File')
+                ->icon('heroicon-o-paper-clip')
+                ->formatStateUsing(fn (?string $state): string => filled($state) ? basename($state) : '-')
+                ->action(SecureFileModal::make(
+                    'previewSupplierDocument',
+                    fn (SupplierDocument $record): string => route('files.supplier-documents.show', $record),
+                    fn (SupplierDocument $record): string => route('files.supplier-documents.show', [
+                        'supplierDocument' => $record,
+                        'download' => 1,
+                    ]),
+                    fn (SupplierDocument $record): ?string => $record->file_path,
+                )),
             TextColumn::make('expires_at')->label('Berlaku Sampai')->date('d/m/Y'),
             TextColumn::make('status')->badge()->formatStateUsing(
                 fn ($state) => str($state instanceof SupplierDocumentStatus ? $state->value : (string) $state)->replace('_', ' ')->title(),
