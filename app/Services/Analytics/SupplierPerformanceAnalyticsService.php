@@ -27,6 +27,7 @@ class SupplierPerformanceAnalyticsService
             ])
             ->withCount('discrepancies')
             ->whereIn('sppg_kitchen_id', $this->access->accessibleKitchenIds($user))
+            ->whereHas('deliverySchedules.goodsReceipts')
             ->whereNotIn('status', [
                 PurchaseOrderStatus::Draft->value,
                 PurchaseOrderStatus::PendingApproval->value,
