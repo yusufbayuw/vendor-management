@@ -64,7 +64,7 @@ class FinanceAnalytics extends Page implements HasTable
         return $table
             ->query(app(FinanceAnalyticsService::class)->query($user))
             ->heading('Invoice & Settlement Analytics')
-            ->description('Outstanding selalu dihitung dari payable dikurangi pembayaran berstatus verified; payment draft/submitted tidak dianggap lunas.')
+            ->description('Outstanding selalu dihitung dari payable dikurangi pembayaran berstatus verified. Invoice rejected/cancelled diklasifikasikan non-payable.')
             ->headerActions([
                 ExportAction::make('export')
                     ->label('Export CSV / XLSX')
@@ -126,6 +126,7 @@ class FinanceAnalytics extends Page implements HasTable
                     ->color(fn (string $state): string => match ($state) {
                         'Paid' => 'success',
                         'Current' => 'info',
+                        'Non-payable' => 'gray',
                         '1–7 hari' => 'warning',
                         '8–14 hari', '15–30 hari', '>30 hari' => 'danger',
                         default => 'gray',
@@ -200,12 +201,20 @@ class FinanceAnalytics extends Page implements HasTable
                     ->queries(
                         true: fn (Builder $query): Builder => $query
                             ->whereDate('due_date', '<', today())
-                            ->whereNotIn('status', [InvoiceStatus::Paid->value, InvoiceStatus::Cancelled->value]),
+                            ->whereNotIn('status', [
+                                InvoiceStatus::Paid->value,
+                                InvoiceStatus::Rejected->value,
+                                InvoiceStatus::Cancelled->value,
+                            ]),
                         false: fn (Builder $query): Builder => $query->where(function (Builder $query): void {
                             $query
                                 ->whereNull('due_date')
                                 ->orWhereDate('due_date', '>=', today())
-                                ->orWhere('status', InvoiceStatus::Paid->value);
+                                ->orWhereIn('status', [
+                                    InvoiceStatus::Paid->value,
+                                    InvoiceStatus::Rejected->value,
+                                    InvoiceStatus::Cancelled->value,
+                                ]);
                         }),
                     ),
             ], layout: FiltersLayout::AboveContentCollapsible)
