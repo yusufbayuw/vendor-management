@@ -14,6 +14,10 @@ class Supplier extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $attributes = [
+        'status' => 'draft',
+    ];
+
     protected $fillable = [
         'code',
         'legal_name',
