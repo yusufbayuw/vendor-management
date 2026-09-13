@@ -29,11 +29,14 @@ jobs:
           php artisan key:generate
           touch database/database.sqlite
 
-      - name: Run migrations
-        run: php artisan migrate:fresh --force
+      - name: Fresh install and seed
+        run: php artisan migrate:fresh --seed --force
 
       - name: Run tests
         run: php artisan test
+
+      - name: Validate routes
+        run: php artisan route:list --except-vendor
 
       - name: Check formatting
         run: vendor/bin/pint --test
