@@ -2,13 +2,18 @@
 
 namespace App\Filament\Admin\Resources\Users;
 
+use App\Actions\Auth\ManuallyVerifyPhoneAction;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Users\Pages\ManageUsers;
 use App\Models\User;
 use App\Support\Auth\LoginIdentifier;
+use DomainException;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -81,11 +86,42 @@ class UserResource extends Resource
                 TextColumn::make('username')->label('Username')->searchable()->sortable(),
                 TextColumn::make('email')->label('Email')->searchable()->sortable()->placeholder('-'),
                 TextColumn::make('phone')->label('Nomor HP')->searchable()->placeholder('-'),
+                TextColumn::make('phone_verified_at')
+                    ->label('Verifikasi HP')
+                    ->badge()
+                    ->formatStateUsing(static fn ($state): string => $state ? 'Terverifikasi' : 'Belum')
+                    ->color(static fn ($state): string => $state ? 'success' : 'warning'),
                 TextColumn::make('roles.name')->label('Role')->badge()->separator(', '),
                 TextColumn::make('access_scopes_count')->label('Scope')->sortable(),
             ])
             ->recordActions([
                 EditAction::make(),
+                Action::make('verifyPhoneManually')
+                    ->label('Verifikasi HP Manual')
+                    ->icon('heroicon-o-check-badge')
+                    ->color('warning')
+                    ->visible(static fn (User $record): bool => filled($record->phone) && $record->phone_verified_at === null)
+                    ->schema([
+                        Textarea::make('reason')
+                            ->label('Alasan verifikasi manual')
+                            ->helperText('Gunakan hanya saat verifikasi OTP tidak dapat dilakukan. Tindakan ini masuk audit log.')
+                            ->required()
+                            ->rows(3),
+                    ])
+                    ->requiresConfirmation()
+                    ->action(static function (User $record, array $data): void {
+                        try {
+                            app(ManuallyVerifyPhoneAction::class)->execute(
+                                $record,
+                                auth()->user(),
+                                (string) $data['reason'],
+                            );
+
+                            Notification::make()->success()->title('Nomor HP ditandai terverifikasi.')->send();
+                        } catch (DomainException $exception) {
+                            Notification::make()->danger()->title($exception->getMessage())->send();
+                        }
+                    }),
             ]);
     }
 
