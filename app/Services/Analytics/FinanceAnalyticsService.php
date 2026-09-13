@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics;
 
+use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\User;
@@ -41,6 +42,10 @@ class FinanceAnalyticsService
 
     public function outstanding(Invoice $invoice): float
     {
+        if (in_array($invoice->status, [InvoiceStatus::Rejected, InvoiceStatus::Cancelled], true)) {
+            return 0;
+        }
+
         return max(0, (float) $invoice->payable_amount - $this->verifiedPaid($invoice));
     }
 
@@ -55,6 +60,10 @@ class FinanceAnalyticsService
 
     public function agingBucket(Invoice $invoice): string
     {
+        if (in_array($invoice->status, [InvoiceStatus::Rejected, InvoiceStatus::Cancelled], true)) {
+            return 'Non-payable';
+        }
+
         if ($this->outstanding($invoice) <= 0) {
             return 'Paid';
         }
