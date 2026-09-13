@@ -6,6 +6,7 @@ use App\Enums\SystemPermission;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Notifications\DevicePushNotification;
 use App\Notifications\SystemNotification;
 use App\Services\Access\UserAccessService;
 use Illuminate\Support\Collection;
@@ -14,7 +15,10 @@ use Spatie\Permission\Models\Permission;
 
 class NotificationDispatchService
 {
-    public function __construct(private readonly UserAccessService $access) {}
+    public function __construct(
+        private readonly UserAccessService $access,
+        private readonly DevicePushSender $push,
+    ) {}
 
     public function toKitchenPermission(
         SppgKitchen|int $kitchen,
@@ -98,14 +102,15 @@ class NotificationDispatchService
         string $severity = 'info',
         ?string $url = null,
     ): void {
-        Notification::sendNow($user, new SystemNotification(
+        $this->send(
+            collect([$user]),
             $title,
             $body,
             $entityType,
             $entityId,
             $severity,
             $url,
-        ));
+        );
     }
 
     /** @param Collection<int, User> $recipients */
@@ -118,7 +123,10 @@ class NotificationDispatchService
         string $severity,
         ?string $url,
     ): int {
-        $recipients = $recipients->unique('id')->values();
+        $recipients = $recipients
+            ->filter(fn (User $user): bool => $user->is_active)
+            ->unique('id')
+            ->values();
 
         if ($recipients->isEmpty()) {
             return 0;
@@ -131,6 +139,21 @@ class NotificationDispatchService
             $entityId,
             $severity,
             $url,
+        ));
+
+        $type = $entityType ?: 'system';
+        $tag = 'vendor-management-'.substr(hash(
+            'sha256',
+            $type.'|'.(string) $entityId.'|'.$title,
+        ), 0, 32);
+
+        $this->push->send($recipients, new DevicePushNotification(
+            title: $title,
+            body: $body,
+            url: $url ?: '/',
+            type: $type,
+            tag: $tag,
+            urgency: in_array($severity, ['warning', 'danger'], true) ? 'high' : 'normal',
         ));
 
         return $recipients->count();
