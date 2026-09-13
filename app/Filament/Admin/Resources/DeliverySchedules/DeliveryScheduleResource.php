@@ -9,10 +9,12 @@ use App\Enums\DeliveryScheduleStatus;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\DeliverySchedules\Pages\ManageDeliverySchedules;
+use App\Filament\Support\SecureFileModal;
 use App\Models\DeliverySchedule;
 use App\Models\DeliveryScheduleItem;
 use App\Models\GoodsReceiptItem;
 use App\Services\Access\UserAccessService;
+use App\Services\Files\VendorFileStorage;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
@@ -55,6 +57,19 @@ class DeliveryScheduleResource extends Resource
                 TextColumn::make('estimated_arrival_at')->label('Estimasi Tiba')->dateTime('d/m/Y H:i')->toggleable(),
                 TextColumn::make('driver_name')->label('Pengemudi')->toggleable(),
                 TextColumn::make('vehicle_number')->label('Kendaraan')->toggleable(),
+                TextColumn::make('delivery_note_file')
+                    ->label('Surat Jalan')
+                    ->icon('heroicon-o-paper-clip')
+                    ->formatStateUsing(fn (?string $state): string => filled($state) ? basename($state) : '-')
+                    ->action(SecureFileModal::make(
+                        'previewDeliveryNote',
+                        fn (DeliverySchedule $record): string => route('files.delivery-notes.show', $record),
+                        fn (DeliverySchedule $record): string => route('files.delivery-notes.show', [
+                            'deliverySchedule' => $record,
+                            'download' => 1,
+                        ]),
+                        fn (DeliverySchedule $record): ?string => $record->delivery_note_file,
+                    )),
                 TextColumn::make('items_count')->label('Item')->sortable(),
                 TextColumn::make('status')
                     ->label('Status')
@@ -87,10 +102,10 @@ class DeliveryScheduleResource extends Resource
                         TextInput::make('delivery_note_number')->label('Nomor surat jalan')->maxLength(100),
                         FileUpload::make('delivery_note_file')
                             ->label('File surat jalan')
-                            ->disk('local')
+                            ->disk(VendorFileStorage::DISK)
                             ->directory('delivery-notes')
                             ->visibility('private')
-                            ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])
+                            ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
                             ->maxSize(10240),
                     ])
                     ->action(static function (DeliverySchedule $record, array $data): void {
