@@ -10,6 +10,7 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Services\Access\UserAccessService;
 use App\Services\Analytics\CommodityAnalyticsService;
+use BackedEnum;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Pages\Page;
@@ -36,7 +37,7 @@ class CommodityAnalytics extends Page implements HasTable
 
     protected static ?int $navigationSort = 10;
 
-    protected static ?string $navigationIcon = 'heroicon-o-chart-bar-square';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar-square';
 
     protected static ?string $slug = 'analytics/commodities';
 
