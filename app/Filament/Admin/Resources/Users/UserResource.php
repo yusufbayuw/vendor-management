@@ -5,6 +5,7 @@ namespace App\Filament\Admin\Resources\Users;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Users\Pages\ManageUsers;
 use App\Models\User;
+use App\Support\Auth\LoginIdentifier;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -37,11 +38,23 @@ class UserResource extends Resource
                 ->label('Nama')
                 ->required()
                 ->maxLength(255),
+            TextInput::make('username')
+                ->label('Username')
+                ->helperText('Diawali huruf. Boleh memakai huruf, angka, titik, garis bawah, dan strip.')
+                ->required()
+                ->maxLength(50)
+                ->regex('/^[A-Za-z][A-Za-z0-9._-]{2,49}$/')
+                ->unique(ignoreRecord: true),
             TextInput::make('email')
                 ->label('Email')
                 ->email()
-                ->required()
                 ->maxLength(255)
+                ->unique(ignoreRecord: true),
+            TextInput::make('phone')
+                ->label('Nomor HP')
+                ->tel()
+                ->maxLength(30)
+                ->dehydrateStateUsing(static fn (?string $state): ?string => LoginIdentifier::normalizePhone($state))
                 ->unique(ignoreRecord: true),
             TextInput::make('password')
                 ->label('Password')
@@ -65,7 +78,9 @@ class UserResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->label('Nama')->searchable()->sortable(),
-                TextColumn::make('email')->label('Email')->searchable()->sortable(),
+                TextColumn::make('username')->label('Username')->searchable()->sortable(),
+                TextColumn::make('email')->label('Email')->searchable()->sortable()->placeholder('-'),
+                TextColumn::make('phone')->label('Nomor HP')->searchable()->placeholder('-'),
                 TextColumn::make('roles.name')->label('Role')->badge()->separator(', '),
                 TextColumn::make('access_scopes_count')->label('Scope')->sortable(),
             ])
