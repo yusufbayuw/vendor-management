@@ -23,10 +23,15 @@ use UnitEnum;
 class SupplierDocumentResource extends Resource
 {
     protected static ?string $model = SupplierDocument::class;
+
     protected static ?string $navigationLabel = 'Verifikasi Dokumen';
+
     protected static ?string $modelLabel = 'dokumen supplier';
+
     protected static ?string $pluralModelLabel = 'dokumen supplier';
-    protected static string | UnitEnum | null $navigationGroup = 'Supplier';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Supplier';
+
     protected static ?int $navigationSort = 20;
 
     public static function table(Table $table): Table
@@ -82,13 +87,25 @@ class SupplierDocumentResource extends Resource
         return auth()->user()?->can(SystemPermission::SupplierVerify->value) ?? false;
     }
 
-    public static function canCreate(): bool { return false; }
-    public static function canEdit(Model $record): bool { return false; }
-    public static function canDelete(Model $record): bool { return false; }
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
 
     private static function canVerify(SupplierDocument $document): bool
     {
         $user = auth()->user();
+
         return $user !== null
             && $user->can(SystemPermission::SupplierVerify->value)
             && app(UserAccessService::class)->canAccessSupplier($user, $document->supplier_id);

@@ -25,8 +25,11 @@ use UnitEnum;
 class SupplierBankAccountResource extends Resource
 {
     protected static ?string $model = SupplierBankAccount::class;
+
     protected static ?string $navigationLabel = 'Rekening Bank';
-    protected static string | UnitEnum | null $navigationGroup = 'Perusahaan';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Perusahaan';
+
     protected static ?int $navigationSort = 30;
 
     public static function form(Schema $schema): Schema
@@ -70,7 +73,10 @@ class SupplierBankAccountResource extends Resource
         return auth()->user()?->can(SystemPermission::SupplierProfileManage->value) ?? false;
     }
 
-    public static function canCreate(): bool { return static::canViewAny(); }
+    public static function canCreate(): bool
+    {
+        return static::canViewAny();
+    }
 
     public static function canEdit(Model $record): bool
     {
@@ -84,7 +90,10 @@ class SupplierBankAccountResource extends Resource
             && static::canEdit($record);
     }
 
-    public static function canDeleteAny(): bool { return false; }
+    public static function canDeleteAny(): bool
+    {
+        return false;
+    }
 
     private static function supplierIds(): array
     {

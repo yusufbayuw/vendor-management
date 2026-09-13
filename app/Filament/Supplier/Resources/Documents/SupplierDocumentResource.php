@@ -26,8 +26,11 @@ use UnitEnum;
 class SupplierDocumentResource extends Resource
 {
     protected static ?string $model = SupplierDocument::class;
+
     protected static ?string $navigationLabel = 'Dokumen Legal';
-    protected static string | UnitEnum | null $navigationGroup = 'Perusahaan';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Perusahaan';
+
     protected static ?int $navigationSort = 20;
 
     public static function form(Schema $schema): Schema
@@ -99,7 +102,10 @@ class SupplierDocumentResource extends Resource
             && static::canEdit($record);
     }
 
-    public static function canDeleteAny(): bool { return false; }
+    public static function canDeleteAny(): bool
+    {
+        return false;
+    }
 
     private static function canManageProfile(): bool
     {

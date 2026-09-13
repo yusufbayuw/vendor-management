@@ -25,8 +25,10 @@ use UnitEnum;
 class SupplierProfileResource extends Resource
 {
     protected static ?string $model = Supplier::class;
+
     protected static ?string $navigationLabel = 'Profil Perusahaan';
-    protected static string | UnitEnum | null $navigationGroup = 'Perusahaan';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Perusahaan';
 
     public static function form(Schema $schema): Schema
     {
@@ -90,8 +92,15 @@ class SupplierProfileResource extends Resource
         return auth()->user()?->can(SystemPermission::SupplierProfileManage->value) ?? false;
     }
 
-    public static function canCreate(): bool { return false; }
-    public static function canDelete(Model $record): bool { return false; }
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
 
     public static function canEdit(Model $record): bool
     {

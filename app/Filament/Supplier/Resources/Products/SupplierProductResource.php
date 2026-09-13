@@ -25,10 +25,15 @@ use UnitEnum;
 class SupplierProductResource extends Resource
 {
     protected static ?string $model = SupplierProduct::class;
+
     protected static ?string $navigationLabel = 'Katalog Produk';
+
     protected static ?string $modelLabel = 'produk supplier';
+
     protected static ?string $pluralModelLabel = 'katalog produk';
-    protected static string | UnitEnum | null $navigationGroup = 'Perusahaan';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Perusahaan';
+
     protected static ?int $navigationSort = 40;
 
     public static function form(Schema $schema): Schema
