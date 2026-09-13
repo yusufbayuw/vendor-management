@@ -2,17 +2,22 @@
 
 namespace App\Filament\Admin\Resources\PurchaseRequests;
 
+use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
 use App\Actions\Procurement\ApprovePurchaseRequestAction;
+use App\Actions\Procurement\GeneratePurchaseOrdersAction;
 use App\Actions\Procurement\RejectPurchaseRequestAction;
 use App\Actions\Procurement\SubmitPurchaseRequestAction;
 use App\Enums\PurchaseRequestStatus;
+use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\PurchaseRequests\Pages\CreatePurchaseRequest;
 use App\Filament\Admin\Resources\PurchaseRequests\Pages\EditPurchaseRequest;
 use App\Filament\Admin\Resources\PurchaseRequests\Pages\ListPurchaseRequests;
 use App\Models\Product;
 use App\Models\PurchaseRequest;
+use App\Models\PurchaseRequestItem;
 use App\Models\SppgKitchen;
+use App\Models\Supplier;
 use App\Models\Unit;
 use App\Services\Access\UserAccessService;
 use DomainException;
@@ -148,6 +153,58 @@ class PurchaseRequestResource extends Resource
                         static::requirePermission(SystemPermission::PurchaseRequestApprove);
                         static::runDomainAction(fn () => app(RejectPurchaseRequestAction::class)->execute($record, auth()->user(), $data['reason']), 'Purchase request ditolak.');
                     }),
+                Action::make('allocate')
+                    ->label('Alokasikan Supplier')
+                    ->color('warning')
+                    ->visible(static fn (PurchaseRequest $record): bool => in_array($record->status, [PurchaseRequestStatus::Approved, PurchaseRequestStatus::PartiallyAllocated], true) && static::canAllocate($record))
+                    ->schema(static fn (PurchaseRequest $record): array => [
+                        Select::make('item_id')
+                            ->label('Item PR')
+                            ->options(static::allocatableItemOptions($record))
+                            ->searchable()
+                            ->required(),
+                        Select::make('supplier_id')
+                            ->label('Supplier')
+                            ->options(Supplier::query()
+                                ->where('status', SupplierStatus::Active->value)
+                                ->orderBy('display_name')
+                                ->pluck('display_name', 'id')
+                                ->all())
+                            ->searchable()
+                            ->required(),
+                        TextInput::make('quantity')->label('Jumlah alokasi')->numeric()->minValue(0.0001)->required(),
+                        TextInput::make('unit_price')->label('Harga satuan')->numeric()->prefix('Rp')->minValue(0)->required(),
+                        Textarea::make('notes')->label('Catatan alokasi')->rows(3),
+                    ])
+                    ->action(static function (PurchaseRequest $record, array $data): void {
+                        static::requirePermission(SystemPermission::PurchaseRequestAllocate);
+
+                        $item = PurchaseRequestItem::query()
+                            ->where('purchase_request_id', $record->getKey())
+                            ->findOrFail($data['item_id']);
+                        $supplier = Supplier::query()->findOrFail($data['supplier_id']);
+
+                        static::runDomainAction(
+                            fn () => app(AllocatePurchaseRequestItemAction::class)->execute(
+                                $item,
+                                $supplier,
+                                (float) $data['quantity'],
+                                (float) $data['unit_price'],
+                                auth()->user(),
+                                $data['notes'] ?? null,
+                            ),
+                            'Alokasi supplier berhasil disimpan.',
+                        );
+                    }),
+                Action::make('generatePo')
+                    ->label('Generate PO')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(static fn (PurchaseRequest $record): bool => $record->status === PurchaseRequestStatus::FullyAllocated && static::canGeneratePo($record))
+                    ->action(static function (PurchaseRequest $record): void {
+                        static::requirePermission(SystemPermission::PurchaseOrderCreate);
+                        static::runDomainAction(fn () => app(GeneratePurchaseOrdersAction::class)->execute($record, auth()->user()), 'Purchase order berhasil dibuat per supplier.');
+                    }),
             ]);
     }
 
@@ -169,6 +226,7 @@ class PurchaseRequestResource extends Resource
             $user->can(SystemPermission::PurchaseRequestSubmit->value)
             || $user->can(SystemPermission::PurchaseRequestApprove->value)
             || $user->can(SystemPermission::PurchaseRequestAllocate->value)
+            || $user->can(SystemPermission::PurchaseOrderCreate->value)
         );
     }
 
@@ -197,20 +255,50 @@ class PurchaseRequestResource extends Resource
 
     private static function canSubmit(PurchaseRequest $record): bool
     {
-        $user = auth()->user();
-
-        return $user !== null
-            && $user->can(SystemPermission::PurchaseRequestSubmit->value)
-            && app(UserAccessService::class)->canAccessKitchen($user, $record->sppg_kitchen_id);
+        return static::hasScopedPermission($record, SystemPermission::PurchaseRequestSubmit);
     }
 
     private static function canApprove(PurchaseRequest $record): bool
     {
+        return static::hasScopedPermission($record, SystemPermission::PurchaseRequestApprove);
+    }
+
+    private static function canAllocate(PurchaseRequest $record): bool
+    {
+        return static::hasScopedPermission($record, SystemPermission::PurchaseRequestAllocate);
+    }
+
+    private static function canGeneratePo(PurchaseRequest $record): bool
+    {
+        return static::hasScopedPermission($record, SystemPermission::PurchaseOrderCreate);
+    }
+
+    private static function hasScopedPermission(PurchaseRequest $record, SystemPermission $permission): bool
+    {
         $user = auth()->user();
 
         return $user !== null
-            && $user->can(SystemPermission::PurchaseRequestApprove->value)
+            && $user->can($permission->value)
             && app(UserAccessService::class)->canAccessKitchen($user, $record->sppg_kitchen_id);
+    }
+
+    private static function allocatableItemOptions(PurchaseRequest $record): array
+    {
+        return PurchaseRequestItem::query()
+            ->where('purchase_request_id', $record->getKey())
+            ->with(['product', 'unit'])
+            ->withSum('allocations as allocated_qty_sum', 'allocated_qty')
+            ->get()
+            ->filter(static fn (PurchaseRequestItem $item): bool => ((float) $item->requested_qty - (float) ($item->allocated_qty_sum ?? 0)) > 0.0001)
+            ->mapWithKeys(static function (PurchaseRequestItem $item): array {
+                $remaining = max(0, (float) $item->requested_qty - (float) ($item->allocated_qty_sum ?? 0));
+                $unit = $item->unit?->symbol ?: $item->unit?->name;
+
+                return [
+                    $item->getKey() => sprintf('%s — sisa %s %s', $item->product?->name ?? 'Item', rtrim(rtrim(number_format($remaining, 4, '.', ''), '0'), '.'), $unit),
+                ];
+            })
+            ->all();
     }
 
     private static function requirePermission(SystemPermission $permission): void
