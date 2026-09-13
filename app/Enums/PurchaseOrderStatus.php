@@ -12,6 +12,7 @@ enum PurchaseOrderStatus: string
     case Scheduled = 'scheduled';
     case PartiallyDelivered = 'partially_delivered';
     case Fulfilled = 'fulfilled';
+    case PendingExceptionClosure = 'pending_exception_closure';
     case ClosedWithException = 'closed_with_exception';
     case Invoiced = 'invoiced';
     case Paid = 'paid';
