@@ -19,33 +19,22 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use UnitEnum;
 
 class OrganizationResource extends Resource
 {
     protected static ?string $model = Organization::class;
-
     protected static ?string $navigationLabel = 'Organisasi';
-
     protected static ?string $modelLabel = 'organisasi';
-
     protected static ?string $pluralModelLabel = 'organisasi';
-
-    protected static ?string $navigationGroup = 'Master & Organisasi';
-
+    protected static string | UnitEnum | null $navigationGroup = 'Master & Organisasi';
     protected static ?int $navigationSort = 10;
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('code')
-                ->label('Kode')
-                ->required()
-                ->maxLength(50)
-                ->unique(ignoreRecord: true),
-            TextInput::make('name')
-                ->label('Nama organisasi')
-                ->required()
-                ->maxLength(255),
+            TextInput::make('code')->label('Kode')->required()->maxLength(50)->unique(ignoreRecord: true),
+            TextInput::make('name')->label('Nama organisasi')->required()->maxLength(255),
             Select::make('operational_profile')
                 ->label('Profil operasional')
                 ->options(collect(OperationalProfile::cases())->mapWithKeys(
@@ -53,9 +42,7 @@ class OrganizationResource extends Resource
                 )->all())
                 ->required()
                 ->default(OperationalProfile::Standard->value),
-            Toggle::make('is_active')
-                ->label('Aktif')
-                ->default(true),
+            Toggle::make('is_active')->label('Aktif')->default(true),
         ]);
     }
 
@@ -68,7 +55,7 @@ class OrganizationResource extends Resource
                 TextColumn::make('operational_profile')
                     ->label('Profil')
                     ->formatStateUsing(static fn ($state): string => $state instanceof OperationalProfile ? $state->label() : (string) $state),
-                TextColumn::make('kitchens_count')->counts('kitchens')->label('Jumlah SPPG')->sortable(),
+                TextColumn::make('kitchens_count')->label('Jumlah SPPG')->sortable(),
                 IconColumn::make('is_active')->label('Aktif')->boolean(),
             ])
             ->recordActions([
@@ -99,8 +86,11 @@ class OrganizationResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return (auth()->user()?->can(SystemPermission::OrganizationManage->value) ?? false)
-            && app(UserAccessService::class)->canAccessOrganization(auth()->user(), (int) $record->getKey());
+        $user = auth()->user();
+
+        return $user !== null
+            && $user->can(SystemPermission::OrganizationManage->value)
+            && app(UserAccessService::class)->canAccessOrganization($user, (int) $record->getKey());
     }
 
     public static function canDelete(Model $record): bool
@@ -115,8 +105,6 @@ class OrganizationResource extends Resource
 
     public static function getPages(): array
     {
-        return [
-            'index' => ManageOrganizations::route('/'),
-        ];
+        return ['index' => ManageOrganizations::route('/')];
     }
 }
