@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\PrivateVendorFileController;
 use App\Http\Controllers\ProcurementReportController;
+use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\PwaIconController;
 use App\Http\Controllers\TransactionDocumentController;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +18,15 @@ Route::get('/pwa/icon/{size}.png', PwaIconController::class)
 Route::middleware('auth')->group(function (): void {
     Route::get('/reports/procurement.csv', [ProcurementReportController::class, 'csv'])
         ->name('reports.procurement.csv');
+
+    Route::prefix('push')->name('push.')->group(function (): void {
+        Route::get('/vapid-public-key', [PushSubscriptionController::class, 'publicKey'])
+            ->name('vapid-public-key');
+        Route::post('/subscriptions', [PushSubscriptionController::class, 'store'])
+            ->name('subscriptions.store');
+        Route::delete('/subscriptions', [PushSubscriptionController::class, 'destroy'])
+            ->name('subscriptions.destroy');
+    });
 
     Route::prefix('documents')->name('documents.')->group(function (): void {
         Route::get('/purchase-orders/{purchaseOrder}', [TransactionDocumentController::class, 'purchaseOrder'])
