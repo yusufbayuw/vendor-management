@@ -14,6 +14,7 @@ use App\Enums\PaymentStatus;
 use App\Enums\SystemPermission;
 use App\Enums\VerificationStatus;
 use App\Filament\Admin\Resources\Invoices\Pages\ManageInvoices;
+use App\Filament\Support\SecureFileModal;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\SupplierBankAccount;
@@ -60,6 +61,19 @@ class InvoiceResource extends Resource
                 TextColumn::make('po_amount')->label('Nilai PO')->money('IDR')->sortable(),
                 TextColumn::make('adjustment_amount')->label('Adjustment')->money('IDR')->toggleable(),
                 TextColumn::make('payable_amount')->label('Payable')->money('IDR')->sortable(),
+                TextColumn::make('invoice_file')
+                    ->label('File Invoice')
+                    ->icon('heroicon-o-paper-clip')
+                    ->formatStateUsing(fn (?string $state): string => filled($state) ? basename($state) : '-')
+                    ->action(SecureFileModal::make(
+                        'previewInvoiceFile',
+                        fn (Invoice $record): string => route('files.invoice-files.show', $record),
+                        fn (Invoice $record): string => route('files.invoice-files.show', [
+                            'invoice' => $record,
+                            'download' => 1,
+                        ]),
+                        fn (Invoice $record): ?string => $record->invoice_file,
+                    )),
                 TextColumn::make('payments_count')->label('Pembayaran')->sortable(),
                 TextColumn::make('status')
                     ->label('Status')
