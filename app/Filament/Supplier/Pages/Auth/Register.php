@@ -6,6 +6,7 @@ use App\Enums\SupplierStatus;
 use App\Enums\SystemRole;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Auth\PhoneVerificationService;
 use App\Support\Auth\LoginIdentifier;
 use Closure;
 use Filament\Auth\Pages\Register as BaseRegister;
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use SensitiveParameter;
+use Throwable;
 
 class Register extends BaseRegister
 {
@@ -67,7 +69,7 @@ class Register extends BaseRegister
 
     protected function handleRegistration(#[SensitiveParameter] array $data): Model
     {
-        return DB::transaction(function () use ($data): User {
+        $user = DB::transaction(function () use ($data): User {
             $email = filled($data['email'] ?? null) ? (string) $data['email'] : null;
 
             $user = User::query()->create([
@@ -99,6 +101,14 @@ class Register extends BaseRegister
 
             return $user;
         });
+
+        try {
+            app(PhoneVerificationService::class)->send($user, request()->ip());
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        return $user;
     }
 
     private function generateSupplierCode(): string
