@@ -82,6 +82,26 @@ class UserAccessService
         });
     }
 
+    public function applyKitchenOwnedScope(Builder $query, User $user, string $kitchenColumn = 'sppg_kitchen_id'): Builder
+    {
+        if ($this->hasGlobalAccess($user)) {
+            return $query;
+        }
+
+        $organizationIds = $this->scopeIds($user, AccessScopeType::Organization);
+        $directKitchenIds = $this->scopeIds($user, AccessScopeType::SppgKitchen);
+
+        $accessibleKitchenIds = SppgKitchen::query()
+            ->where(function (Builder $kitchenQuery) use ($organizationIds, $directKitchenIds): void {
+                $kitchenQuery
+                    ->whereIn('organization_id', $organizationIds)
+                    ->orWhereIn('id', $directKitchenIds);
+            })
+            ->pluck('id');
+
+        return $query->whereIn($kitchenColumn, $accessibleKitchenIds);
+    }
+
     public function applySupplierScope(Builder $query, User $user): Builder
     {
         if ($this->hasGlobalAccess($user)) {
