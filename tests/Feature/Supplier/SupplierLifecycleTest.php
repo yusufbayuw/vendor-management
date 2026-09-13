@@ -39,6 +39,20 @@ class SupplierLifecycleTest extends TestCase
         $this->assertSame($reviewer->id, $supplier->verified_by);
     }
 
+    public function test_supplier_without_email_can_be_submitted_using_phone(): void
+    {
+        $supplier = Supplier::query()->create([
+            'code' => 'SUP-PHONE',
+            'legal_name' => 'Warung Pangan Sejahtera',
+            'email' => null,
+            'phone' => '081234567890',
+        ]);
+
+        app(SubmitSupplierAction::class)->execute($supplier);
+
+        $this->assertSame(SupplierStatus::Submitted, $supplier->refresh()->status);
+    }
+
     public function test_supplier_can_be_returned_for_revision_and_resubmitted(): void
     {
         $supplier = Supplier::query()->create([
