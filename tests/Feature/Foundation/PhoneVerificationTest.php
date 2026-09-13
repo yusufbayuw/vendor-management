@@ -67,8 +67,27 @@ class PhoneVerificationTest extends TestCase
         $this->assertFalse($user->fresh()->hasVerifiedPhone());
     }
 
-    public function test_unverified_supplier_is_redirected_to_phone_verification_page(): void
+    public function test_manual_mode_allows_unverified_supplier_to_use_portal(): void
     {
+        config(['phone-verification.mode' => 'manual']);
+        Role::findOrCreate(SystemRole::SupplierAdmin->value, 'web');
+
+        $user = User::factory()->create([
+            'email' => null,
+            'username' => 'suppliermanual',
+            'phone' => '081234567890',
+            'phone_verified_at' => null,
+        ]);
+        $user->assignRole(SystemRole::SupplierAdmin->value);
+
+        $this->actingAs($user)
+            ->get('/supplier')
+            ->assertOk();
+    }
+
+    public function test_otp_mode_redirects_unverified_supplier_to_phone_verification_page(): void
+    {
+        config(['phone-verification.mode' => 'otp']);
         Role::findOrCreate(SystemRole::SupplierAdmin->value, 'web');
 
         $user = User::factory()->create([
