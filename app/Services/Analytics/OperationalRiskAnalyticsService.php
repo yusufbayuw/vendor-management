@@ -276,7 +276,7 @@ class OperationalRiskAnalyticsService
             return null;
         }
 
-        return $invoice->due_date->diffInDays(today());
+        return (int) $invoice->due_date->diffInDays(today());
     }
 
     private function hasSupplierAvailabilityRisk(PurchaseOrder $order): bool
