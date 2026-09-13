@@ -12,8 +12,6 @@ class PriceAnomalyAnalyticsExporter extends Exporter
 {
     protected static ?string $model = PurchaseOrderItem::class;
 
-    private static ?PriceAnomalyAnalyticsService $analytics = null;
-
     public static function getColumns(): array
     {
         return [
@@ -65,7 +63,7 @@ class PriceAnomalyAnalyticsExporter extends Exporter
 
     private static function metrics(): PriceAnomalyAnalyticsService
     {
-        return self::$analytics ??= app(PriceAnomalyAnalyticsService::class);
+        return app(PriceAnomalyAnalyticsService::class);
     }
 
     private static function statusLabel(string $status): string
