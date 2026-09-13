@@ -1,0 +1,88 @@
+name: Install application foundation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/install-foundation.yml
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Prepare Laravel environment
+        run: |
+          cp -n .env.example .env || true
+          mkdir -p database
+          touch database/database.sqlite
+          php artisan key:generate --force
+
+      - name: Install Filament and Shield
+        run: |
+          composer require filament/filament:"^5.0" bezhansalleh/filament-shield:"^4.3" -W --no-interaction
+          php artisan filament:install --panels --no-interaction
+
+      - name: Configure Shield auth model
+        run: |
+          cat > app/Models/User.php <<'PHP'
+          <?php
+
+          namespace App\Models;
+
+          use BezhanSalleh\FilamentShield\Traits\HasPanelShield;
+          use Database\Factories\UserFactory;
+          use Filament\Models\Contracts\FilamentUser;
+          use Illuminate\Database\Eloquent\Attributes\Fillable;
+          use Illuminate\Database\Eloquent\Attributes\Hidden;
+          use Illuminate\Database\Eloquent\Factories\HasFactory;
+          use Illuminate\Foundation\Auth\User as Authenticatable;
+          use Illuminate\Notifications\Notifiable;
+          use Spatie\Permission\Traits\HasRoles;
+
+          #[Fillable(['name', 'email', 'password'])]
+          #[Hidden(['password', 'remember_token'])]
+          class User extends Authenticatable implements FilamentUser
+          {
+              /** @use HasFactory<UserFactory> */
+              use HasFactory, HasPanelShield, HasRoles, Notifiable;
+
+              protected function casts(): array
+              {
+                  return [
+                      'email_verified_at' => 'datetime',
+                      'password' => 'hashed',
+                  ];
+              }
+          }
+          PHP
+
+      - name: Setup Filament Shield
+        run: |
+          php artisan shield:setup --force --no-interaction
+          php artisan shield:install admin --no-interaction
+
+      - name: Validate foundation
+        run: |
+          php artisan migrate:fresh --force
+          php artisan test
+
+      - name: Commit generated foundation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add composer.json composer.lock app/Models/User.php app/Providers/Filament bootstrap/providers.php config database/migrations
+          if ! git diff --cached --quiet; then
+            git commit -m "build: install Filament and Shield foundation"
+            git push origin main
+          fi
