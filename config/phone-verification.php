@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'mode' => env('PHONE_VERIFICATION_MODE', 'manual'),
+
     'driver' => env('OTP_CHANNEL', 'log'),
 
     'expires_in_seconds' => (int) env('OTP_EXPIRES_IN_SECONDS', 300),
