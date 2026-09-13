@@ -17,6 +17,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
@@ -25,10 +26,15 @@ class ProductCategoryResource extends Resource
     use AuthorizesMasterData;
 
     protected static ?string $model = ProductCategory::class;
+
     protected static ?string $navigationLabel = 'Kategori Produk';
+
     protected static ?string $modelLabel = 'kategori produk';
+
     protected static ?string $pluralModelLabel = 'kategori produk';
-    protected static string | UnitEnum | null $navigationGroup = 'Master & Organisasi';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
+
     protected static ?int $navigationSort = 40;
 
     public static function form(Schema $schema): Schema
@@ -62,7 +68,7 @@ class ProductCategoryResource extends Resource
             ]);
     }
 
-    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->withCount('products')->with('parent');
     }

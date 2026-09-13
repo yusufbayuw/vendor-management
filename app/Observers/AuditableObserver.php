@@ -37,6 +37,7 @@ class AuditableObserver
     private function withoutNoise(array $values): array
     {
         unset($values['created_at'], $values['updated_at']);
+
         return $values;
     }
 }

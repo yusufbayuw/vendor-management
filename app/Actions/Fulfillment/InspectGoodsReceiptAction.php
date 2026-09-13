@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 class InspectGoodsReceiptAction
 {
     /**
-     * @param array<int, array{accepted_qty: float|int|string, rejected_qty: float|int|string, condition?: string|null, rejection_reason?: string|null, batch_number?: string|null, expiry_date?: mixed, temperature?: float|int|string|null, notes?: string|null}> $inspection
+     * @param  array<int, array{accepted_qty: float|int|string, rejected_qty: float|int|string, condition?: string|null, rejection_reason?: string|null, batch_number?: string|null, expiry_date?: mixed, temperature?: float|int|string|null, notes?: string|null}>  $inspection
      */
     public function execute(GoodsReceipt $receipt, array $inspection, User $actor): GoodsReceipt
     {

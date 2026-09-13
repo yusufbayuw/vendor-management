@@ -24,8 +24,11 @@ use UnitEnum;
 class DeliveryScheduleResource extends Resource
 {
     protected static ?string $model = DeliverySchedule::class;
+
     protected static ?string $navigationLabel = 'Pengiriman';
-    protected static string | UnitEnum | null $navigationGroup = 'Transaksi';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Transaksi';
+
     protected static ?int $navigationSort = 20;
 
     public static function table(Table $table): Table
@@ -67,6 +70,7 @@ class DeliveryScheduleResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $supplierIds = static::supplierIds();
+
         return parent::getEloquentQuery()->with('purchaseOrder.kitchen')
             ->whereHas('purchaseOrder', fn (Builder $q) => $q->whereIn('supplier_id', $supplierIds));
     }
@@ -76,13 +80,25 @@ class DeliveryScheduleResource extends Resource
         return auth()->user()?->can(SystemPermission::DeliveryManage->value) ?? false;
     }
 
-    public static function canCreate(): bool { return false; }
-    public static function canEdit(Model $record): bool { return false; }
-    public static function canDelete(Model $record): bool { return false; }
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
 
     private static function allowed(DeliverySchedule $schedule): bool
     {
         $schedule->loadMissing('purchaseOrder');
+
         return auth()->user()?->can(SystemPermission::DeliveryManage->value)
             && in_array($schedule->purchaseOrder->supplier_id, static::supplierIds(), true);
     }

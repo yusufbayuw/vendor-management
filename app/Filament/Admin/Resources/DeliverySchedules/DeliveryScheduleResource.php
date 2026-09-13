@@ -32,10 +32,15 @@ use UnitEnum;
 class DeliveryScheduleResource extends Resource
 {
     protected static ?string $model = DeliverySchedule::class;
+
     protected static ?string $navigationLabel = 'Jadwal Pengiriman';
+
     protected static ?string $modelLabel = 'jadwal pengiriman';
+
     protected static ?string $pluralModelLabel = 'jadwal pengiriman';
-    protected static string | UnitEnum | null $navigationGroup = 'Fulfillment';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Fulfillment';
+
     protected static ?int $navigationSort = 10;
 
     public static function table(Table $table): Table

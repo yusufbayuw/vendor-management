@@ -32,10 +32,15 @@ use UnitEnum;
 class GoodsReceiptResource extends Resource
 {
     protected static ?string $model = GoodsReceipt::class;
+
     protected static ?string $navigationLabel = 'Penerimaan Barang';
+
     protected static ?string $modelLabel = 'penerimaan barang';
+
     protected static ?string $pluralModelLabel = 'penerimaan barang';
-    protected static string | UnitEnum | null $navigationGroup = 'Fulfillment';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Fulfillment';
+
     protected static ?int $navigationSort = 20;
 
     public static function table(Table $table): Table

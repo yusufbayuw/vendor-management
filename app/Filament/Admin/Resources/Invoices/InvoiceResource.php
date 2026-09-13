@@ -35,10 +35,15 @@ use UnitEnum;
 class InvoiceResource extends Resource
 {
     protected static ?string $model = Invoice::class;
+
     protected static ?string $navigationLabel = 'Invoice';
+
     protected static ?string $modelLabel = 'invoice';
+
     protected static ?string $pluralModelLabel = 'invoice';
-    protected static string | UnitEnum | null $navigationGroup = 'Finance';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Finance';
+
     protected static ?int $navigationSort = 10;
 
     public static function table(Table $table): Table
@@ -170,19 +175,32 @@ class InvoiceResource extends Resource
         ])->contains(static fn (SystemPermission $permission): bool => $user->can($permission->value));
     }
 
-    public static function canCreate(): bool { return false; }
-    public static function canEdit(Model $record): bool { return false; }
-    public static function canDelete(Model $record): bool { return false; }
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
 
     public static function canGenerateInvoice(): bool
     {
         $user = auth()->user();
+
         return $user !== null && ($user->can(SystemPermission::InvoiceReview->value) || $user->can(SystemPermission::InvoiceSubmit->value));
     }
 
     private static function canSubmit(Invoice $record): bool
     {
         $user = auth()->user();
+
         return $user !== null
             && ($user->can(SystemPermission::InvoiceSubmit->value) || $user->can(SystemPermission::InvoiceReview->value))
             && app(UserAccessService::class)->canAccessKitchen($user, $record->sppg_kitchen_id);
@@ -191,6 +209,7 @@ class InvoiceResource extends Resource
     private static function hasScopedPermission(Invoice $record, SystemPermission $permission): bool
     {
         $user = auth()->user();
+
         return $user !== null && $user->can($permission->value) && app(UserAccessService::class)->canAccessKitchen($user, $record->sppg_kitchen_id);
     }
 
@@ -200,6 +219,7 @@ class InvoiceResource extends Resource
             ->where('invoice_id', $invoice->getKey())
             ->whereNotIn('status', [PaymentStatus::Rejected->value, PaymentStatus::Cancelled->value])
             ->sum('amount');
+
         return max(0, (float) $invoice->payable_amount - $committed);
     }
 
@@ -255,6 +275,7 @@ class InvoiceResource extends Resource
     private static function statusLabel($state): string
     {
         $status = $state instanceof InvoiceStatus ? $state : InvoiceStatus::tryFrom((string) $state);
+
         return match ($status) {
             InvoiceStatus::Draft => 'Draft',
             InvoiceStatus::Submitted => 'Diajukan',
@@ -271,6 +292,7 @@ class InvoiceResource extends Resource
     private static function statusColor($state): string
     {
         $status = $state instanceof InvoiceStatus ? $state : InvoiceStatus::tryFrom((string) $state);
+
         return match ($status) {
             InvoiceStatus::Approved, InvoiceStatus::Paid => 'success',
             InvoiceStatus::Submitted, InvoiceStatus::UnderReview, InvoiceStatus::PartiallyPaid => 'warning',

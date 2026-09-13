@@ -23,10 +23,15 @@ class UnitResource extends Resource
     use AuthorizesMasterData;
 
     protected static ?string $model = Unit::class;
+
     protected static ?string $navigationLabel = 'Satuan';
+
     protected static ?string $modelLabel = 'satuan';
+
     protected static ?string $pluralModelLabel = 'satuan';
-    protected static string | UnitEnum | null $navigationGroup = 'Master & Organisasi';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
+
     protected static ?int $navigationSort = 30;
 
     public static function form(Schema $schema): Schema

@@ -20,8 +20,11 @@ use UnitEnum;
 class InvoiceResource extends Resource
 {
     protected static ?string $model = Invoice::class;
+
     protected static ?string $navigationLabel = 'Invoice';
-    protected static string | UnitEnum | null $navigationGroup = 'Finance';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Finance';
+
     protected static ?int $navigationSort = 10;
 
     public static function table(Table $table): Table
@@ -62,9 +65,20 @@ class InvoiceResource extends Resource
         return auth()->user()?->can(SystemPermission::InvoiceSubmit->value) ?? false;
     }
 
-    public static function canCreate(): bool { return false; }
-    public static function canEdit(Model $record): bool { return false; }
-    public static function canDelete(Model $record): bool { return false; }
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
 
     public static function supplierIds(): array
     {

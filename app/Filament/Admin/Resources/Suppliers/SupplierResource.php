@@ -19,15 +19,21 @@ use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class SupplierResource extends Resource
 {
     protected static ?string $model = Supplier::class;
+
     protected static ?string $navigationLabel = 'Supplier';
+
     protected static ?string $modelLabel = 'supplier';
+
     protected static ?string $pluralModelLabel = 'supplier';
-    protected static string | UnitEnum | null $navigationGroup = 'Supplier';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Supplier';
+
     protected static ?int $navigationSort = 10;
 
     public static function table(Table $table): Table
@@ -116,12 +122,12 @@ class SupplierResource extends Resource
         return false;
     }
 
-    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    public static function canEdit(Model $record): bool
     {
         return false;
     }
 
-    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    public static function canDelete(Model $record): bool
     {
         return false;
     }

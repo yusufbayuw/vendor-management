@@ -24,10 +24,15 @@ use UnitEnum;
 class OrganizationResource extends Resource
 {
     protected static ?string $model = Organization::class;
+
     protected static ?string $navigationLabel = 'Organisasi';
+
     protected static ?string $modelLabel = 'organisasi';
+
     protected static ?string $pluralModelLabel = 'organisasi';
-    protected static string | UnitEnum | null $navigationGroup = 'Master & Organisasi';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
+
     protected static ?int $navigationSort = 10;
 
     public static function form(Schema $schema): Schema

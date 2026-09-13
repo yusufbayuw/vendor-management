@@ -25,10 +25,15 @@ use UnitEnum;
 class UserAccessScopeResource extends Resource
 {
     protected static ?string $model = UserAccessScope::class;
+
     protected static ?string $navigationLabel = 'Cakupan Akses';
+
     protected static ?string $modelLabel = 'cakupan akses';
+
     protected static ?string $pluralModelLabel = 'cakupan akses';
-    protected static string | UnitEnum | null $navigationGroup = 'Administrasi';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Administrasi';
+
     protected static ?int $navigationSort = 91;
 
     public static function form(Schema $schema): Schema

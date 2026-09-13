@@ -25,10 +25,15 @@ use UnitEnum;
 class SppgKitchenResource extends Resource
 {
     protected static ?string $model = SppgKitchen::class;
+
     protected static ?string $navigationLabel = 'Dapur SPPG';
+
     protected static ?string $modelLabel = 'dapur SPPG';
+
     protected static ?string $pluralModelLabel = 'dapur SPPG';
-    protected static string | UnitEnum | null $navigationGroup = 'Master & Organisasi';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
+
     protected static ?int $navigationSort = 20;
 
     public static function form(Schema $schema): Schema

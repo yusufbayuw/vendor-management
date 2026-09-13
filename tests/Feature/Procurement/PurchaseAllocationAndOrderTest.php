@@ -16,6 +16,7 @@ use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use DomainException;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -99,7 +100,7 @@ class PurchaseAllocationAndOrderTest extends TestCase
         $this->assertSame(1, $request->purchaseOrders()->count());
     }
 
-    /** @return array{PurchaseRequest, \Illuminate\Database\Eloquent\Collection<int, PurchaseRequestItem>, User} */
+    /** @return array{PurchaseRequest, Collection<int, PurchaseRequestItem>, User} */
     private function makeApprovedPurchaseRequest(array $quantities): array
     {
         $actor = User::factory()->create();

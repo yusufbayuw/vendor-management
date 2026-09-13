@@ -29,8 +29,11 @@ use UnitEnum;
 class PaymentResource extends Resource
 {
     protected static ?string $model = Payment::class;
+
     protected static ?string $navigationLabel = 'Pembayaran';
-    protected static string | UnitEnum | null $navigationGroup = 'Finance';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Finance';
+
     protected static ?int $navigationSort = 20;
 
     public static function table(Table $table): Table
@@ -107,8 +110,12 @@ class PaymentResource extends Resource
     {
         $query = parent::getEloquentQuery()->with(['invoice.supplier', 'invoice.kitchen'])->withCount('attachments');
         $user = auth()->user();
-        if (! $user) return $query->whereRaw('1 = 0');
-        if (app(UserAccessService::class)->hasGlobalAccess($user)) return $query;
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+        if (app(UserAccessService::class)->hasGlobalAccess($user)) {
+            return $query;
+        }
 
         return $query->whereHas('invoice', fn (Builder $q) => app(UserAccessService::class)->applyKitchenOwnedScope($q, $user));
     }
@@ -116,17 +123,30 @@ class PaymentResource extends Resource
     public static function canViewAny(): bool
     {
         $user = auth()->user();
+
         return $user && ($user->can(SystemPermission::PaymentCreate->value) || $user->can(SystemPermission::PaymentVerify->value));
     }
 
-    public static function canCreate(): bool { return false; }
-    public static function canEdit(Model $record): bool { return false; }
-    public static function canDelete(Model $record): bool { return false; }
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
 
     private static function allowed(Payment $payment, SystemPermission $permission): bool
     {
         $user = auth()->user();
         $payment->loadMissing('invoice');
+
         return $user && $user->can($permission->value)
             && app(UserAccessService::class)->canAccessKitchen($user, $payment->invoice->sppg_kitchen_id);
     }

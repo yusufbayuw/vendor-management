@@ -29,8 +29,11 @@ use UnitEnum;
 class PurchaseOrderResource extends Resource
 {
     protected static ?string $model = PurchaseOrder::class;
+
     protected static ?string $navigationLabel = 'Purchase Order';
-    protected static string | UnitEnum | null $navigationGroup = 'Transaksi';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Transaksi';
+
     protected static ?int $navigationSort = 10;
 
     public static function table(Table $table): Table
@@ -67,7 +70,9 @@ class PurchaseOrderResource extends Resource
                         $items = [];
                         foreach ($data['items'] ?? [] as $row) {
                             $id = (int) ($row['item_id'] ?? 0);
-                            if ($id <= 0 || isset($items[$id])) throw new DomainException('Item PO duplikat atau tidak valid.');
+                            if ($id <= 0 || isset($items[$id])) {
+                                throw new DomainException('Item PO duplikat atau tidak valid.');
+                            }
                             $items[$id] = (float) ($row['qty'] ?? 0);
                         }
                         app(CreateDeliveryScheduleAction::class)->execute($record, $items, $data['planned_delivery_at'], auth()->user(), $data['notes'] ?? null);
@@ -80,7 +85,9 @@ class PurchaseOrderResource extends Resource
     {
         $user = auth()->user();
         $query = parent::getEloquentQuery()->with('kitchen')->withCount('items');
-        if (! $user) return $query->whereRaw('1 = 0');
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
 
         return $query->whereIn('supplier_id', static::supplierIds())
             ->whereNotIn('status', [PurchaseOrderStatus::Draft->value, PurchaseOrderStatus::PendingApproval->value, PurchaseOrderStatus::Approved->value]);
@@ -89,12 +96,24 @@ class PurchaseOrderResource extends Resource
     public static function canViewAny(): bool
     {
         $user = auth()->user();
+
         return $user && ($user->can(SystemPermission::PurchaseOrderAcknowledge->value) || $user->can(SystemPermission::DeliveryManage->value));
     }
 
-    public static function canCreate(): bool { return false; }
-    public static function canEdit(Model $record): bool { return false; }
-    public static function canDelete(Model $record): bool { return false; }
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
 
     private static function allowed(PurchaseOrder $po, SystemPermission $permission): bool
     {
@@ -122,6 +141,7 @@ class PurchaseOrderResource extends Resource
             ->where('purchase_order_item_id', $item->getKey())
             ->whereHas('deliverySchedule', fn (Builder $q) => $q->where('status', '!=', DeliveryScheduleStatus::Cancelled->value))
             ->sum('planned_qty');
+
         return max(0, (float) $item->ordered_qty - $scheduled);
     }
 

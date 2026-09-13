@@ -40,10 +40,15 @@ use UnitEnum;
 class PurchaseRequestResource extends Resource
 {
     protected static ?string $model = PurchaseRequest::class;
+
     protected static ?string $navigationLabel = 'Purchase Request';
+
     protected static ?string $modelLabel = 'purchase request';
+
     protected static ?string $pluralModelLabel = 'purchase request';
-    protected static string | UnitEnum | null $navigationGroup = 'Procurement';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Procurement';
+
     protected static ?int $navigationSort = 10;
 
     public static function form(Schema $schema): Schema
