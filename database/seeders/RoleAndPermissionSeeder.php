@@ -31,6 +31,8 @@ class RoleAndPermissionSeeder extends Seeder
             SystemPermission::OrganizationManage,
             SystemPermission::KitchenView,
             SystemPermission::KitchenManage,
+            SystemPermission::UserView,
+            SystemPermission::UserManage,
             SystemPermission::MasterDataView,
             SystemPermission::SupplierView,
             SystemPermission::SupplierVerify,
@@ -129,6 +131,7 @@ class RoleAndPermissionSeeder extends Seeder
         $this->sync(SystemRole::Auditor, [
             SystemPermission::OrganizationView,
             SystemPermission::KitchenView,
+            SystemPermission::UserView,
             SystemPermission::MasterDataView,
             SystemPermission::SupplierView,
             SystemPermission::AuditView,
