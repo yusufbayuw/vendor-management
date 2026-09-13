@@ -5,6 +5,7 @@ namespace Tests\Feature\Foundation;
 use App\Actions\Procurement\SubmitPurchaseRequestAction;
 use App\Enums\AccessScopeType;
 use App\Enums\SystemRole;
+use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
@@ -137,6 +138,12 @@ class PreE2EInfrastructureTest extends TestCase
 
     public function test_operational_reminders_are_idempotent_within_the_same_day(): void
     {
+        Invoice::query()
+            ->where('status', 'partially_paid')
+            ->firstOrFail()
+            ->forceFill(['due_date' => today()->addDay()])
+            ->saveQuietly();
+
         $service = app(OperationalReminderService::class);
 
         $first = array_sum($service->send());
