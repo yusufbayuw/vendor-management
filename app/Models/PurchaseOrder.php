@@ -88,6 +88,21 @@ class PurchaseOrder extends Model
         return $this->hasMany(PurchaseOrderResponse::class);
     }
 
+    public function deliverySchedules(): HasMany
+    {
+        return $this->hasMany(DeliverySchedule::class);
+    }
+
+    public function goodsReceipts(): HasMany
+    {
+        return $this->hasMany(GoodsReceipt::class);
+    }
+
+    public function discrepancies(): HasMany
+    {
+        return $this->hasMany(FulfillmentDiscrepancy::class);
+    }
+
     public function approvalRequests(): MorphMany
     {
         return $this->morphMany(ApprovalRequest::class, 'approvable');
