@@ -2,6 +2,7 @@
 
 namespace App\Filament\Exports;
 
+use App\Enums\PurchaseOrderStatus;
 use App\Models\PurchaseOrder;
 use App\Services\Analytics\OperationalRiskAnalyticsService;
 use Filament\Actions\Exports\ExportColumn;
@@ -23,7 +24,9 @@ class OperationalRiskAnalyticsExporter extends Exporter
             ExportColumn::make('kitchen.name')->label('SPPG'),
             ExportColumn::make('status')
                 ->label('Status PO')
-                ->formatStateUsing(fn ($state): string => self::statusLabel($state?->value ?? (string) $state)),
+                ->formatStateUsing(fn ($state): string => self::statusLabel(
+                    $state instanceof PurchaseOrderStatus ? $state->value : (string) $state,
+                )),
             ExportColumn::make('total_amount')->label('Nilai PO'),
             ExportColumn::make('risk_level')
                 ->label('Risk Level')
