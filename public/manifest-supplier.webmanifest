@@ -1,0 +1,23 @@
+{
+    "id": "/supplier",
+    "name": "Portal Supplier SPPG",
+    "short_name": "Supplier SPPG",
+    "description": "Portal supplier untuk purchase order, delivery, invoice, dan dokumen SPPG.",
+    "lang": "id-ID",
+    "dir": "ltr",
+    "start_url": "/supplier",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#0f172a",
+    "theme_color": "#10b981",
+    "icons": [
+        {"src": "/pwa/icon/192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+        {"src": "/pwa/icon/512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+        {"src": "/pwa/icon/512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+    ],
+    "shortcuts": [
+        {"name": "Dashboard", "short_name": "Dashboard", "url": "/supplier"},
+        {"name": "Purchase Order", "short_name": "PO", "url": "/supplier/purchase-orders"}
+    ]
+}
