@@ -58,7 +58,7 @@ class AdminPanelProvider extends PanelProvider
                     ->navigationLabel('Role & Permission')
                     ->navigationGroup('Administrasi')
                     ->navigationSort(100)
-                    ->registerNavigation(),
+                    ->registerNavigation(true),
             )
             ->middleware([
                 EncryptCookies::class,
