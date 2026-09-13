@@ -207,7 +207,7 @@ class AuditAnalyticsService
 
     private function orModelIds(Builder $query, string $modelClass, Builder $ids): void
     {
-        $morphClass = (new $modelClass())->getMorphClass();
+        $morphClass = (new $modelClass)->getMorphClass();
 
         $query->orWhere(function (Builder $modelQuery) use ($morphClass, $ids): void {
             $modelQuery
