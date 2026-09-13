@@ -32,18 +32,28 @@ class GovernancePolicyService
             ->first();
     }
 
+    /** @return array{self_approval_allowed: bool, minimum_approvers: int, requires_override_reason: bool} */
+    public function snapshot(
+        Organization $organization,
+        GovernanceProcess $process,
+        ?float $amount = null,
+    ): array {
+        $policy = $this->resolve($organization, $process, $amount);
+
+        return [
+            'self_approval_allowed' => $policy?->self_approval_allowed
+                ?? $this->defaultSelfApprovalAllowed($organization->operational_profile, $process),
+            'minimum_approvers' => max(1, $policy?->minimum_approvers ?? 1),
+            'requires_override_reason' => $policy?->requires_override_reason ?? false,
+        ];
+    }
+
     public function selfApprovalAllowed(
         Organization $organization,
         GovernanceProcess $process,
         ?float $amount = null,
     ): bool {
-        $policy = $this->resolve($organization, $process, $amount);
-
-        if ($policy !== null) {
-            return $policy->self_approval_allowed;
-        }
-
-        return $this->defaultSelfApprovalAllowed($organization->operational_profile, $process);
+        return $this->snapshot($organization, $process, $amount)['self_approval_allowed'];
     }
 
     private function defaultSelfApprovalAllowed(
