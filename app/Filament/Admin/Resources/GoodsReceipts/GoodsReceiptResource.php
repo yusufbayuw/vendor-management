@@ -8,9 +8,12 @@ use App\Enums\GoodsReceiptAttachmentType;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\GoodsReceipts\Pages\ManageGoodsReceipts;
+use App\Filament\Support\SecureFileGalleryModal;
 use App\Models\GoodsReceipt;
+use App\Models\GoodsReceiptAttachment;
 use App\Models\GoodsReceiptItem;
 use App\Services\Access\UserAccessService;
+use App\Services\Files\VendorFileStorage;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -63,6 +66,25 @@ class GoodsReceiptResource extends Resource
                     ->color(static fn ($state): string => static::statusColor($state)),
             ])
             ->recordActions([
+                SecureFileGalleryModal::make(
+                    'viewEvidence',
+                    static function (GoodsReceipt $record): array {
+                        $record->loadMissing('attachments');
+
+                        return $record->attachments
+                            ->map(static fn (GoodsReceiptAttachment $attachment): array => [
+                                'label' => $attachment->caption ?: basename($attachment->file_path),
+                                'path' => $attachment->file_path,
+                                'inlineUrl' => route('files.goods-receipt-attachments.show', $attachment),
+                                'downloadUrl' => route('files.goods-receipt-attachments.show', [
+                                    'goodsReceiptAttachment' => $attachment,
+                                    'download' => 1,
+                                ]),
+                            ])
+                            ->all();
+                    },
+                    'Lihat Bukti',
+                ),
                 Action::make('uploadEvidence')
                     ->label('Upload Bukti')
                     ->color('primary')
@@ -74,7 +96,7 @@ class GoodsReceiptResource extends Resource
                             ->required(),
                         FileUpload::make('files')
                             ->label('File')
-                            ->disk('local')
+                            ->disk(VendorFileStorage::DISK)
                             ->directory('goods-receipts/'.$record->getKey())
                             ->visibility('private')
                             ->multiple()
@@ -100,6 +122,7 @@ class GoodsReceiptResource extends Resource
                                     $filePath,
                                     auth()->user(),
                                     $data['caption'] ?? null,
+                                    VendorFileStorage::DISK,
                                 );
                             }
                         }, 'Bukti penerimaan berhasil di-upload.');
