@@ -7,6 +7,7 @@ use App\Enums\PurchaseOrderStatus;
 use App\Filament\Admin\Resources\Invoices\InvoiceResource;
 use App\Models\PurchaseOrder;
 use App\Services\Access\UserAccessService;
+use App\Services\Files\VendorFileStorage;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -38,10 +39,10 @@ class ManageInvoices extends ManageRecords
                     TextInput::make('payment_term_days')->label('Termin pembayaran (hari)')->numeric()->minValue(0)->default(0)->required(),
                     FileUpload::make('invoice_file')
                         ->label('File invoice supplier')
-                        ->disk('local')
+                        ->disk(VendorFileStorage::DISK)
                         ->directory('invoices')
                         ->visibility('private')
-                        ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])
+                        ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
                         ->maxSize(10240),
                 ])
                 ->action(function (array $data): void {
