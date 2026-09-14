@@ -16,6 +16,7 @@ use App\Models\DeliveryScheduleItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Services\Access\UserAccessService;
+use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
@@ -63,6 +64,11 @@ class PurchaseOrderResource extends Resource
                     ->badge()
                     ->formatStateUsing(static fn ($state): string => static::statusLabel($state))
                     ->color(static fn ($state): string => static::statusColor($state)),
+                TextColumn::make('next_action')
+                    ->label('Berikutnya')
+                    ->state(fn (PurchaseOrder $record): string => app(WorkflowGuidanceService::class)->internalPurchaseOrder($record, auth()->user()))
+                    ->icon('heroicon-o-arrow-right-circle')
+                    ->wrap(),
             ])
             ->recordActions([
                 Action::make('submitApproval')
