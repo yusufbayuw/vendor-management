@@ -27,6 +27,8 @@ class ItemsRelationManager extends RelationManager
 
     protected static ?string $title = 'Allocation Workspace';
 
+    protected static bool $isLazy = false;
+
     public function isReadOnly(): bool
     {
         return false;
