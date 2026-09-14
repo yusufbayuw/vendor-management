@@ -20,6 +20,7 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Services\Access\UserAccessService;
+use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -130,6 +131,11 @@ class PurchaseRequestResource extends Resource
                     ->badge()
                     ->formatStateUsing(static fn ($state): string => static::statusLabel($state))
                     ->color(static fn ($state): string => static::statusColor($state)),
+                TextColumn::make('next_action')
+                    ->label('Berikutnya')
+                    ->state(fn (PurchaseRequest $record): string => app(WorkflowGuidanceService::class)->purchaseRequest($record, auth()->user()))
+                    ->icon('heroicon-o-arrow-right-circle')
+                    ->wrap(),
             ])
             ->recordActions([
                 EditAction::make()->visible(static fn (PurchaseRequest $record): bool => static::canEdit($record)),
