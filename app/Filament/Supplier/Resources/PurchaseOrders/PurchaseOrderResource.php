@@ -11,6 +11,7 @@ use App\Filament\Supplier\Resources\PurchaseOrders\Pages\ManagePurchaseOrders;
 use App\Models\DeliveryScheduleItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
@@ -48,6 +49,11 @@ class PurchaseOrderResource extends Resource
             TextColumn::make('total_amount')->label('Total')->money('IDR'),
             TextColumn::make('status')->label('Status')->badge()
                 ->formatStateUsing(fn ($state) => str($state instanceof PurchaseOrderStatus ? $state->value : (string) $state)->replace('_', ' ')->title()),
+            TextColumn::make('next_action')
+                ->label('Berikutnya')
+                ->state(fn (PurchaseOrder $record): string => app(WorkflowGuidanceService::class)->supplierPurchaseOrder($record, auth()->user()))
+                ->icon('heroicon-o-arrow-right-circle')
+                ->wrap(),
         ])->recordActions([
             Action::make('acknowledge')->label('Konfirmasi PO')->color('success')->requiresConfirmation()
                 ->visible(fn (PurchaseOrder $record) => $record->status === PurchaseOrderStatus::Issued && static::allowed($record, SystemPermission::PurchaseOrderAcknowledge))
