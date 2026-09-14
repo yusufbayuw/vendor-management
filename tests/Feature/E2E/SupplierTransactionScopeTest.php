@@ -21,11 +21,12 @@ class SupplierTransactionScopeTest extends TestCase
         $this->seed(DatabaseSeeder::class);
     }
 
-    public function test_supplier_purchase_order_page_never_leaks_another_supplier_transactions(): void
+    public function test_ayam_supplier_pages_only_show_ayam_transactions(): void
     {
         [$ayamPo, $taniPo] = $this->supplierOrders();
+        $ayamInvoice = $ayamPo->invoice()->firstOrFail();
+        $taniInvoice = $taniPo->invoice()->firstOrFail();
         $ayamAdmin = User::query()->where('email', 'supplier.ayam.admin@example.test')->firstOrFail();
-        $taniAdmin = User::query()->where('email', 'supplier.tani.admin@example.test')->firstOrFail();
 
         $this->actingAs($ayamAdmin)
             ->get(route('filament.supplier.resources.purchase-orders.index'))
@@ -33,29 +34,26 @@ class SupplierTransactionScopeTest extends TestCase
             ->assertSee($ayamPo->number)
             ->assertDontSee($taniPo->number);
 
+        $this->get(route('filament.supplier.resources.invoices.index'))
+            ->assertOk()
+            ->assertSee($ayamInvoice->number)
+            ->assertDontSee($taniInvoice->number);
+    }
+
+    public function test_tani_supplier_pages_only_show_tani_transactions(): void
+    {
+        [$ayamPo, $taniPo] = $this->supplierOrders();
+        $ayamInvoice = $ayamPo->invoice()->firstOrFail();
+        $taniInvoice = $taniPo->invoice()->firstOrFail();
+        $taniAdmin = User::query()->where('email', 'supplier.tani.admin@example.test')->firstOrFail();
+
         $this->actingAs($taniAdmin)
             ->get(route('filament.supplier.resources.purchase-orders.index'))
             ->assertOk()
             ->assertSee($taniPo->number)
             ->assertDontSee($ayamPo->number);
-    }
 
-    public function test_supplier_invoice_page_never_leaks_another_supplier_transactions(): void
-    {
-        [$ayamPo, $taniPo] = $this->supplierOrders();
-        $ayamInvoice = $ayamPo->invoice()->firstOrFail();
-        $taniInvoice = $taniPo->invoice()->firstOrFail();
-        $ayamAdmin = User::query()->where('email', 'supplier.ayam.admin@example.test')->firstOrFail();
-        $taniAdmin = User::query()->where('email', 'supplier.tani.admin@example.test')->firstOrFail();
-
-        $this->actingAs($ayamAdmin)
-            ->get(route('filament.supplier.resources.invoices.index'))
-            ->assertOk()
-            ->assertSee($ayamInvoice->number)
-            ->assertDontSee($taniInvoice->number);
-
-        $this->actingAs($taniAdmin)
-            ->get(route('filament.supplier.resources.invoices.index'))
+        $this->get(route('filament.supplier.resources.invoices.index'))
             ->assertOk()
             ->assertSee($taniInvoice->number)
             ->assertDontSee($ayamInvoice->number);
