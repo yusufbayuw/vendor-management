@@ -26,12 +26,14 @@ use App\Services\Analytics\ProcessBottleneckAnalyticsService;
 use App\Services\Analytics\ProcessPerformanceAnalyticsService;
 use App\Services\Auth\LogOtpChannel;
 use App\Support\UiNumber;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
-use Filament\Infolists\Infolist;
+use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Number;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
 use Spatie\Permission\Models\Role;
@@ -89,26 +91,36 @@ class AppServiceProvider extends ServiceProvider
 
     private function configureUiFormats(): void
     {
-        Table::$defaultDateDisplayFormat = 'd/m/Y';
-        Table::$defaultDateTimeDisplayFormat = 'd/m/Y H:i';
-        Table::$defaultTimeDisplayFormat = 'H:i';
-        Table::$defaultNumberLocale = 'id_ID';
+        Number::useLocale('id_ID');
 
-        Infolist::$defaultDateDisplayFormat = 'd/m/Y';
-        Infolist::$defaultDateTimeDisplayFormat = 'd/m/Y H:i';
-        Infolist::$defaultTimeDisplayFormat = 'H:i';
-        Infolist::$defaultNumberLocale = 'id_ID';
+        Table::configureUsing(static function (Table $table): void {
+            $table
+                ->defaultDateDisplayFormat('d/m/Y')
+                ->defaultDateTimeDisplayFormat('d/m/Y H:i')
+                ->defaultTimeDisplayFormat('H:i');
+        });
 
-        DateTimePicker::$defaultDateDisplayFormat = 'd/m/Y';
-        DateTimePicker::$defaultDateTimeDisplayFormat = 'd/m/Y H:i';
-        DateTimePicker::$defaultDateTimeWithSecondsDisplayFormat = 'd/m/Y H:i:s';
+        Schema::configureUsing(static function (Schema $schema): void {
+            $schema
+                ->defaultDateDisplayFormat('d/m/Y')
+                ->defaultDateTimeDisplayFormat('d/m/Y H:i')
+                ->defaultTimeDisplayFormat('H:i');
+        });
 
         DateTimePicker::configureUsing(static function (DateTimePicker $component): void {
-            $component->hourMode(24);
+            $component
+                ->hourMode(24)
+                ->displayFormat('d/m/Y H:i');
+        });
+
+        DatePicker::configureUsing(static function (DatePicker $component): void {
+            $component->displayFormat('d/m/Y');
         });
 
         TimePicker::configureUsing(static function (TimePicker $component): void {
-            $component->hourMode(24)->displayFormat('H:i');
+            $component
+                ->hourMode(24)
+                ->displayFormat('H:i');
         });
 
         TextInput::configureUsing(static function (TextInput $component): void {
