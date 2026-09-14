@@ -9,6 +9,7 @@ use App\Filament\Supplier\Resources\Invoices\Pages\ManageInvoices;
 use App\Filament\Support\SecureFileModal;
 use App\Models\Invoice;
 use App\Services\Files\VendorFileStorage;
+use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
@@ -58,6 +59,11 @@ class InvoiceResource extends Resource
             TextColumn::make('payments_count')->label('Pembayaran'),
             TextColumn::make('status')->label('Status')->badge()
                 ->formatStateUsing(fn ($state) => str($state instanceof InvoiceStatus ? $state->value : (string) $state)->replace('_', ' ')->title()),
+            TextColumn::make('next_action')
+                ->label('Berikutnya')
+                ->state(fn (Invoice $record): string => app(WorkflowGuidanceService::class)->supplierInvoice($record, auth()->user()))
+                ->icon('heroicon-o-arrow-right-circle')
+                ->wrap(),
         ])->recordActions([
             Action::make('uploadInvoice')
                 ->label(fn (Invoice $record): string => filled($record->invoice_file) ? 'Ganti File' : 'Upload Invoice')
