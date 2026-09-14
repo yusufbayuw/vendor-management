@@ -13,6 +13,7 @@ use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\PurchaseRequests\Pages\CreatePurchaseRequest;
 use App\Filament\Admin\Resources\PurchaseRequests\Pages\EditPurchaseRequest;
 use App\Filament\Admin\Resources\PurchaseRequests\Pages\ListPurchaseRequests;
+use App\Filament\Admin\Resources\PurchaseRequests\Pages\ViewPurchaseRequest;
 use App\Models\Product;
 use App\Models\PurchaseRequest;
 use App\Models\PurchaseRequestItem;
@@ -24,13 +25,17 @@ use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -116,6 +121,62 @@ class PurchaseRequestResource extends Resource
         ])->columns(2);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('Ringkasan')
+                ->schema([
+                    TextEntry::make('number')->label('Nomor PR'),
+                    TextEntry::make('kitchen.name')->label('SPPG'),
+                    TextEntry::make('requester.name')->label('Pemohon'),
+                    TextEntry::make('period_start')->label('Periode mulai')->date('d/m/Y'),
+                    TextEntry::make('period_end')->label('Periode selesai')->date('d/m/Y'),
+                    TextEntry::make('status')
+                        ->label('Status')
+                        ->badge()
+                        ->formatStateUsing(static fn ($state): string => static::statusLabel($state))
+                        ->color(static fn ($state): string => static::statusColor($state)),
+                    TextEntry::make('next_action')
+                        ->label('Berikutnya')
+                        ->state(fn (PurchaseRequest $record): string => app(WorkflowGuidanceService::class)->purchaseRequest($record, auth()->user()))
+                        ->icon('heroicon-o-arrow-right-circle')
+                        ->columnSpanFull(),
+                    TextEntry::make('description')->label('Deskripsi kebutuhan')->placeholder('-')->columnSpanFull(),
+                    TextEntry::make('notes')->label('Catatan')->placeholder('-')->columnSpanFull(),
+                ])
+                ->columns(3),
+            Section::make('Item kebutuhan')
+                ->schema([
+                    RepeatableEntry::make('items')
+                        ->hiddenLabel()
+                        ->schema([
+                            TextEntry::make('product.name')->label('Produk'),
+                            TextEntry::make('requested_qty')
+                                ->label('Jumlah')
+                                ->formatStateUsing(static fn ($state): string => rtrim(rtrim(number_format((float) $state, 4, ',', '.'), '0'), ',')),
+                            TextEntry::make('unit.symbol')->label('Satuan')->placeholder('-'),
+                            TextEntry::make('estimated_unit_price')->label('Estimasi harga')->money('IDR')->placeholder('-'),
+                            TextEntry::make('preferred_delivery_date')->label('Tanggal kirim pilihan')->date('d/m/Y')->placeholder('-'),
+                            TextEntry::make('quality_specification')->label('Spesifikasi kualitas')->placeholder('-')->columnSpanFull(),
+                            TextEntry::make('description')->label('Deskripsi item')->placeholder('-')->columnSpanFull(),
+                            TextEntry::make('notes')->label('Catatan item')->placeholder('-')->columnSpanFull(),
+                        ])
+                        ->columns(3)
+                        ->columnSpanFull(),
+                ]),
+            Section::make('Riwayat proses')
+                ->schema([
+                    TextEntry::make('created_at')->label('Dibuat')->dateTime('d/m/Y H:i'),
+                    TextEntry::make('submitted_at')->label('Diajukan')->dateTime('d/m/Y H:i')->placeholder('-'),
+                    TextEntry::make('approved_at')->label('Disetujui')->dateTime('d/m/Y H:i')->placeholder('-'),
+                    TextEntry::make('approver.name')->label('Penyetuju')->placeholder('-'),
+                    TextEntry::make('rejected_at')->label('Ditolak')->dateTime('d/m/Y H:i')->placeholder('-'),
+                    TextEntry::make('rejection_reason')->label('Alasan penolakan')->placeholder('-')->columnSpanFull(),
+                ])
+                ->columns(3),
+        ]);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -138,6 +199,7 @@ class PurchaseRequestResource extends Resource
                     ->wrap(),
             ])
             ->recordActions([
+                ViewAction::make(),
                 EditAction::make()->visible(static fn (PurchaseRequest $record): bool => static::canEdit($record)),
                 Action::make('submit')
                     ->label('Ajukan')
@@ -373,6 +435,7 @@ class PurchaseRequestResource extends Resource
         return [
             'index' => ListPurchaseRequests::route('/'),
             'create' => CreatePurchaseRequest::route('/create'),
+            'view' => ViewPurchaseRequest::route('/{record}'),
             'edit' => EditPurchaseRequest::route('/{record}/edit'),
         ];
     }
