@@ -10,6 +10,7 @@ use App\Filament\Supplier\Resources\DeliverySchedules\Pages\ManageDeliverySchedu
 use App\Filament\Support\SecureFileModal;
 use App\Models\DeliverySchedule;
 use App\Services\Files\VendorFileStorage;
+use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
@@ -58,6 +59,11 @@ class DeliveryScheduleResource extends Resource
                 )),
             TextColumn::make('status')->label('Status')->badge()
                 ->formatStateUsing(fn ($state) => str($state instanceof DeliveryScheduleStatus ? $state->value : (string) $state)->replace('_', ' ')->title()),
+            TextColumn::make('next_action')
+                ->label('Berikutnya')
+                ->state(fn (DeliverySchedule $record): string => app(WorkflowGuidanceService::class)->supplierDelivery($record, auth()->user()))
+                ->icon('heroicon-o-arrow-right-circle')
+                ->wrap(),
         ])->recordActions([
             Action::make('confirm')->label('Konfirmasi')->color('success')->requiresConfirmation()
                 ->visible(fn (DeliverySchedule $record) => in_array($record->status, [DeliveryScheduleStatus::Draft, DeliveryScheduleStatus::Planned], true) && static::allowed($record))
