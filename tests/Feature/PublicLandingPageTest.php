@@ -16,7 +16,7 @@ class PublicLandingPageTest extends TestCase
             ->assertSee('Mulai Daftar Supplier')
             ->assertSee('Alur kemitraan')
             ->assertSee('Purchase Order yang jelas')
-            ->assertSee('Keamanan & transparansi')
+            ->assertSee('Keamanan & transparansi', false)
             ->assertSee(url('/supplier/register'), false)
             ->assertSee(url('/supplier/login'), false)
             ->assertSee(url('/admin/login'), false);
