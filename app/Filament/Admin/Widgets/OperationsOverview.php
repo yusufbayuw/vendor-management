@@ -7,6 +7,11 @@ use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\PurchaseRequestStatus;
+use App\Filament\Admin\Pages\DiscrepancyAnalytics;
+use App\Filament\Admin\Resources\DeliverySchedules\DeliveryScheduleResource;
+use App\Filament\Admin\Resources\Invoices\InvoiceResource;
+use App\Filament\Admin\Resources\PurchaseOrders\PurchaseOrderResource;
+use App\Filament\Admin\Resources\PurchaseRequests\PurchaseRequestResource;
 use App\Models\DeliverySchedule;
 use App\Models\FulfillmentDiscrepancy;
 use App\Models\Invoice;
@@ -69,19 +74,29 @@ class OperationsOverview extends StatsOverviewWidget
         return [
             Stat::make('PR Menunggu Approval', number_format($pendingRequests, 0, ',', '.'))
                 ->description('Purchase request yang perlu keputusan')
-                ->color($pendingRequests > 0 ? 'warning' : 'success'),
+                ->icon('heroicon-o-clipboard-document-check')
+                ->color($pendingRequests > 0 ? 'warning' : 'success')
+                ->url(PurchaseRequestResource::getUrl('index')),
             Stat::make('PO Aktif', number_format($activeOrders, 0, ',', '.'))
                 ->description('Belum closed/cancelled')
-                ->color('primary'),
+                ->icon('heroicon-o-document-text')
+                ->color('primary')
+                ->url(PurchaseOrderResource::getUrl('index')),
             Stat::make('Pengiriman Hari Ini', number_format($todayDeliveries, 0, ',', '.'))
                 ->description('Jadwal seluruh SPPG dalam scope')
-                ->color('info'),
+                ->icon('heroicon-o-truck')
+                ->color('info')
+                ->url(DeliveryScheduleResource::getUrl('index')),
             Stat::make('Discrepancy Terbuka', number_format($openDiscrepancies, 0, ',', '.'))
                 ->description('Perlu rekonsiliasi')
-                ->color($openDiscrepancies > 0 ? 'danger' : 'success'),
+                ->icon('heroicon-o-exclamation-triangle')
+                ->color($openDiscrepancies > 0 ? 'danger' : 'success')
+                ->url(DiscrepancyAnalytics::getUrl()),
             Stat::make('Outstanding Invoice', 'Rp '.number_format($outstanding, 0, ',', '.'))
                 ->description('Setelah pembayaran terverifikasi')
-                ->color($outstanding > 0 ? 'warning' : 'success'),
+                ->icon('heroicon-o-banknotes')
+                ->color($outstanding > 0 ? 'warning' : 'success')
+                ->url(InvoiceResource::getUrl('index')),
         ];
     }
 }
