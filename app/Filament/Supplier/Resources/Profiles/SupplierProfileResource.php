@@ -7,6 +7,7 @@ use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Supplier\Resources\Profiles\Pages\ManageSupplierProfiles;
 use App\Models\Supplier;
+use App\Services\Regions\IndonesiaRegionService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -15,6 +16,8 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -50,10 +53,42 @@ class SupplierProfileResource extends Resource
             TextInput::make('phone')->label('Telepon')->tel()->required(),
             TextInput::make('website')->label('Website')->url(),
             Textarea::make('address')->label('Alamat')->columnSpanFull(),
-            TextInput::make('province_code')->label('Kode Provinsi'),
-            TextInput::make('regency_code')->label('Kode Kabupaten/Kota'),
-            TextInput::make('district_code')->label('Kode Kecamatan'),
-            TextInput::make('village_code')->label('Kode Desa/Kelurahan'),
+            Select::make('province_code')
+                ->label('Provinsi')
+                ->placeholder('Pilih provinsi')
+                ->options(fn (): array => app(IndonesiaRegionService::class)->provinces())
+                ->searchable()
+                ->live()
+                ->afterStateUpdated(function (Set $set): void {
+                    $set('regency_code', null);
+                    $set('district_code', null);
+                    $set('village_code', null);
+                }),
+            Select::make('regency_code')
+                ->label('Kabupaten / Kota')
+                ->placeholder('Pilih kabupaten / kota')
+                ->options(fn (Get $get): array => app(IndonesiaRegionService::class)->cities($get('province_code')))
+                ->searchable()
+                ->live()
+                ->disabled(fn (Get $get): bool => blank($get('province_code')))
+                ->afterStateUpdated(function (Set $set): void {
+                    $set('district_code', null);
+                    $set('village_code', null);
+                }),
+            Select::make('district_code')
+                ->label('Kecamatan')
+                ->placeholder('Pilih kecamatan')
+                ->options(fn (Get $get): array => app(IndonesiaRegionService::class)->districts($get('regency_code')))
+                ->searchable()
+                ->live()
+                ->disabled(fn (Get $get): bool => blank($get('regency_code')))
+                ->afterStateUpdated(fn (Set $set) => $set('village_code', null)),
+            Select::make('village_code')
+                ->label('Desa / Kelurahan')
+                ->placeholder('Pilih desa / kelurahan')
+                ->options(fn (Get $get): array => app(IndonesiaRegionService::class)->villages($get('district_code')))
+                ->searchable()
+                ->disabled(fn (Get $get): bool => blank($get('district_code'))),
             TextInput::make('postal_code')->label('Kode Pos'),
         ])->columns(2);
     }
