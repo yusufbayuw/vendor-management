@@ -9,9 +9,9 @@ use Illuminate\Support\Carbon;
 
 class ProcurementReportOverview extends StatsOverviewWidget
 {
-    public string $fromDate;
+    public ?string $fromDate = null;
 
-    public string $toDate;
+    public ?string $toDate = null;
 
     protected int|string|array $columnSpan = 'full';
 
@@ -26,10 +26,12 @@ class ProcurementReportOverview extends StatsOverviewWidget
 
     protected function getDescription(): ?string
     {
+        [$fromDate, $toDate] = $this->dateRange();
+
         return sprintf(
             'Periode %s sampai %s',
-            Carbon::parse($this->fromDate)->translatedFormat('d F Y'),
-            Carbon::parse($this->toDate)->translatedFormat('d F Y'),
+            Carbon::parse($fromDate)->translatedFormat('d F Y'),
+            Carbon::parse($toDate)->translatedFormat('d F Y'),
         );
     }
 
@@ -41,10 +43,12 @@ class ProcurementReportOverview extends StatsOverviewWidget
             return [];
         }
 
+        [$fromDate, $toDate] = $this->dateRange();
+
         $summary = app(ProcurementReportService::class)->summary(
             $user,
-            $this->fromDate,
-            $this->toDate,
+            $fromDate,
+            $toDate,
         );
 
         return [
@@ -80,6 +84,15 @@ class ProcurementReportOverview extends StatsOverviewWidget
                 ->description('Sisa payable setelah pembayaran terverifikasi')
                 ->descriptionIcon('heroicon-m-clock')
                 ->color($summary['outstanding_value'] > 0 ? 'warning' : 'success'),
+        ];
+    }
+
+    /** @return array{string, string} */
+    private function dateRange(): array
+    {
+        return [
+            $this->fromDate ?: now()->startOfMonth()->toDateString(),
+            $this->toDate ?: now()->toDateString(),
         ];
     }
 }
