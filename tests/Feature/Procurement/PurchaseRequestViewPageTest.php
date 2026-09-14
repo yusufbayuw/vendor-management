@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Procurement;
 
+use App\Enums\PurchaseRequestStatus;
 use App\Models\PurchaseRequest;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
@@ -32,6 +33,22 @@ class PurchaseRequestViewPageTest extends TestCase
             ->assertSee('Riwayat proses')
             ->assertSee('PR-DEMO-WEEKLY-001')
             ->assertSee('Ayam Broiler');
+    }
+
+    public function test_procurement_user_sees_supplier_allocation_workspace_for_approved_request(): void
+    {
+        $user = User::query()->where('email', 'pusat@example.test')->firstOrFail();
+        $request = PurchaseRequest::query()->where('number', 'PR-DEMO-DRAFT-001')->firstOrFail();
+        $request->forceFill(['status' => PurchaseRequestStatus::Approved])->save();
+
+        $this->actingAs($user)
+            ->get(route('filament.admin.resources.purchase-requests.view', ['record' => $request]))
+            ->assertOk()
+            ->assertSee('Alokasi Supplier per Item')
+            ->assertSee('Dialokasikan')
+            ->assertSee('Sisa')
+            ->assertSee('Alokasikan Supplier')
+            ->assertSee('Tepung Terigu');
     }
 
     public function test_user_cannot_open_purchase_request_outside_their_kitchen_scope(): void
