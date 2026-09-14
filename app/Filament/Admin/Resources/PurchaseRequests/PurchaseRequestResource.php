@@ -30,6 +30,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -84,9 +85,18 @@ class PurchaseRequestResource extends Resource
                         ->label('Produk')
                         ->options(Product::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
                         ->searchable()
+                        ->live()
+                        ->afterStateUpdated(static function (Set $set, mixed $state): void {
+                            $unitId = filled($state)
+                                ? Product::query()->whereKey($state)->value('default_unit_id')
+                                : null;
+
+                            $set('unit_id', $unitId);
+                        })
                         ->required(),
                     Select::make('unit_id')
                         ->label('Satuan')
+                        ->helperText('Otomatis mengikuti satuan default produk. Dapat diubah bila kebutuhan menggunakan satuan lain.')
                         ->options(Unit::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
                         ->searchable()
                         ->required(),
