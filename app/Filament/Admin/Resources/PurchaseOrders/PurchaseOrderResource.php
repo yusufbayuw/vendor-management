@@ -12,6 +12,7 @@ use App\Enums\DeliveryScheduleStatus;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\PurchaseOrders\Pages\ManagePurchaseOrders;
+use App\Filament\Admin\Resources\PurchaseOrders\Pages\ViewPurchaseOrder;
 use App\Models\DeliveryScheduleItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
@@ -19,13 +20,18 @@ use App\Services\Access\UserAccessService;
 use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -45,6 +51,81 @@ class PurchaseOrderResource extends Resource
     protected static string|UnitEnum|null $navigationGroup = 'Procurement';
 
     protected static ?int $navigationSort = 20;
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('Ringkasan')
+                ->schema([
+                    TextEntry::make('number')->label('Nomor PO'),
+                    TextEntry::make('supplier.display_name')->label('Supplier'),
+                    TextEntry::make('kitchen.name')->label('SPPG'),
+                    TextEntry::make('purchaseRequest.number')->label('Purchase Request')->placeholder('-'),
+                    TextEntry::make('order_date')->label('Tanggal PO')->date('d/m/Y'),
+                    TextEntry::make('revision_number')->label('Revisi')->numeric(),
+                    TextEntry::make('status')
+                        ->label('Status')
+                        ->badge()
+                        ->formatStateUsing(static fn ($state): string => static::statusLabel($state))
+                        ->color(static fn ($state): string => static::statusColor($state)),
+                    TextEntry::make('next_action')
+                        ->label('Berikutnya')
+                        ->state(fn (PurchaseOrder $record): string => app(WorkflowGuidanceService::class)->internalPurchaseOrder($record, auth()->user()))
+                        ->icon('heroicon-o-arrow-right-circle')
+                        ->columnSpan(2),
+                    TextEntry::make('delivery_start')->label('Mulai pengiriman')->date('d/m/Y')->placeholder('-'),
+                    TextEntry::make('delivery_end')->label('Batas pengiriman')->date('d/m/Y')->placeholder('-'),
+                    TextEntry::make('notes')->label('Catatan')->placeholder('-')->columnSpanFull(),
+                ])
+                ->columns(3),
+            Section::make('Nilai Purchase Order')
+                ->schema([
+                    TextEntry::make('subtotal')->label('Subtotal')->money('IDR'),
+                    TextEntry::make('tax_amount')->label('Pajak')->money('IDR'),
+                    TextEntry::make('discount_amount')->label('Diskon')->money('IDR'),
+                    TextEntry::make('total_amount')->label('Total PO')->money('IDR'),
+                ])
+                ->columns(4),
+            Section::make('Item Purchase Order')
+                ->schema([
+                    RepeatableEntry::make('items')
+                        ->hiddenLabel()
+                        ->schema([
+                            TextEntry::make('product_name_snapshot')->label('Produk'),
+                            TextEntry::make('ordered_qty')
+                                ->label('Dipesan')
+                                ->formatStateUsing(static fn ($state): string => static::formatQty((float) $state)),
+                            TextEntry::make('unit_name_snapshot')->label('Satuan'),
+                            TextEntry::make('unit_price')->label('Harga satuan')->money('IDR'),
+                            TextEntry::make('subtotal')->label('Subtotal')->money('IDR'),
+                            TextEntry::make('delivered_qty')
+                                ->label('Dikirim')
+                                ->formatStateUsing(static fn ($state): string => static::formatQty((float) $state)),
+                            TextEntry::make('accepted_qty')
+                                ->label('Diterima')
+                                ->formatStateUsing(static fn ($state): string => static::formatQty((float) $state)),
+                            TextEntry::make('rejected_qty')
+                                ->label('Ditolak')
+                                ->formatStateUsing(static fn ($state): string => static::formatQty((float) $state)),
+                            TextEntry::make('description_snapshot')->label('Deskripsi')->placeholder('-')->columnSpanFull(),
+                        ])
+                        ->columns(4)
+                        ->columnSpanFull(),
+                ]),
+            Section::make('Riwayat proses')
+                ->schema([
+                    TextEntry::make('creator.name')->label('Dibuat oleh')->placeholder('-'),
+                    TextEntry::make('created_at')->label('Dibuat')->dateTime('d/m/Y H:i'),
+                    TextEntry::make('approver.name')->label('Disetujui oleh')->placeholder('-'),
+                    TextEntry::make('approved_at')->label('Disetujui')->dateTime('d/m/Y H:i')->placeholder('-'),
+                    TextEntry::make('issued_at')->label('Diterbitkan')->dateTime('d/m/Y H:i')->placeholder('-'),
+                    TextEntry::make('acknowledged_at')->label('Dikonfirmasi supplier')->dateTime('d/m/Y H:i')->placeholder('-'),
+                    TextEntry::make('paid_at')->label('Dibayar')->dateTime('d/m/Y H:i')->placeholder('-'),
+                    TextEntry::make('closed_at')->label('Ditutup')->dateTime('d/m/Y H:i')->placeholder('-'),
+                ])
+                ->columns(4),
+        ]);
+    }
 
     public static function table(Table $table): Table
     {
@@ -71,6 +152,7 @@ class PurchaseOrderResource extends Resource
                     ->wrap(),
             ])
             ->recordActions([
+                ViewAction::make(),
                 Action::make('submitApproval')
                     ->label('Ajukan Approval')
                     ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::Draft && static::hasScopedPermission($record, SystemPermission::PurchaseOrderCreate))
@@ -348,6 +430,7 @@ class PurchaseOrderResource extends Resource
     {
         return [
             'index' => ManagePurchaseOrders::route('/'),
+            'view' => ViewPurchaseOrder::route('/{record}'),
         ];
     }
 }
