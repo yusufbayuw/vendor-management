@@ -5,6 +5,8 @@ namespace App\Providers\Filament;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Supplier\Pages\Auth\Register;
+use App\Filament\Supplier\Widgets\SupplierOnboardingOverview;
+use App\Filament\Supplier\Widgets\SupplierOverview;
 use App\Http\Middleware\EnsureSupplierPhoneIsVerified;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -69,6 +71,8 @@ class SupplierPanelProvider extends PanelProvider
             )
             ->widgets([
                 AccountWidget::class,
+                SupplierOnboardingOverview::class,
+                SupplierOverview::class,
             ])
             ->middleware([
                 EncryptCookies::class,
