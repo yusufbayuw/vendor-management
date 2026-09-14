@@ -38,7 +38,13 @@ class SupplierDocumentResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('supplier_id')->label('Supplier')->options(static::supplierOptions())->required(),
+            Select::make('supplier_id')
+                ->label('Supplier')
+                ->options(static::supplierOptions())
+                ->default(fn (): ?int => static::singleSupplierId())
+                ->disabled(fn (): bool => static::singleSupplierId() !== null)
+                ->dehydrated()
+                ->required(),
             Select::make('document_type')->label('Jenis Dokumen')->options([
                 'nib' => 'NIB',
                 'npwp' => 'NPWP',
@@ -147,6 +153,13 @@ class SupplierDocumentResource extends Resource
     {
         return Supplier::query()->whereIn('id', static::supplierIds())->whereIn('status', [SupplierStatus::Draft->value, SupplierStatus::RevisionRequired->value])
             ->pluck('display_name', 'id')->all();
+    }
+
+    private static function singleSupplierId(): ?int
+    {
+        $options = static::supplierOptions();
+
+        return count($options) === 1 ? (int) array_key_first($options) : null;
     }
 
     public static function getPages(): array
