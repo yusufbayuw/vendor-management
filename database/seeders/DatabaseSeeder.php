@@ -13,6 +13,10 @@ class DatabaseSeeder extends Seeder
             MasterDataSeeder::class,
         ]);
 
+        if (! app()->environment('testing')) {
+            $this->call(IndonesiaRegionSeeder::class);
+        }
+
         if (! app()->environment('production')) {
             $this->call([
                 DemoDataSeeder::class,
