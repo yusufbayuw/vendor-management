@@ -42,6 +42,9 @@ class SupplierProductResource extends Resource
             Select::make('supplier_id')
                 ->label('Supplier')
                 ->options(static::supplierOptions())
+                ->default(fn (): ?int => static::singleSupplierId())
+                ->disabled(fn (): bool => static::singleSupplierId() !== null)
+                ->dehydrated()
                 ->required(),
             Select::make('product_id')
                 ->label('Produk')
@@ -127,6 +130,13 @@ class SupplierProductResource extends Resource
             ->orderBy('display_name')
             ->pluck('display_name', 'id')
             ->all();
+    }
+
+    private static function singleSupplierId(): ?int
+    {
+        $options = static::supplierOptions();
+
+        return count($options) === 1 ? (int) array_key_first($options) : null;
     }
 
     public static function getPages(): array
