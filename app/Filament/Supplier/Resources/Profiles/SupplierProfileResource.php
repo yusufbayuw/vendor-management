@@ -43,7 +43,10 @@ class SupplierProfileResource extends Resource
             ])->required(),
             TextInput::make('npwp')->label('NPWP'),
             TextInput::make('nib')->label('NIB'),
-            TextInput::make('email')->label('Email')->email()->required(),
+            TextInput::make('email')
+                ->label('Email')
+                ->helperText('Opsional. Supplier tetap dapat menggunakan nomor HP dan username untuk akses portal.')
+                ->email(),
             TextInput::make('phone')->label('Telepon')->tel()->required(),
             TextInput::make('website')->label('Website')->url(),
             Textarea::make('address')->label('Alamat')->columnSpanFull(),
