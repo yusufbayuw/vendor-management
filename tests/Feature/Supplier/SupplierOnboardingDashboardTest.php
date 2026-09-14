@@ -1,0 +1,42 @@
+<?php
+
+namespace Tests\Feature\Supplier;
+
+use App\Models\User;
+use Database\Seeders\DatabaseSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class SupplierOnboardingDashboardTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_pending_supplier_sees_onboarding_guidance_on_dashboard(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $user = User::query()->where('email', 'supplier.pending.operator@example.test')->firstOrFail();
+
+        $this->actingAs($user)
+            ->get('/supplier')
+            ->assertOk()
+            ->assertSee('Status Pendaftaran')
+            ->assertSee('Progress Onboarding')
+            ->assertSee('Profil Supplier')
+            ->assertSee('Dokumen Legal')
+            ->assertSee('Rekening Bank')
+            ->assertSee('Katalog Produk');
+    }
+
+    public function test_active_supplier_does_not_see_onboarding_widget(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $user = User::query()->where('email', 'supplier.ayam.admin@example.test')->firstOrFail();
+
+        $this->actingAs($user)
+            ->get('/supplier')
+            ->assertOk()
+            ->assertDontSee('Progress Onboarding');
+    }
+}
