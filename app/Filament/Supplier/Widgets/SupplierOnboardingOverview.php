@@ -15,6 +15,8 @@ class SupplierOnboardingOverview extends StatsOverviewWidget
 {
     protected static ?int $sort = 0;
 
+    protected static bool $isLazy = false;
+
     public static function canView(): bool
     {
         $user = auth()->user();
