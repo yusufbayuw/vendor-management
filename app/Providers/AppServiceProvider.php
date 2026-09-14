@@ -25,6 +25,12 @@ use App\Services\Analytics\PriceAnomalyAnalyticsService;
 use App\Services\Analytics\ProcessBottleneckAnalyticsService;
 use App\Services\Analytics\ProcessPerformanceAnalyticsService;
 use App\Services\Auth\LogOtpChannel;
+use App\Support\UiNumber;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
+use Filament\Infolists\Infolist;
+use Filament\Tables\Table;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
@@ -68,6 +74,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->configureUiFormats();
+
         Gate::policy(Role::class, RolePolicy::class);
 
         foreach ($this->auditedModels() as $model) {
@@ -77,6 +85,47 @@ class AppServiceProvider extends ServiceProvider
         foreach ($this->notificationModels() as $model) {
             $model::observe(TransactionNotificationObserver::class);
         }
+    }
+
+    private function configureUiFormats(): void
+    {
+        Table::$defaultDateDisplayFormat = 'd/m/Y';
+        Table::$defaultDateTimeDisplayFormat = 'd/m/Y H:i';
+        Table::$defaultTimeDisplayFormat = 'H:i';
+        Table::$defaultNumberLocale = 'id_ID';
+
+        Infolist::$defaultDateDisplayFormat = 'd/m/Y';
+        Infolist::$defaultDateTimeDisplayFormat = 'd/m/Y H:i';
+        Infolist::$defaultTimeDisplayFormat = 'H:i';
+        Infolist::$defaultNumberLocale = 'id_ID';
+
+        DateTimePicker::$defaultDateDisplayFormat = 'd/m/Y';
+        DateTimePicker::$defaultDateTimeDisplayFormat = 'd/m/Y H:i';
+        DateTimePicker::$defaultDateTimeWithSecondsDisplayFormat = 'd/m/Y H:i:s';
+
+        DateTimePicker::configureUsing(static function (DateTimePicker $component): void {
+            $component->hourMode(24);
+        });
+
+        TimePicker::configureUsing(static function (TimePicker $component): void {
+            $component->hourMode(24)->displayFormat('H:i');
+        });
+
+        TextInput::configureUsing(static function (TextInput $component): void {
+            $component
+                ->mask(static fn (TextInput $component) => $component->getType() === 'number'
+                    ? UiNumber::maskFor($component->getName())
+                    : null)
+                ->formatStateUsing(static fn (mixed $state, TextInput $component): mixed => $component->getType() === 'number'
+                    ? UiNumber::formatForInput($state, $component->getName())
+                    : $state)
+                ->mutateStateForValidationUsing(static fn (mixed $state, TextInput $component): mixed => $component->getType() === 'number'
+                    ? UiNumber::normalizeForStorage($state, $component->getName())
+                    : $state)
+                ->dehydrateStateUsing(static fn (mixed $state, TextInput $component): mixed => $component->getType() === 'number'
+                    ? UiNumber::normalizeForStorage($state, $component->getName())
+                    : $state);
+        });
     }
 
     /** @return array<class-string> */
