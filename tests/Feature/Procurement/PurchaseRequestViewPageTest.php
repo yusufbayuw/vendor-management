@@ -51,6 +51,18 @@ class PurchaseRequestViewPageTest extends TestCase
             ->assertSee('Tepung Terigu');
     }
 
+    public function test_procurement_user_can_continue_to_generate_po_from_fully_allocated_request_detail(): void
+    {
+        $user = User::query()->where('email', 'pusat@example.test')->firstOrFail();
+        $request = PurchaseRequest::query()->where('number', 'PR-DEMO-DRAFT-001')->firstOrFail();
+        $request->forceFill(['status' => PurchaseRequestStatus::FullyAllocated])->save();
+
+        $this->actingAs($user)
+            ->get(route('filament.admin.resources.purchase-requests.view', ['record' => $request]))
+            ->assertOk()
+            ->assertSee('Generate PO');
+    }
+
     public function test_user_cannot_open_purchase_request_outside_their_kitchen_scope(): void
     {
         $user = User::query()->where('email', 'sppg.cimahi@example.test')->firstOrFail();
