@@ -6,6 +6,9 @@ use App\Enums\DeliveryScheduleStatus;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
+use App\Filament\Supplier\Resources\DeliverySchedules\DeliveryScheduleResource;
+use App\Filament\Supplier\Resources\Invoices\InvoiceResource;
+use App\Filament\Supplier\Resources\PurchaseOrders\PurchaseOrderResource;
 use App\Models\DeliverySchedule;
 use App\Models\Invoice;
 use App\Models\PurchaseOrder;
@@ -63,16 +66,24 @@ class SupplierOverview extends StatsOverviewWidget
         return [
             Stat::make('PO Menunggu Konfirmasi', number_format($waitingAcknowledgement, 0, ',', '.'))
                 ->description('PO baru yang perlu direspons')
-                ->color($waitingAcknowledgement > 0 ? 'warning' : 'success'),
+                ->icon('heroicon-o-inbox-arrow-down')
+                ->color($waitingAcknowledgement > 0 ? 'warning' : 'success')
+                ->url(PurchaseOrderResource::getUrl('index')),
             Stat::make('PO Aktif', number_format($activeOrders, 0, ',', '.'))
                 ->description('Seluruh PO yang belum ditutup')
-                ->color('primary'),
+                ->icon('heroicon-o-document-text')
+                ->color('primary')
+                ->url(PurchaseOrderResource::getUrl('index')),
             Stat::make('Pengiriman Mendatang', number_format($upcomingDeliveries, 0, ',', '.'))
                 ->description('Jadwal yang belum selesai')
-                ->color('info'),
+                ->icon('heroicon-o-truck')
+                ->color('info')
+                ->url(DeliveryScheduleResource::getUrl('index')),
             Stat::make('Piutang Outstanding', 'Rp '.number_format($outstanding, 0, ',', '.'))
                 ->description('Invoice approved setelah pembayaran terverifikasi')
-                ->color($outstanding > 0 ? 'warning' : 'success'),
+                ->icon('heroicon-o-banknotes')
+                ->color($outstanding > 0 ? 'warning' : 'success')
+                ->url(InvoiceResource::getUrl('index')),
         ];
     }
 }
