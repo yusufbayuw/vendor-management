@@ -35,7 +35,13 @@ class SupplierBankAccountResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('supplier_id')->label('Supplier')->options(static::supplierOptions())->required(),
+            Select::make('supplier_id')
+                ->label('Supplier')
+                ->options(static::supplierOptions())
+                ->default(fn (): ?int => static::singleSupplierId())
+                ->disabled(fn (): bool => static::singleSupplierId() !== null)
+                ->dehydrated()
+                ->required(),
             TextInput::make('bank_name')->label('Nama Bank')->required()->maxLength(255),
             TextInput::make('bank_code')->label('Kode Bank')->maxLength(30),
             TextInput::make('account_number')->label('Nomor Rekening')->required()->maxLength(100),
@@ -103,6 +109,13 @@ class SupplierBankAccountResource extends Resource
     private static function supplierOptions(): array
     {
         return Supplier::query()->whereIn('id', static::supplierIds())->pluck('display_name', 'id')->all();
+    }
+
+    private static function singleSupplierId(): ?int
+    {
+        $options = static::supplierOptions();
+
+        return count($options) === 1 ? (int) array_key_first($options) : null;
     }
 
     public static function getPages(): array
