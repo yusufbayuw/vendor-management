@@ -108,9 +108,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         DateTimePicker::configureUsing(static function (DateTimePicker $component): void {
-            $component
-                ->hourMode(24)
-                ->displayFormat('d/m/Y H:i');
+            $component->displayFormat('d/m/Y H:i');
         });
 
         DatePicker::configureUsing(static function (DatePicker $component): void {
@@ -118,9 +116,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         TimePicker::configureUsing(static function (TimePicker $component): void {
-            $component
-                ->hourMode(24)
-                ->displayFormat('H:i');
+            $component->displayFormat('H:i');
         });
 
         TextInput::configureUsing(static function (TextInput $component): void {
