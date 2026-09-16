@@ -44,12 +44,21 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\Files\VendorFileStorage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ProcurementExceptionLifecycleTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Storage::fake(VendorFileStorage::DISK);
+    }
 
     public function test_rejected_goods_can_be_reconciled_and_paid_after_approved_exception_closure(): void
     {
@@ -196,7 +205,7 @@ class ProcurementExceptionLifecycleTest extends TestCase
         );
         app(AttachPaymentProofAction::class)->execute(
             $payment,
-            'payments/e2e/exception-payment-proof.jpg',
+            $this->storeProof('exception-payment-proof.pdf'),
             $finance,
         );
         app(SubmitPaymentForVerificationAction::class)->execute($payment->refresh(), $finance);
@@ -209,5 +218,13 @@ class ProcurementExceptionLifecycleTest extends TestCase
         $this->assertSame(5, ApprovalRequest::query()->count());
         $this->assertSame(5, ApprovalRequest::query()->where('status', ApprovalStatus::Approved->value)->count());
         $this->assertSame(0, ApprovalAction::query()->where('is_self_approval', true)->count());
+    }
+
+    private function storeProof(string $filename): string
+    {
+        $path = 'payments/e2e/'.$filename;
+        Storage::disk(VendorFileStorage::DISK)->put($path, "%PDF-1.4\n% E2E payment proof\n");
+
+        return $path;
     }
 }
