@@ -7,10 +7,13 @@ use App\Enums\PaymentStatus;
 use App\Models\Payment;
 use App\Models\PaymentAttachment;
 use App\Models\User;
+use App\Services\Files\VendorFileStorage;
 use DomainException;
 
 class AttachPaymentProofAction
 {
+    public function __construct(private readonly VendorFileStorage $files) {}
+
     public function execute(
         Payment $payment,
         string $filePath,
@@ -28,12 +31,14 @@ class AttachPaymentProofAction
             throw new DomainException('File bukti pembayaran wajib tersedia.');
         }
 
+        $metadata = $this->files->assertSafeDocument($filePath);
+
         return PaymentAttachment::query()->create([
             'payment_id' => $payment->getKey(),
             'type' => $type,
-            'file_path' => $filePath,
-            'mime_type' => $mimeType,
-            'size' => $size,
+            'file_path' => $metadata['path'],
+            'mime_type' => $metadata['mime_type'],
+            'size' => $metadata['size'],
             'caption' => $caption,
             'uploaded_by' => $actor->getKey(),
             'uploaded_at' => now(),
