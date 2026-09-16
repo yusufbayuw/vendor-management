@@ -108,13 +108,7 @@ class UserAccessService
             return $query;
         }
 
-        $supplierIds = $this->scopeIds($user, AccessScopeType::Supplier);
-
-        if ($supplierIds->isNotEmpty()) {
-            return $query->whereIn('id', $supplierIds);
-        }
-
-        return $query;
+        return $query->whereIn('id', $this->scopeIds($user, AccessScopeType::Supplier));
     }
 
     public function applyUserScope(Builder $query, User $user): Builder
