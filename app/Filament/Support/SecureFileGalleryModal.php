@@ -19,9 +19,22 @@ class SecureFileGalleryModal
             ->color('gray')
             ->modalHeading('File & Bukti')
             ->modalWidth('6xl')
-            ->modalContent(fn (Model $record) => view('filament.components.secure-file-gallery', [
-                'files' => collect($files($record))->values()->all(),
-            ]))
+            ->modalContent(function (Model $record) use ($files) {
+                $presentedFiles = collect($files($record))
+                    ->map(function (array $file): array {
+                        $metadata = SecureFilePresentation::describe($file['path'] ?? null);
+
+                        return array_merge($file, $metadata, [
+                            'label' => (string) ($file['label'] ?? $metadata['filename']),
+                        ]);
+                    })
+                    ->values()
+                    ->all();
+
+                return view('filament.components.secure-file-gallery', [
+                    'files' => $presentedFiles,
+                ]);
+            })
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Tutup')
             ->visible(fn (Model $record): bool => collect($files($record))->isNotEmpty());
