@@ -97,7 +97,7 @@ class PaymentResource extends Resource
                         ->required(),
                     Textarea::make('caption')->label('Keterangan')->rows(2),
                 ])->action(function (Payment $record, array $data): void {
-                    static::guard(SystemPermission::PaymentCreate);
+                    static::guard($record, SystemPermission::PaymentCreate);
                     static::run(function () use ($record, $data): void {
                         $disk = Storage::disk(VendorFileStorage::DISK);
                         foreach ((array) $data['files'] as $path) {
@@ -116,7 +116,7 @@ class PaymentResource extends Resource
             Action::make('submit')->label('Ajukan Verifikasi')->color('warning')->requiresConfirmation()
                 ->visible(fn (Payment $record) => $record->status === PaymentStatus::Draft && static::allowed($record, SystemPermission::PaymentCreate))
                 ->action(function (Payment $record): void {
-                    static::guard(SystemPermission::PaymentCreate);
+                    static::guard($record, SystemPermission::PaymentCreate);
                     static::run(fn () => app(SubmitPaymentForVerificationAction::class)->execute($record, auth()->user()), 'Pembayaran diajukan untuk verifikasi.');
                 }),
             Action::make('verify')->label('Verifikasi')->color('success')
@@ -125,14 +125,14 @@ class PaymentResource extends Resource
                     Textarea::make('comments')->label('Catatan')->rows(3),
                     Textarea::make('override_reason')->label('Alasan override')->rows(3),
                 ])->action(function (Payment $record, array $data): void {
-                    static::guard(SystemPermission::PaymentVerify);
+                    static::guard($record, SystemPermission::PaymentVerify);
                     static::run(fn () => app(VerifyPaymentAction::class)->execute($record, auth()->user(), $data['comments'] ?? null, $data['override_reason'] ?? null), 'Pembayaran berhasil diverifikasi.');
                 }),
             Action::make('reject')->label('Tolak')->color('danger')
                 ->visible(fn (Payment $record) => in_array($record->status, [PaymentStatus::Submitted, PaymentStatus::UnderReview], true) && static::allowed($record, SystemPermission::PaymentVerify))
                 ->schema([Textarea::make('reason')->label('Alasan')->required()->rows(4)])
                 ->action(function (Payment $record, array $data): void {
-                    static::guard(SystemPermission::PaymentVerify);
+                    static::guard($record, SystemPermission::PaymentVerify);
                     static::run(fn () => app(RejectPaymentAction::class)->execute($record, auth()->user(), $data['reason']), 'Pembayaran ditolak.');
                 }),
         ]);
@@ -183,9 +183,9 @@ class PaymentResource extends Resource
             && app(UserAccessService::class)->canAccessKitchen($user, $payment->invoice->sppg_kitchen_id);
     }
 
-    private static function guard(SystemPermission $permission): void
+    private static function guard(Payment $payment, SystemPermission $permission): void
     {
-        abort_unless(auth()->user()?->can($permission->value), 403);
+        abort_unless(static::allowed($payment, $permission), 403);
     }
 
     private static function run(callable $callback, string $message): void
