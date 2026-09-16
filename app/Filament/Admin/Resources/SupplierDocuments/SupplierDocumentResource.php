@@ -67,20 +67,28 @@ class SupplierDocumentResource extends Resource
                     SupplierDocumentStatus::UnderReview,
                     SupplierDocumentStatus::Rejected,
                 ], true) && static::canVerify($record))
-                ->action(fn (SupplierDocument $record) => static::run(
-                    fn () => app(VerifySupplierDocumentAction::class)->execute($record, auth()->user()),
-                    'Dokumen supplier berhasil diverifikasi.',
-                )),
+                ->action(function (SupplierDocument $record): void {
+                    abort_unless(static::canVerify($record), 403);
+
+                    static::run(
+                        fn () => app(VerifySupplierDocumentAction::class)->execute($record, auth()->user()),
+                        'Dokumen supplier berhasil diverifikasi.',
+                    );
+                }),
             Action::make('reject')->label('Tolak')->color('danger')
                 ->visible(fn (SupplierDocument $record) => in_array($record->status, [
                     SupplierDocumentStatus::Uploaded,
                     SupplierDocumentStatus::UnderReview,
                 ], true) && static::canVerify($record))
                 ->schema([Textarea::make('reason')->label('Alasan penolakan')->required()->rows(4)])
-                ->action(fn (SupplierDocument $record, array $data) => static::run(
-                    fn () => app(RejectSupplierDocumentAction::class)->execute($record, auth()->user(), $data['reason']),
-                    'Dokumen supplier ditolak.',
-                )),
+                ->action(function (SupplierDocument $record, array $data): void {
+                    abort_unless(static::canVerify($record), 403);
+
+                    static::run(
+                        fn () => app(RejectSupplierDocumentAction::class)->execute($record, auth()->user(), $data['reason']),
+                        'Dokumen supplier ditolak.',
+                    );
+                }),
         ]);
     }
 
