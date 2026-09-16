@@ -207,7 +207,7 @@ class PurchaseRequestResource extends Resource
                     ->requiresConfirmation()
                     ->visible(static fn (PurchaseRequest $record): bool => $record->status === PurchaseRequestStatus::Draft && static::canSubmit($record))
                     ->action(static function (PurchaseRequest $record): void {
-                        static::requirePermission(SystemPermission::PurchaseRequestSubmit);
+                        static::requireScopedPermission($record, SystemPermission::PurchaseRequestSubmit);
                         static::runDomainAction(fn () => app(SubmitPurchaseRequestAction::class)->execute($record, auth()->user()), 'Purchase request berhasil diajukan.');
                     }),
                 Action::make('approve')
@@ -219,7 +219,7 @@ class PurchaseRequestResource extends Resource
                         Textarea::make('override_reason')->label('Alasan override (jika self approval)')->rows(3),
                     ])
                     ->action(static function (PurchaseRequest $record, array $data): void {
-                        static::requirePermission(SystemPermission::PurchaseRequestApprove);
+                        static::requireScopedPermission($record, SystemPermission::PurchaseRequestApprove);
                         static::runDomainAction(
                             fn () => app(ApprovePurchaseRequestAction::class)->execute($record, auth()->user(), $data['comments'] ?? null, $data['override_reason'] ?? null),
                             'Keputusan approval berhasil disimpan.',
@@ -233,7 +233,7 @@ class PurchaseRequestResource extends Resource
                         Textarea::make('reason')->label('Alasan penolakan')->required()->rows(4),
                     ])
                     ->action(static function (PurchaseRequest $record, array $data): void {
-                        static::requirePermission(SystemPermission::PurchaseRequestApprove);
+                        static::requireScopedPermission($record, SystemPermission::PurchaseRequestApprove);
                         static::runDomainAction(fn () => app(RejectPurchaseRequestAction::class)->execute($record, auth()->user(), $data['reason']), 'Purchase request ditolak.');
                     }),
                 Action::make('allocate')
@@ -260,7 +260,7 @@ class PurchaseRequestResource extends Resource
                         Textarea::make('notes')->label('Catatan alokasi')->rows(3),
                     ])
                     ->action(static function (PurchaseRequest $record, array $data): void {
-                        static::requirePermission(SystemPermission::PurchaseRequestAllocate);
+                        static::requireScopedPermission($record, SystemPermission::PurchaseRequestAllocate);
 
                         $item = PurchaseRequestItem::query()
                             ->where('purchase_request_id', $record->getKey())
@@ -285,7 +285,7 @@ class PurchaseRequestResource extends Resource
                     ->requiresConfirmation()
                     ->visible(static fn (PurchaseRequest $record): bool => $record->status === PurchaseRequestStatus::FullyAllocated && static::canGeneratePo($record))
                     ->action(static function (PurchaseRequest $record): void {
-                        static::requirePermission(SystemPermission::PurchaseOrderCreate);
+                        static::requireScopedPermission($record, SystemPermission::PurchaseOrderCreate);
                         static::runDomainAction(fn () => app(GeneratePurchaseOrdersAction::class)->execute($record, auth()->user()), 'Purchase order berhasil dibuat per supplier.');
                     }),
             ]);
@@ -384,9 +384,9 @@ class PurchaseRequestResource extends Resource
             ->all();
     }
 
-    private static function requirePermission(SystemPermission $permission): void
+    private static function requireScopedPermission(PurchaseRequest $record, SystemPermission $permission): void
     {
-        abort_unless(auth()->user()?->can($permission->value), 403);
+        abort_unless(static::hasScopedPermission($record, $permission), 403);
     }
 
     private static function runDomainAction(callable $action, string $successMessage): void
