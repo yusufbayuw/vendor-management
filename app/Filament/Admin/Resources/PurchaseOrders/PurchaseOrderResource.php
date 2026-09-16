@@ -158,7 +158,7 @@ class PurchaseOrderResource extends Resource
                     ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::Draft && static::hasScopedPermission($record, SystemPermission::PurchaseOrderCreate))
                     ->requiresConfirmation()
                     ->action(static function (PurchaseOrder $record): void {
-                        static::requirePermission(SystemPermission::PurchaseOrderCreate);
+                        static::requireScopedPermission($record, SystemPermission::PurchaseOrderCreate);
                         static::runDomainAction(fn () => app(SubmitPurchaseOrderForApprovalAction::class)->execute($record, auth()->user()), 'PO berhasil diajukan untuk approval.');
                     }),
                 Action::make('approve')
@@ -170,7 +170,7 @@ class PurchaseOrderResource extends Resource
                         Textarea::make('override_reason')->label('Alasan override (jika self approval)')->rows(3),
                     ])
                     ->action(static function (PurchaseOrder $record, array $data): void {
-                        static::requirePermission(SystemPermission::PurchaseOrderApprove);
+                        static::requireScopedPermission($record, SystemPermission::PurchaseOrderApprove);
                         static::runDomainAction(
                             fn () => app(ApprovePurchaseOrderAction::class)->execute($record, auth()->user(), $data['comments'] ?? null, $data['override_reason'] ?? null),
                             'Keputusan approval PO berhasil disimpan.',
@@ -182,7 +182,7 @@ class PurchaseOrderResource extends Resource
                     ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::Approved && static::hasScopedPermission($record, SystemPermission::PurchaseOrderIssue))
                     ->requiresConfirmation()
                     ->action(static function (PurchaseOrder $record): void {
-                        static::requirePermission(SystemPermission::PurchaseOrderIssue);
+                        static::requireScopedPermission($record, SystemPermission::PurchaseOrderIssue);
                         static::runDomainAction(fn () => app(IssuePurchaseOrderAction::class)->execute($record), 'PO berhasil diterbitkan dan siap dikonfirmasi supplier.');
                     }),
                 Action::make('schedule')
@@ -220,7 +220,7 @@ class PurchaseOrderResource extends Resource
                         Textarea::make('supplier_notes')->label('Catatan pengiriman')->rows(3),
                     ])
                     ->action(static function (PurchaseOrder $record, array $data): void {
-                        static::requirePermission(SystemPermission::DeliverySchedule);
+                        static::requireScopedPermission($record, SystemPermission::DeliverySchedule);
 
                         static::runDomainAction(function () use ($record, $data): void {
                             $items = [];
@@ -251,7 +251,7 @@ class PurchaseOrderResource extends Resource
                         Textarea::make('reason')->label('Alasan penutupan dengan selisih')->required()->rows(4),
                     ])
                     ->action(static function (PurchaseOrder $record, array $data): void {
-                        static::requirePermission(SystemPermission::PurchaseOrderExceptionClose);
+                        static::requireScopedPermission($record, SystemPermission::PurchaseOrderExceptionClose);
                         static::runDomainAction(
                             fn () => app(RequestPurchaseOrderExceptionCloseAction::class)->execute($record, auth()->user(), $data['reason']),
                             'Permohonan close with exception berhasil diajukan.',
@@ -266,7 +266,7 @@ class PurchaseOrderResource extends Resource
                         Textarea::make('override_reason')->label('Alasan override (jika self approval)')->rows(3),
                     ])
                     ->action(static function (PurchaseOrder $record, array $data): void {
-                        static::requirePermission(SystemPermission::PurchaseOrderExceptionClose);
+                        static::requireScopedPermission($record, SystemPermission::PurchaseOrderExceptionClose);
                         static::runDomainAction(
                             fn () => app(ApprovePurchaseOrderExceptionCloseAction::class)->execute(
                                 $record,
@@ -366,9 +366,9 @@ class PurchaseOrderResource extends Resource
         return rtrim(rtrim(number_format($value, 4, '.', ''), '0'), '.');
     }
 
-    private static function requirePermission(SystemPermission $permission): void
+    private static function requireScopedPermission(PurchaseOrder $record, SystemPermission $permission): void
     {
-        abort_unless(auth()->user()?->can($permission->value), 403);
+        abort_unless(static::hasScopedPermission($record, $permission), 403);
     }
 
     private static function runDomainAction(callable $action, string $successMessage): void
