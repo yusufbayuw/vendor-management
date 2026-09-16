@@ -43,12 +43,21 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\Files\VendorFileStorage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ProcurementLifecycleHappyPathTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Storage::fake(VendorFileStorage::DISK);
+    }
 
     public function test_strict_profile_completes_procurement_lifecycle_from_pr_to_verified_payment(): void
     {
@@ -201,7 +210,7 @@ class ProcurementLifecycleHappyPathTest extends TestCase
         );
         app(AttachPaymentProofAction::class)->execute(
             $payment,
-            'payments/e2e/payment-proof.jpg',
+            $this->storeProof('payment-proof.pdf'),
             $finance,
         );
         app(SubmitPaymentForVerificationAction::class)->execute($payment->refresh(), $finance);
@@ -217,5 +226,13 @@ class ProcurementLifecycleHappyPathTest extends TestCase
         $this->assertSame(4, ApprovalRequest::query()->count());
         $this->assertSame(4, ApprovalRequest::query()->where('status', ApprovalStatus::Approved->value)->count());
         $this->assertSame(0, ApprovalAction::query()->where('is_self_approval', true)->count());
+    }
+
+    private function storeProof(string $filename): string
+    {
+        $path = 'payments/e2e/'.$filename;
+        Storage::disk(VendorFileStorage::DISK)->put($path, "%PDF-1.4\n% E2E payment proof\n");
+
+        return $path;
     }
 }
