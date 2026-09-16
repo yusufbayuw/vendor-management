@@ -96,7 +96,7 @@ class InvoiceResource extends Resource
                         Textarea::make('description')->label('Keterangan')->required()->rows(3),
                     ])
                     ->action(static function (Invoice $record, array $data): void {
-                        static::requirePermission(SystemPermission::InvoiceReview);
+                        static::requireScopedPermission($record, SystemPermission::InvoiceReview);
                         static::runDomainAction(fn () => app(AddInvoiceAdjustmentAction::class)->execute(
                             $record,
                             InvoiceAdjustmentType::from($data['type']),
@@ -124,7 +124,7 @@ class InvoiceResource extends Resource
                         Textarea::make('override_reason')->label('Alasan override (jika self approval)')->rows(3),
                     ])
                     ->action(static function (Invoice $record, array $data): void {
-                        static::requirePermission(SystemPermission::InvoiceApprove);
+                        static::requireScopedPermission($record, SystemPermission::InvoiceApprove);
                         static::runDomainAction(fn () => app(ApproveInvoiceAction::class)->execute(
                             $record,
                             auth()->user(),
@@ -146,7 +146,7 @@ class InvoiceResource extends Resource
                         Textarea::make('notes')->label('Catatan')->rows(3),
                     ])
                     ->action(static function (Invoice $record, array $data): void {
-                        static::requirePermission(SystemPermission::PaymentCreate);
+                        static::requireScopedPermission($record, SystemPermission::PaymentCreate);
                         static::runDomainAction(function () use ($record, $data): void {
                             $destinationAccount = filled($data['destination_account_id'] ?? null)
                                 ? SupplierBankAccount::query()->where('supplier_id', $record->supplier_id)->findOrFail($data['destination_account_id'])
@@ -271,9 +271,9 @@ class InvoiceResource extends Resource
         ];
     }
 
-    private static function requirePermission(SystemPermission $permission): void
+    private static function requireScopedPermission(Invoice $record, SystemPermission $permission): void
     {
-        abort_unless(auth()->user()?->can($permission->value), 403);
+        abort_unless(static::hasScopedPermission($record, $permission), 403);
     }
 
     private static function runDomainAction(callable $action, string $successMessage): void
