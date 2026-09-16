@@ -2,6 +2,7 @@
 
 namespace App\Services\Files;
 
+use DomainException;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -9,6 +10,24 @@ use RuntimeException;
 class VendorFileStorage
 {
     public const DISK = 'vendor-private';
+
+    public const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024;
+
+    /** @var array<string> */
+    public const DOCUMENT_MIME_TYPES = [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+    ];
+
+    /** @var array<string, array<int, string>> */
+    private const MIME_EXTENSIONS = [
+        'application/pdf' => ['pdf'],
+        'image/jpeg' => ['jpg', 'jpeg'],
+        'image/png' => ['png'],
+        'image/webp' => ['webp'],
+    ];
 
     /** @var array<string> */
     private const LEGACY_DISKS = ['local', 'public'];
@@ -60,6 +79,69 @@ class VendorFileStorage
         return false;
     }
 
+    /**
+     * @return array{path:string,filename:string,mime_type:string,size:int|null,preview_type:string}
+     */
+    public function inspect(string $path): array
+    {
+        $path = $this->requiredPath($path);
+
+        if (! $this->disk()->exists($path)) {
+            throw new RuntimeException('File tidak ditemukan pada penyimpanan private.');
+        }
+
+        $mime = $this->mimeType($path);
+
+        return [
+            'path' => $path,
+            'filename' => basename($path),
+            'mime_type' => $mime,
+            'size' => $this->size($path),
+            'preview_type' => match (true) {
+                str_starts_with($mime, 'image/') && $this->isInlinePreviewable($mime) => 'image',
+                $mime === 'application/pdf' => 'pdf',
+                default => 'download',
+            },
+        ];
+    }
+
+    /**
+     * Validate a newly uploaded business document using server-detected MIME and size.
+     *
+     * @return array{path:string,filename:string,mime_type:string,size:int|null,preview_type:string}
+     */
+    public function assertSafeDocument(string $path, int $maxBytes = self::MAX_DOCUMENT_SIZE): array
+    {
+        try {
+            $metadata = $this->inspect($path);
+        } catch (RuntimeException $exception) {
+            throw new DomainException('File upload tidak ditemukan atau tidak dapat dibaca.', previous: $exception);
+        }
+
+        if (! in_array($metadata['mime_type'], self::DOCUMENT_MIME_TYPES, true)) {
+            $this->delete($path);
+
+            throw new DomainException('Tipe file tidak diizinkan. Gunakan PDF, JPG/JPEG, PNG, atau WebP.');
+        }
+
+        if (($metadata['size'] ?? 0) > $maxBytes) {
+            $this->delete($path);
+
+            throw new DomainException('Ukuran file melebihi batas 10 MB.');
+        }
+
+        $extension = strtolower(pathinfo($metadata['filename'], PATHINFO_EXTENSION));
+        $allowedExtensions = self::MIME_EXTENSIONS[$metadata['mime_type']] ?? [];
+
+        if ($extension === '' || ! in_array($extension, $allowedExtensions, true)) {
+            $this->delete($path);
+
+            throw new DomainException('Ekstensi file tidak sesuai dengan isi file yang terdeteksi.');
+        }
+
+        return $metadata;
+    }
+
     public function disk(): FilesystemAdapter
     {
         return Storage::disk(self::DISK);
@@ -101,12 +183,7 @@ class VendorFileStorage
 
     public function isInlinePreviewable(string $mime): bool
     {
-        return in_array($mime, [
-            'application/pdf',
-            'image/jpeg',
-            'image/png',
-            'image/webp',
-        ], true);
+        return in_array($mime, self::DOCUMENT_MIME_TYPES, true);
     }
 
     private function requiredPath(string $path): string
