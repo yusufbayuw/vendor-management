@@ -5,6 +5,7 @@ namespace Tests\Feature\Foundation;
 use App\Enums\AccessScopeType;
 use App\Models\Organization;
 use App\Models\SppgKitchen;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Models\UserAccessScope;
 use App\Services\Access\UserAccessService;
@@ -71,5 +72,52 @@ class UserAccessServiceTest extends TestCase
 
         $this->assertTrue($service->canAccessKitchen($user, $kitchenA));
         $this->assertFalse($service->canAccessKitchen($user, $kitchenB));
+    }
+
+    public function test_non_global_user_without_supplier_scope_sees_no_suppliers(): void
+    {
+        $user = User::factory()->create();
+        Supplier::query()->create([
+            'code' => 'SUP-A',
+            'legal_name' => 'Supplier A',
+            'display_name' => 'Supplier A',
+        ]);
+        Supplier::query()->create([
+            'code' => 'SUP-B',
+            'legal_name' => 'Supplier B',
+            'display_name' => 'Supplier B',
+        ]);
+
+        $query = app(UserAccessService::class)->applySupplierScope(Supplier::query(), $user);
+
+        $this->assertSame(0, $query->count());
+    }
+
+    public function test_supplier_scope_only_exposes_explicit_supplier(): void
+    {
+        $user = User::factory()->create();
+        $supplierA = Supplier::query()->create([
+            'code' => 'SUP-A',
+            'legal_name' => 'Supplier A',
+            'display_name' => 'Supplier A',
+        ]);
+        $supplierB = Supplier::query()->create([
+            'code' => 'SUP-B',
+            'legal_name' => 'Supplier B',
+            'display_name' => 'Supplier B',
+        ]);
+
+        UserAccessScope::query()->create([
+            'user_id' => $user->id,
+            'scope_type' => AccessScopeType::Supplier,
+            'scope_id' => $supplierA->id,
+        ]);
+
+        $service = app(UserAccessService::class);
+        $visibleIds = $service->applySupplierScope(Supplier::query(), $user)->pluck('id')->all();
+
+        $this->assertSame([$supplierA->id], $visibleIds);
+        $this->assertTrue($service->canAccessSupplier($user, $supplierA->id));
+        $this->assertFalse($service->canAccessSupplier($user, $supplierB->id));
     }
 }
