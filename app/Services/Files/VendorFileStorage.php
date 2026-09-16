@@ -108,26 +108,37 @@ class VendorFileStorage
     /**
      * Validate a newly uploaded business document using server-detected MIME and size.
      *
+     * Demo placeholders are accepted only from CLI under the dedicated demo/ namespace so
+     * seed data can remain lightweight. Web uploads always go through the strict allow-list.
+     *
      * @return array{path:string,filename:string,mime_type:string,size:int|null,preview_type:string}
      */
     public function assertSafeDocument(string $path, int $maxBytes = self::MAX_DOCUMENT_SIZE): array
     {
         try {
+            if (! $this->ensurePrivate($path)) {
+                throw new RuntimeException('File tidak ditemukan pada penyimpanan private.');
+            }
+
             $metadata = $this->inspect($path);
         } catch (RuntimeException $exception) {
             throw new DomainException('File upload tidak ditemukan atau tidak dapat dibaca.', previous: $exception);
-        }
-
-        if (! in_array($metadata['mime_type'], self::DOCUMENT_MIME_TYPES, true)) {
-            $this->delete($path);
-
-            throw new DomainException('Tipe file tidak diizinkan. Gunakan PDF, JPG/JPEG, PNG, atau WebP.');
         }
 
         if (($metadata['size'] ?? 0) > $maxBytes) {
             $this->delete($path);
 
             throw new DomainException('Ukuran file melebihi batas 10 MB.');
+        }
+
+        if ($this->isConsoleDemoPlaceholder($metadata['path'])) {
+            return $metadata;
+        }
+
+        if (! in_array($metadata['mime_type'], self::DOCUMENT_MIME_TYPES, true)) {
+            $this->delete($path);
+
+            throw new DomainException('Tipe file tidak diizinkan. Gunakan PDF, JPG/JPEG, PNG, atau WebP.');
         }
 
         $extension = strtolower(pathinfo($metadata['filename'], PATHINFO_EXTENSION));
@@ -184,6 +195,11 @@ class VendorFileStorage
     public function isInlinePreviewable(string $mime): bool
     {
         return in_array($mime, self::DOCUMENT_MIME_TYPES, true);
+    }
+
+    private function isConsoleDemoPlaceholder(string $path): bool
+    {
+        return app()->runningInConsole() && str_starts_with($path, 'demo/');
     }
 
     private function requiredPath(string $path): string
