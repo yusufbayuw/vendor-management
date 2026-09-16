@@ -19,13 +19,22 @@ use App\Models\PurchaseRequest;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Files\VendorFileStorage;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class PaymentFlowTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Storage::fake(VendorFileStorage::DISK);
+    }
 
     public function test_full_verified_payment_closes_procurement_flow(): void
     {
@@ -37,7 +46,7 @@ class PaymentFlowTest extends TestCase
             PaymentMethod::BankTransfer,
             $actor,
         );
-        app(AttachPaymentProofAction::class)->execute($payment, 'payments/proof.jpg', $actor);
+        app(AttachPaymentProofAction::class)->execute($payment, $this->storeProof('proof.pdf'), $actor);
         app(SubmitPaymentForVerificationAction::class)->execute($payment, $actor);
         app(VerifyPaymentAction::class)->execute($payment, $actor);
 
@@ -57,7 +66,7 @@ class PaymentFlowTest extends TestCase
             PaymentMethod::BankTransfer,
             $actor,
         );
-        app(AttachPaymentProofAction::class)->execute($payment, 'payments/partial.jpg', $actor);
+        app(AttachPaymentProofAction::class)->execute($payment, $this->storeProof('partial.pdf'), $actor);
         app(SubmitPaymentForVerificationAction::class)->execute($payment, $actor);
         app(VerifyPaymentAction::class)->execute($payment, $actor);
 
@@ -88,11 +97,35 @@ class PaymentFlowTest extends TestCase
             PaymentMethod::BankTransfer,
             $actor,
         );
-        app(AttachPaymentProofAction::class)->execute($payment, 'payments/strict.jpg', $actor);
+        app(AttachPaymentProofAction::class)->execute($payment, $this->storeProof('strict.pdf'), $actor);
         app(SubmitPaymentForVerificationAction::class)->execute($payment, $actor);
 
         $this->expectException(DomainException::class);
         app(VerifyPaymentAction::class)->execute($payment, $actor);
+    }
+
+    public function test_payment_proof_rejects_extension_that_does_not_match_detected_mime(): void
+    {
+        [$invoice, $actor] = $this->makeApprovedInvoice(1_000_000, OperationalProfile::Lean);
+        $payment = app(CreatePaymentAction::class)->execute(
+            $invoice,
+            1_000_000,
+            PaymentMethod::BankTransfer,
+            $actor,
+        );
+        $path = 'payments/fake.jpg';
+        Storage::disk(VendorFileStorage::DISK)->put($path, "%PDF-1.4\n% test\n");
+
+        $this->expectException(DomainException::class);
+        app(AttachPaymentProofAction::class)->execute($payment, $path, $actor);
+    }
+
+    private function storeProof(string $filename): string
+    {
+        $path = 'payments/'.$filename;
+        Storage::disk(VendorFileStorage::DISK)->put($path, "%PDF-1.4\n% test\n");
+
+        return $path;
     }
 
     /** @return array{Invoice, User} */
