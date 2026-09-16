@@ -21,11 +21,15 @@ class SecureFileModal
             ->color('gray')
             ->modalHeading('Preview File')
             ->modalWidth('5xl')
-            ->modalContent(fn (Model $record) => view('filament.components.secure-file-preview', [
-                'inlineUrl' => $inlineUrl($record),
-                'downloadUrl' => $downloadUrl($record),
-                'path' => $path($record),
-            ]))
+            ->modalContent(function (Model $record) use ($inlineUrl, $downloadUrl, $path) {
+                $file = SecureFilePresentation::describe($path($record));
+
+                return view('filament.components.secure-file-preview', [
+                    'inlineUrl' => $inlineUrl($record),
+                    'downloadUrl' => $downloadUrl($record),
+                    'file' => $file,
+                ]);
+            })
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Tutup')
             ->visible(fn (Model $record): bool => filled($path($record)));
