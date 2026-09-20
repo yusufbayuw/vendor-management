@@ -8,8 +8,10 @@ use App\Actions\Supplier\RequestSupplierRevisionAction;
 use App\Actions\Supplier\StartSupplierReviewAction;
 use App\Actions\Supplier\SubmitSupplierAction;
 use App\Actions\Supplier\SuspendSupplierAction;
+use App\Enums\SupplierDocumentStatus;
 use App\Enums\SupplierStatus;
 use App\Models\Supplier;
+use App\Models\SupplierDocument;
 use App\Models\User;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,6 +38,7 @@ class SupplierLifecycleTest extends TestCase
             'is_owner' => true,
             'is_active' => true,
         ]);
+        $this->verifiedDocument($supplier);
 
         app(SubmitSupplierAction::class)->execute($supplier);
         $this->assertSame(SupplierStatus::Submitted, $supplier->refresh()->status);
@@ -64,6 +67,7 @@ class SupplierLifecycleTest extends TestCase
             'is_owner' => true,
             'is_active' => true,
         ]);
+        $this->verifiedDocument($supplier);
 
         app(SubmitSupplierAction::class)->execute($supplier);
         app(StartSupplierReviewAction::class)->execute($supplier);
@@ -84,6 +88,53 @@ class SupplierLifecycleTest extends TestCase
         app(ApproveSupplierAction::class)->execute($supplier, $reviewer);
 
         $this->assertNotNull($owner->fresh()->phone_verified_at);
+        $this->assertSame(SupplierStatus::Active, $supplier->refresh()->status);
+    }
+
+    public function test_supplier_approval_is_blocked_until_legal_documents_are_verified(): void
+    {
+        $supplier = Supplier::query()->create([
+            'code' => 'SUP-DOC',
+            'legal_name' => 'PT Supplier Dokumen',
+            'phone' => '081277700010',
+        ]);
+        $reviewer = User::factory()->create();
+        $owner = User::factory()->create([
+            'phone' => '081277700011',
+        ]);
+        $owner->forceFill(['phone_verified_at' => now()])->save();
+
+        $supplier->users()->attach($owner->getKey(), [
+            'is_owner' => true,
+            'is_active' => true,
+        ]);
+
+        $document = SupplierDocument::query()->create([
+            'supplier_id' => $supplier->getKey(),
+            'document_type' => 'nib',
+            'document_number' => 'NIB-SUP-DOC',
+            'file_path' => 'supplier-documents/nib-sup-doc.pdf',
+            'status' => SupplierDocumentStatus::Uploaded,
+        ]);
+
+        app(SubmitSupplierAction::class)->execute($supplier);
+        app(StartSupplierReviewAction::class)->execute($supplier);
+
+        try {
+            app(ApproveSupplierAction::class)->execute($supplier, $reviewer);
+            $this->fail('Approval should be blocked before legal documents are verified.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('dokumen legal', strtolower($exception->getMessage()));
+        }
+
+        $document->forceFill([
+            'status' => SupplierDocumentStatus::Verified,
+            'verified_at' => now(),
+            'verified_by' => $reviewer->getKey(),
+        ])->save();
+
+        app(ApproveSupplierAction::class)->execute($supplier, $reviewer);
+
         $this->assertSame(SupplierStatus::Active, $supplier->refresh()->status);
     }
 
@@ -134,6 +185,18 @@ class SupplierLifecycleTest extends TestCase
 
         $this->assertSame(SupplierStatus::Suspended, $supplier->refresh()->status);
         $this->assertSame('Pelanggaran kualitas berulang.', $supplier->suspension_reason);
+    }
+
+    private function verifiedDocument(Supplier $supplier): SupplierDocument
+    {
+        return SupplierDocument::query()->create([
+            'supplier_id' => $supplier->getKey(),
+            'document_type' => 'nib',
+            'document_number' => 'NIB-'.$supplier->code,
+            'file_path' => 'supplier-documents/'.strtolower($supplier->code).'.pdf',
+            'status' => SupplierDocumentStatus::Verified,
+            'verified_at' => now(),
+        ]);
     }
 
     public function test_invalid_transition_is_rejected(): void
