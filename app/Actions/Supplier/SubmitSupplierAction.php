@@ -4,7 +4,6 @@ namespace App\Actions\Supplier;
 
 use App\Enums\SupplierStatus;
 use App\Models\Supplier;
-use App\Services\Supplier\SupplierOnboardingService;
 use DomainException;
 
 class SubmitSupplierAction
@@ -15,14 +14,8 @@ class SubmitSupplierAction
             throw new DomainException('Supplier hanya dapat diajukan dari status draft atau perlu perbaikan.');
         }
 
-        $summary = app(SupplierOnboardingService::class)->summary($supplier);
-
-        if (! $summary['complete']) {
-            $missing = collect($summary['missing'])->take(4)->implode(', ');
-
-            throw new DomainException(
-                'Data onboarding belum lengkap ('.$summary['percentage'].'%). Lengkapi: '.$missing.'.',
-            );
+        if (blank($supplier->legal_name) || blank($supplier->phone)) {
+            throw new DomainException('Nama legal dan nomor HP supplier wajib dilengkapi sebelum pengajuan.');
         }
 
         $supplier->forceFill([
