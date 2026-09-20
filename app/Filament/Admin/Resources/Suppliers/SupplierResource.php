@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\Suppliers;
 
-use App\Actions\Auth\ManuallyVerifyPhoneAction;
 use App\Actions\Supplier\ApproveSupplierAction;
 use App\Actions\Supplier\RequestSupplierRevisionAction;
 use App\Actions\Supplier\StartSupplierReviewAction;
@@ -69,7 +68,7 @@ class SupplierResource extends Resource
                         );
                         $candidates = $owners->isNotEmpty() ? $owners : $activeUsers;
 
-                        return $candidates->contains(static fn (User $user): bool => $user->hasVerifiedPhone())
+                        return $candidates->contains(static fn (User $user): bool => $user->hasOtpVerifiedPhone())
                             ? 'Terverifikasi'
                             : 'Belum';
                     })
@@ -87,63 +86,6 @@ class SupplierResource extends Resource
                     ->action(static function (Supplier $record): void {
                         static::requirePermission(SystemPermission::SupplierVerify);
                         static::runDomainAction(fn () => app(StartSupplierReviewAction::class)->execute($record), 'Verifikasi supplier dimulai.');
-                    }),
-                Action::make('verifyPicPhone')
-                    ->label('Verifikasi HP PIC')
-                    ->icon('heroicon-o-device-phone-mobile')
-                    ->color('warning')
-                    ->visible(static function (Supplier $record): bool {
-                        if (! static::canVerify()) {
-                            return false;
-                        }
-
-                        return $record->users->contains(
-                            static fn (User $user): bool => (bool) $user->pivot?->is_active
-                                && filled($user->phone)
-                                && ! $user->hasVerifiedPhone(),
-                        );
-                    })
-                    ->schema([
-                        Select::make('user_id')
-                            ->label('PIC / Pengguna Supplier')
-                            ->options(static function (Supplier $record): array {
-                                return $record->users
-                                    ->filter(static fn (User $user): bool => (bool) $user->pivot?->is_active && filled($user->phone))
-                                    ->mapWithKeys(static function (User $user): array {
-                                        $owner = (bool) $user->pivot?->is_owner ? ' (Owner)' : '';
-                                        $verified = $user->hasVerifiedPhone() ? ' - terverifikasi' : '';
-
-                                        return [$user->getKey() => $user->name.' - +'.$user->phone.$owner.$verified];
-                                    })
-                                    ->all();
-                            })
-                            ->required(),
-                        Textarea::make('reason')
-                            ->label('Dasar verifikasi')
-                            ->helperText('Contoh: dikonfirmasi saat review dokumen melalui telepon atau pertemuan langsung. Tindakan ini masuk audit log.')
-                            ->required()
-                            ->rows(3),
-                    ])
-                    ->requiresConfirmation()
-                    ->action(static function (Supplier $record, array $data): void {
-                        static::requirePermission(SystemPermission::SupplierVerify);
-
-                        static::runDomainAction(function () use ($record, $data): void {
-                            $user = $record->users()
-                                ->wherePivot('is_active', true)
-                                ->whereKey((int) $data['user_id'])
-                                ->first();
-
-                            if (! $user) {
-                                throw new DomainException('PIC supplier tidak ditemukan atau sudah tidak aktif.');
-                            }
-
-                            app(ManuallyVerifyPhoneAction::class)->execute(
-                                $user,
-                                auth()->user(),
-                                (string) $data['reason'],
-                            );
-                        }, 'Nomor HP PIC berhasil diverifikasi.');
                     }),
                 Action::make('requestRevision')
                     ->label('Minta Perbaikan')
