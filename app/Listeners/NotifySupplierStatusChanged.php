@@ -16,7 +16,7 @@ class NotifySupplierStatusChanged implements ShouldQueue
         $status = SupplierStatus::tryFrom($event->status);
         $supplier = Supplier::query()->find($event->supplierId);
 
-        if ($status === null || $supplier === null) {
+        if ($status === null || $supplier === null || $supplier->status !== $status) {
             return;
         }
 

@@ -18,7 +18,7 @@ class NotifyPurchaseOrderStatusChanged implements ShouldQueue
             ->with(['kitchen', 'supplier'])
             ->find($event->purchaseOrderId);
 
-        if ($status === null || $order === null) {
+        if ($status === null || $order === null || $order->status !== $status) {
             return;
         }
 

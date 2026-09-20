@@ -19,7 +19,7 @@ class NotifyGoodsReceiptStatusChanged implements ShouldQueue
 
         $receipt = GoodsReceipt::query()->with('kitchen')->find($event->goodsReceiptId);
 
-        if ($receipt === null) {
+        if ($receipt === null || $receipt->status !== GoodsReceiptStatus::PendingInspection) {
             return;
         }
 

@@ -18,7 +18,7 @@ class NotifyPaymentStatusChanged implements ShouldQueue
             ->with(['invoice.kitchen', 'invoice.supplier'])
             ->find($event->paymentId);
 
-        if ($status === null || $payment === null) {
+        if ($status === null || $payment === null || $payment->status !== $status) {
             return;
         }
 

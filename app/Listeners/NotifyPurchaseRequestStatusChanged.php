@@ -16,7 +16,7 @@ class NotifyPurchaseRequestStatusChanged implements ShouldQueue
         $status = PurchaseRequestStatus::tryFrom($event->status);
         $request = PurchaseRequest::query()->with('kitchen')->find($event->purchaseRequestId);
 
-        if ($status === null || $request === null) {
+        if ($status === null || $request === null || $request->status !== $status) {
             return;
         }
 

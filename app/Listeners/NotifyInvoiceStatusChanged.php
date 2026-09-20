@@ -16,7 +16,7 @@ class NotifyInvoiceStatusChanged implements ShouldQueue
         $status = InvoiceStatus::tryFrom($event->status);
         $invoice = Invoice::query()->with('kitchen')->find($event->invoiceId);
 
-        if ($status === null || $invoice === null) {
+        if ($status === null || $invoice === null || $invoice->status !== $status) {
             return;
         }
 
