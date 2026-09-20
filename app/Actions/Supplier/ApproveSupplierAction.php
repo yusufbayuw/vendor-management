@@ -6,11 +6,16 @@ use App\Enums\SupplierDocumentStatus;
 use App\Enums\SupplierStatus;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Supplier\SupplierApprovalAttestationService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
 class ApproveSupplierAction
 {
+    public function __construct(
+        private readonly SupplierApprovalAttestationService $attestations,
+    ) {}
+
     public function execute(Supplier $supplier, User $actor): Supplier
     {
         if (! in_array($supplier->status, [SupplierStatus::Submitted, SupplierStatus::UnderReview], true)) {
@@ -26,6 +31,8 @@ class ApproveSupplierAction
         $hasUnverifiedDocument = $documents->contains(
             static fn ($document): bool => blank($document->file_path)
                 || $document->status !== SupplierDocumentStatus::Verified
+                || $document->verified_at === null
+                || $document->verified_by === null
                 || ($document->expires_at !== null && $document->expires_at->isPast()),
         );
 
@@ -33,25 +40,20 @@ class ApproveSupplierAction
             throw new DomainException('Seluruh dokumen legal yang diajukan harus sudah diperiksa, masih berlaku, dan berstatus terverifikasi sebelum supplier dapat disetujui.');
         }
 
-        $hasActiveOwner = $supplier->users()
+        $activeUsers = $supplier->users()
             ->wherePivot('is_active', true)
-            ->wherePivot('is_owner', true)
-            ->exists();
+            ->with('phoneVerificationCodes')
+            ->get();
+        $owners = $activeUsers->filter(
+            static fn (User $user): bool => (bool) $user->pivot?->is_owner,
+        );
+        $candidates = $owners->isNotEmpty() ? $owners : $activeUsers;
 
-        $verifiedPicQuery = $supplier->users()
-            ->wherePivot('is_active', true)
-            ->whereNotNull('users.phone')
-            ->whereNotNull('users.phone_verified_at');
-
-        if ($hasActiveOwner) {
-            $verifiedPicQuery->wherePivot('is_owner', true);
-        }
-
-        if (! $verifiedPicQuery->exists()) {
+        if (! $candidates->contains(static fn (User $user): bool => $user->hasOtpVerifiedPhone())) {
             throw new DomainException(
-                $hasActiveOwner
-                    ? 'Nomor HP PIC/owner supplier harus diverifikasi sebelum supplier dapat disetujui.'
-                    : 'Minimal satu pengguna aktif supplier harus memiliki nomor HP terverifikasi sebelum supplier dapat disetujui.',
+                $owners->isNotEmpty()
+                    ? 'Nomor HP PIC/owner supplier harus diverifikasi melalui OTP sebelum supplier dapat disetujui.'
+                    : 'Minimal satu pengguna aktif supplier harus memiliki nomor HP yang diverifikasi melalui OTP sebelum supplier dapat disetujui.',
             );
         }
 
@@ -64,6 +66,8 @@ class ApproveSupplierAction
                 'suspended_at' => null,
                 'suspension_reason' => null,
             ])->save();
+
+            $this->attestations->issue($supplier, $actor);
 
             return $supplier->refresh();
         });
