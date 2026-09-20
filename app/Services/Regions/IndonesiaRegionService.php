@@ -2,6 +2,7 @@
 
 namespace App\Services\Regions;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 use Laravolt\Indonesia\Models\City;
 use Laravolt\Indonesia\Models\District;
@@ -74,7 +75,7 @@ class IndonesiaRegionService
     }
 
     /**
-     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $modelClass
+     * @param  class-string<Model>  $modelClass
      */
     private function tableExists(string $modelClass): bool
     {
