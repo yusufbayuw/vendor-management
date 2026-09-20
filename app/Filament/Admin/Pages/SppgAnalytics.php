@@ -9,6 +9,7 @@ use App\Filament\Exports\SppgAnalyticsExporter;
 use App\Models\PurchaseOrder;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
+use App\Services\Analytics\AnalyticsPeriodDefaults;
 use App\Services\Access\UserAccessService;
 use App\Services\Analytics\SppgAnalyticsService;
 use BackedEnum;
@@ -65,7 +66,7 @@ class SppgAnalytics extends Page implements HasTable
         return $table
             ->query(app(SppgAnalyticsService::class)->query($user))
             ->heading('Aktivitas Procurement per SPPG')
-            ->description('Gunakan grouping SPPG untuk memperoleh subtotal jumlah item dan nilai PO. Default periode tiga bulan terakhir.')
+            ->description('Gunakan grouping SPPG untuk memperoleh subtotal jumlah item dan nilai PO. Default periode mengikuti data terbaru yang tersedia dalam scope.')
             ->headerActions([
                 ExportAction::make('export')
                     ->label('Export CSV / XLSX')
@@ -152,10 +153,10 @@ class SppgAnalytics extends Page implements HasTable
                     ->schema([
                         DatePicker::make('from')
                             ->label('Dari tanggal')
-                            ->default(today()->subMonths(3)->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->purchaseOrders(auth()->user())['from']),
                         DatePicker::make('to')
                             ->label('Sampai tanggal')
-                            ->default(today()->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->purchaseOrders(auth()->user())['to']),
                     ])
                     ->columns(2)
                     ->query(fn (Builder $query, array $data): Builder => $query
