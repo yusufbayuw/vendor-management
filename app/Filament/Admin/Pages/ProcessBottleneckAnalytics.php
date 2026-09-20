@@ -8,6 +8,7 @@ use App\Filament\Exports\ProcessBottleneckAnalyticsExporter;
 use App\Models\PurchaseOrder;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
+use App\Services\Analytics\AnalyticsPeriodDefaults;
 use App\Services\Access\UserAccessService;
 use App\Services\Analytics\ProcessBottleneckAnalyticsService;
 use App\Services\Analytics\ProcessPerformanceAnalyticsService;
@@ -141,10 +142,10 @@ class ProcessBottleneckAnalytics extends Page implements HasTable
                     ->schema([
                         DatePicker::make('from')
                             ->label('Dari tanggal')
-                            ->default(today()->subMonths(3)->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->purchaseOrders(auth()->user())['from']),
                         DatePicker::make('to')
                             ->label('Sampai tanggal')
-                            ->default(today()->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->purchaseOrders(auth()->user())['to']),
                     ])
                     ->columns(2)
                     ->query(fn (Builder $query, array $data): Builder => $query
