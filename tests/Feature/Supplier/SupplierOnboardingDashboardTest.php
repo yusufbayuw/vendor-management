@@ -28,11 +28,30 @@ class SupplierOnboardingDashboardTest extends TestCase
             ->assertSee('Katalog Produk');
     }
 
-    public function test_active_supplier_does_not_see_onboarding_widget(): void
+    public function test_active_supplier_with_incomplete_profile_still_sees_onboarding_widget(): void
     {
         $this->seed(DatabaseSeeder::class);
 
         $user = User::query()->where('email', 'supplier.ayam.admin@example.test')->firstOrFail();
+
+        $this->actingAs($user)
+            ->get('/supplier')
+            ->assertOk()
+            ->assertSee('Progress Onboarding');
+    }
+
+    public function test_onboarding_widget_disappears_after_profile_is_complete(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $user = User::query()->where('email', 'supplier.ayam.admin@example.test')->firstOrFail();
+        $supplier = $user->suppliers()->wherePivot('is_active', true)->firstOrFail();
+
+        $supplier->forceFill([
+            'regency_code' => '3273',
+            'district_code' => '3273010',
+            'village_code' => '3273010001',
+        ])->save();
 
         $this->actingAs($user)
             ->get('/supplier')
