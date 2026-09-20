@@ -13,6 +13,7 @@ use App\Enums\PurchaseOrderStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\PurchaseOrders\Pages\ManagePurchaseOrders;
 use App\Filament\Admin\Resources\PurchaseOrders\Pages\ViewPurchaseOrder;
+use App\Filament\Support\ReferencePreviewModal;
 use App\Models\DeliveryScheduleItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
@@ -134,7 +135,16 @@ class PurchaseOrderResource extends Resource
                 TextColumn::make('number')->label('Nomor PO')->searchable()->sortable(),
                 TextColumn::make('supplier.display_name')->label('Supplier')->searchable()->sortable(),
                 TextColumn::make('kitchen.name')->label('SPPG')->searchable()->sortable(),
-                TextColumn::make('purchaseRequest.number')->label('PR')->searchable()->toggleable(),
+                TextColumn::make('purchaseRequest.number')
+                    ->label('PR')
+                    ->searchable()
+                    ->toggleable()
+                    ->color('primary')
+                    ->tooltip('Klik untuk preview purchase request')
+                    ->action(ReferencePreviewModal::purchaseRequest(
+                        'previewPurchaseRequest',
+                        static fn (PurchaseOrder $record) => $record->purchaseRequest,
+                    )),
                 TextColumn::make('order_date')->label('Tanggal PO')->date('d/m/Y')->sortable(),
                 TextColumn::make('delivery_start')->label('Mulai Kirim')->date('d/m/Y')->toggleable(),
                 TextColumn::make('delivery_end')->label('Batas Kirim')->date('d/m/Y')->toggleable(),
