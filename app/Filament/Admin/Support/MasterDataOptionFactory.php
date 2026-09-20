@@ -39,10 +39,10 @@ final class MasterDataOptionFactory
                     ->rows(3),
             ])
             ->createOptionAction(
-                fn (Action $action): Action => static::secureCreateAction($action, 'Buat kategori produk'),
+                fn (Action $action): Action => self::secureCreateAction($action, 'Buat kategori produk'),
             )
             ->createOptionUsing(static function (array $data): int {
-                static::authorizeManage();
+                self::authorizeManage();
                 MasterDataDuplicateGuard::assertNoExactName(ProductCategory::class, (string) $data['name']);
 
                 return ProductCategory::query()->create([
@@ -82,10 +82,10 @@ final class MasterDataOptionFactory
                     ->required(),
             ])
             ->createOptionAction(
-                fn (Action $action): Action => static::secureCreateAction($action, 'Buat satuan baru'),
+                fn (Action $action): Action => self::secureCreateAction($action, 'Buat satuan baru'),
             )
             ->createOptionUsing(static function (array $data): int {
-                static::authorizeManage();
+                self::authorizeManage();
                 MasterDataDuplicateGuard::assertNoExactName(Unit::class, (string) $data['name']);
 
                 return Unit::query()->create([
@@ -102,7 +102,7 @@ final class MasterDataOptionFactory
     {
         return $select
             ->createOptionForm([
-                static::category(
+                self::category(
                     Select::make('category_id')
                         ->label('Kategori')
                         ->options(static fn (): array => ProductCategory::query()
@@ -114,7 +114,7 @@ final class MasterDataOptionFactory
                         ->preload()
                         ->required(),
                 ),
-                static::unit(
+                self::unit(
                     Select::make('default_unit_id')
                         ->label('Satuan default')
                         ->options(static fn (): array => Unit::query()
@@ -142,10 +142,10 @@ final class MasterDataOptionFactory
                     ->rows(3),
             ])
             ->createOptionAction(
-                fn (Action $action): Action => static::secureCreateAction($action, 'Buat produk baru'),
+                fn (Action $action): Action => self::secureCreateAction($action, 'Buat produk baru'),
             )
             ->createOptionUsing(static function (array $data): int {
-                static::authorizeManage();
+                self::authorizeManage();
                 MasterDataDuplicateGuard::assertNoExactName(Product::class, (string) $data['name']);
 
                 return Product::query()->create([
@@ -165,11 +165,11 @@ final class MasterDataOptionFactory
             ->tooltip($label)
             ->modalHeading($label)
             ->modalSubmitActionLabel('Buat')
-            ->visible(static fn (): bool => static::canManage());
+            ->visible(static fn (): bool => self::canManage());
     }
 
     private static function authorizeManage(): void
     {
-        abort_unless(static::canManage(), 403, 'Anda tidak memiliki izin untuk menambah data master.');
+        abort_unless(self::canManage(), 403, 'Anda tidak memiliki izin untuk menambah data master.');
     }
 }

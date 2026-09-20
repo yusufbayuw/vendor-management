@@ -15,7 +15,7 @@ final class MasterDataDuplicateGuard
             return null;
         }
 
-        $needle = static::normalize((string) $value);
+        $needle = self::normalize((string) $value);
 
         if ($needle === '') {
             return null;
@@ -29,7 +29,7 @@ final class MasterDataDuplicateGuard
             ->limit(300)
             ->get()
             ->map(function (Model $record) use ($needle, $threshold): ?array {
-                $candidate = static::normalize((string) $record->getAttribute('name'));
+                $candidate = self::normalize((string) $record->getAttribute('name'));
 
                 if ($candidate === '') {
                     return null;
@@ -67,13 +67,13 @@ final class MasterDataDuplicateGuard
     /** @param class-string<Model> $modelClass */
     public static function assertNoExactName(string $modelClass, string $value, ?int $ignoreId = null): void
     {
-        $needle = static::normalize($value);
+        $needle = self::normalize($value);
 
         $match = $modelClass::query()
             ->select(['id', 'name'])
             ->when($ignoreId !== null, fn ($query) => $query->where('id', '!=', $ignoreId))
             ->get()
-            ->first(static fn (Model $record): bool => static::normalize((string) $record->getAttribute('name')) === $needle);
+            ->first(static fn (Model $record): bool => self::normalize((string) $record->getAttribute('name')) === $needle);
 
         if ($match !== null) {
             throw ValidationException::withMessages([
