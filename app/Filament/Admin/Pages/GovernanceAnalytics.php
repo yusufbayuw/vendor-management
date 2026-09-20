@@ -8,6 +8,7 @@ use App\Enums\SystemPermission;
 use App\Filament\Exports\GovernanceAnalyticsExporter;
 use App\Models\ApprovalRequest;
 use App\Models\Organization;
+use App\Services\Analytics\AnalyticsPeriodDefaults;
 use App\Services\Access\UserAccessService;
 use App\Services\Analytics\GovernanceAnalyticsService;
 use BackedEnum;
@@ -153,10 +154,10 @@ class GovernanceAnalytics extends Page implements HasTable
                     ->schema([
                         DatePicker::make('from')
                             ->label('Dari tanggal')
-                            ->default(today()->subMonths(3)->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->approvals(auth()->user())['from']),
                         DatePicker::make('to')
                             ->label('Sampai tanggal')
-                            ->default(today()->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->approvals(auth()->user())['to']),
                     ])
                     ->columns(2)
                     ->query(fn (Builder $query, array $data): Builder => $query
