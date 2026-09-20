@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             $this->call([
                 DemoReferenceDataSeeder::class,
                 DemoDataSeeder::class,
+                DemoAnalyticsSeeder::class,
                 DemoUserSeeder::class,
             ]);
         }
