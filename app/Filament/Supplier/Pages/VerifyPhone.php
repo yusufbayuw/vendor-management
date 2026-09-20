@@ -32,7 +32,7 @@ class VerifyPhone extends Page implements HasForms
 
         abort_unless($user !== null, 403);
 
-        if (config('phone-verification.mode', 'manual') !== 'otp' || $user->hasVerifiedPhone()) {
+        if (config('phone-verification.mode', 'otp') !== 'otp' || $user->hasOtpVerifiedPhone()) {
             $this->redirect('/supplier');
 
             return;
@@ -61,8 +61,8 @@ class VerifyPhone extends Page implements HasForms
     {
         if (config('phone-verification.mode', 'manual') !== 'otp') {
             Notification::make()
-                ->warning()
-                ->title('Verifikasi nomor HP dilakukan oleh admin.')
+                ->danger()
+                ->title('Verifikasi OTP tidak tersedia pada konfigurasi ini.')
                 ->send();
 
             return;
