@@ -7,6 +7,7 @@ use App\Enums\PurchaseOrderStatus;
 use App\Enums\PurchaseRequestStatus;
 use App\Enums\SupplierStatus;
 use App\Enums\SystemRole;
+use App\Models\FulfillmentDiscrepancy;
 use App\Models\Invoice;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
@@ -81,6 +82,17 @@ class DemoDataSeederTest extends TestCase
         $this->assertSame($lean->getKey(), $leanRequest->approved_by);
 
         $this->assertGreaterThan(0, Invoice::query()->count());
+        $historicalOrders = PurchaseOrder::query()
+            ->where('number', 'like', 'PO-HIST-%')
+            ->get();
+
+        $this->assertCount(18, $historicalOrders);
+        $this->assertGreaterThanOrEqual(
+            9,
+            $historicalOrders->pluck('order_date')->map(fn ($date): string => $date->format('Y-m'))->unique()->count(),
+        );
+        $this->assertTrue(Invoice::query()->where('number', 'like', 'INV-HIST-%')->where('status', InvoiceStatus::PartiallyPaid->value)->exists());
+        $this->assertTrue(FulfillmentDiscrepancy::query()->whereHas('purchaseOrder', fn ($query) => $query->where('number', 'like', 'PO-HIST-%'))->exists());
         $this->assertGreaterThanOrEqual(2, PurchaseRequestTemplate::query()->count());
         $this->assertTrue(
             PurchaseRequestTemplate::query()
