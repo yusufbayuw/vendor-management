@@ -216,10 +216,17 @@ class SupplierLifecycleTest extends TestCase
             'status' => SupplierStatus::Active,
         ]);
 
+        $supplier->approvalAttestation()->create([
+            'approved_by' => User::factory()->create()->getKey(),
+            'approved_at' => now(),
+            'signature' => str_repeat('a', 64),
+        ]);
+
         app(SuspendSupplierAction::class)->execute($supplier, 'Pelanggaran kualitas berulang.');
 
         $this->assertSame(SupplierStatus::Suspended, $supplier->refresh()->status);
         $this->assertSame('Pelanggaran kualitas berulang.', $supplier->suspension_reason);
+        $this->assertFalse($supplier->approvalAttestation()->exists());
     }
 
     private function otpProof(User $user): PhoneVerificationCode
