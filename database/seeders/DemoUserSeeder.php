@@ -5,12 +5,14 @@ namespace Database\Seeders;
 use App\Enums\AccessScopeType;
 use App\Enums\SystemRole;
 use App\Models\Organization;
+use App\Models\PhoneVerificationCode;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Models\UserAccessScope;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class DemoUserSeeder extends Seeder
 {
@@ -219,6 +221,21 @@ class DemoUserSeeder extends Seeder
             'phone_verified_at' => now(),
             'is_active' => true,
         ])->save();
+
+        if (
+            filled($user->phone)
+            && ! $user->phoneVerificationCodes()->where('phone', $user->phone)->whereNotNull('verified_at')->exists()
+        ) {
+            PhoneVerificationCode::query()->create([
+                'user_id' => $user->getKey(),
+                'phone' => $user->phone,
+                'code_hash' => Hash::make('000000'),
+                'attempt_count' => 1,
+                'expires_at' => now()->subMinute(),
+                'verified_at' => now()->subMinute(),
+                'sent_at' => now()->subMinutes(2),
+            ]);
+        }
 
         return $user;
     }
