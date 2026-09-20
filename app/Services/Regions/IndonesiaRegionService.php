@@ -2,6 +2,7 @@
 
 namespace App\Services\Regions;
 
+use Illuminate\Support\Facades\Schema;
 use Laravolt\Indonesia\Models\City;
 use Laravolt\Indonesia\Models\District;
 use Laravolt\Indonesia\Models\Province;
@@ -14,6 +15,10 @@ class IndonesiaRegionService
      */
     public function provinces(): array
     {
+        if (! $this->tableExists(Province::class)) {
+            return [];
+        }
+
         return Province::query()
             ->orderBy('name')
             ->pluck('name', 'code')
@@ -25,7 +30,7 @@ class IndonesiaRegionService
      */
     public function cities(?string $provinceCode): array
     {
-        if (blank($provinceCode)) {
+        if (blank($provinceCode) || ! $this->tableExists(City::class)) {
             return [];
         }
 
@@ -41,7 +46,7 @@ class IndonesiaRegionService
      */
     public function districts(?string $cityCode): array
     {
-        if (blank($cityCode)) {
+        if (blank($cityCode) || ! $this->tableExists(District::class)) {
             return [];
         }
 
@@ -57,7 +62,7 @@ class IndonesiaRegionService
      */
     public function villages(?string $districtCode): array
     {
-        if (blank($districtCode)) {
+        if (blank($districtCode) || ! $this->tableExists(Village::class)) {
             return [];
         }
 
@@ -66,5 +71,13 @@ class IndonesiaRegionService
             ->orderBy('name')
             ->pluck('name', 'code')
             ->all();
+    }
+
+    /**
+     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $modelClass
+     */
+    private function tableExists(string $modelClass): bool
+    {
+        return Schema::hasTable((new $modelClass)->getTable());
     }
 }
