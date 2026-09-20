@@ -54,7 +54,12 @@ class SupplierOnboardingOverview extends StatsOverviewWidget
         $remaining = count($summary['missing']);
 
         return [
-            Stat::make('Kelengkapan Data', $summary['percentage'].'%')
+            Stat::make('Status Pendaftaran', $supplier->status->label())
+                ->description($this->statusDescription($supplier->status))
+                ->icon('heroicon-o-identification')
+                ->color($this->statusColor($supplier->status)),
+
+            Stat::make('Progress Onboarding', $summary['percentage'].'%')
                 ->description($remaining > 0
                     ? $remaining.' item belum lengkap'.($missingPreview !== '' ? ': '.$missingPreview : '')
                     : 'Seluruh data onboarding sudah lengkap.')
@@ -79,8 +84,8 @@ class SupplierOnboardingOverview extends StatsOverviewWidget
                 ->color($sections['bank'] ? 'success' : 'warning')
                 ->url(SupplierBankAccountResource::getUrl('index')),
 
-            Stat::make('Komoditas / Produk', $sections['products'] ? 'Sudah dipilih' : 'Belum dipilih')
-                ->description('Master produk yang dapat dipasok oleh supplier')
+            Stat::make('Katalog Produk', $sections['products'] ? 'Sudah dipilih' : 'Belum dipilih')
+                ->description('Komoditas / produk master yang dapat dipasok supplier')
                 ->icon($sections['products'] ? 'heroicon-o-check-circle' : 'heroicon-o-archive-box-arrow-down')
                 ->color($sections['products'] ? 'success' : 'warning')
                 ->url(SupplierProductResource::getUrl('index')),
@@ -100,5 +105,29 @@ class SupplierOnboardingOverview extends StatsOverviewWidget
             ->orderByPivot('is_owner', 'desc')
             ->orderBy('suppliers.id')
             ->first();
+    }
+
+    private function statusDescription(SupplierStatus $status): string
+    {
+        return match ($status) {
+            SupplierStatus::Draft => 'Lengkapi data yang masih kurang lalu ajukan verifikasi.',
+            SupplierStatus::Submitted => 'Pengajuan sudah dikirim dan menunggu pemeriksaan.',
+            SupplierStatus::UnderReview => 'Tim sedang memeriksa data supplier.',
+            SupplierStatus::RevisionRequired => 'Ada data yang perlu diperbaiki sebelum diajukan ulang.',
+            SupplierStatus::Approved => 'Pengajuan disetujui dan menunggu aktivasi.',
+            SupplierStatus::Rejected => 'Tinjau catatan verifikasi atau hubungi tim.',
+            default => 'Pantau status pendaftaran supplier.',
+        };
+    }
+
+    private function statusColor(SupplierStatus $status): string
+    {
+        return match ($status) {
+            SupplierStatus::Draft => 'gray',
+            SupplierStatus::Submitted, SupplierStatus::UnderReview => 'warning',
+            SupplierStatus::RevisionRequired, SupplierStatus::Rejected => 'danger',
+            SupplierStatus::Approved => 'success',
+            default => 'primary',
+        };
     }
 }
