@@ -10,6 +10,7 @@ use App\Enums\PaymentAttachmentType;
 use App\Enums\PaymentStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Payments\Pages\ManagePayments;
+use App\Filament\Support\ReferencePreviewModal;
 use App\Filament\Support\SecureFileGalleryModal;
 use App\Models\Payment;
 use App\Models\PaymentAttachment;
@@ -43,7 +44,15 @@ class PaymentResource extends Resource
     {
         return $table->columns([
             TextColumn::make('number')->label('Nomor')->searchable()->sortable(),
-            TextColumn::make('invoice.number')->label('Invoice')->searchable(),
+            TextColumn::make('invoice.number')
+                ->label('Invoice')
+                ->searchable()
+                ->color('primary')
+                ->tooltip('Klik untuk preview invoice')
+                ->action(ReferencePreviewModal::invoice(
+                    'previewInvoice',
+                    static fn (Payment $record) => $record->invoice,
+                )),
             TextColumn::make('invoice.supplier.display_name')->label('Supplier')->searchable(),
             TextColumn::make('invoice.kitchen.name')->label('SPPG')->searchable(),
             TextColumn::make('payment_date')->label('Tanggal')->date('d/m/Y')->sortable(),
