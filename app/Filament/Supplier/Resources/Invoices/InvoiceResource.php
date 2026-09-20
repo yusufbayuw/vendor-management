@@ -9,6 +9,7 @@ use App\Filament\Supplier\Resources\Invoices\Pages\ManageInvoices;
 use App\Filament\Support\SecureFileModal;
 use App\Models\Invoice;
 use App\Services\Files\VendorFileStorage;
+use App\Services\Supplier\SupplierPortalAccessService;
 use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
@@ -113,7 +114,11 @@ class InvoiceResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()?->can(SystemPermission::InvoiceSubmit->value) ?? false;
+        $user = auth()->user();
+
+        return $user !== null
+            && app(SupplierPortalAccessService::class)->hasActiveSupplier($user)
+            && $user->can(SystemPermission::InvoiceSubmit->value);
     }
 
     public static function canCreate(): bool
@@ -133,7 +138,7 @@ class InvoiceResource extends Resource
 
     public static function supplierIds(): array
     {
-        return auth()->user()?->suppliers()->wherePivot('is_active', true)->pluck('suppliers.id')->map(fn ($id) => (int) $id)->all() ?? [];
+        return app(SupplierPortalAccessService::class)->activeSupplierIds(auth()->user());
     }
 
     private static function owned(Invoice $invoice): bool
