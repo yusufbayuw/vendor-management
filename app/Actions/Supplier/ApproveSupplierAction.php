@@ -2,6 +2,7 @@
 
 namespace App\Actions\Supplier;
 
+use App\Enums\SupplierDocumentStatus;
 use App\Enums\SupplierStatus;
 use App\Models\Supplier;
 use App\Models\User;
@@ -14,6 +15,22 @@ class ApproveSupplierAction
     {
         if (! in_array($supplier->status, [SupplierStatus::Submitted, SupplierStatus::UnderReview], true)) {
             throw new DomainException('Supplier hanya dapat disetujui saat berstatus diajukan atau dalam verifikasi.');
+        }
+
+        $documents = $supplier->documents()->get();
+
+        if ($documents->isEmpty()) {
+            throw new DomainException('Minimal satu dokumen legal harus tersedia sebelum supplier dapat disetujui.');
+        }
+
+        $hasUnverifiedDocument = $documents->contains(
+            static fn ($document): bool => blank($document->file_path)
+                || $document->status !== SupplierDocumentStatus::Verified
+                || ($document->expires_at !== null && $document->expires_at->isPast()),
+        );
+
+        if ($hasUnverifiedDocument) {
+            throw new DomainException('Seluruh dokumen legal yang diajukan harus sudah diperiksa, masih berlaku, dan berstatus terverifikasi sebelum supplier dapat disetujui.');
         }
 
         $hasActiveOwner = $supplier->users()
