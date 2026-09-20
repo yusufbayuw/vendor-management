@@ -18,6 +18,10 @@ class SubmitSupplierAction
             throw new DomainException('Nama legal dan nomor HP supplier wajib dilengkapi sebelum pengajuan.');
         }
 
+        if (! $supplier->documents()->whereNotNull('file_path')->exists()) {
+            throw new DomainException('Minimal satu dokumen legal pendukung wajib diunggah sebelum pengajuan verifikasi.');
+        }
+
         $supplier->forceFill([
             'status' => SupplierStatus::Submitted,
             'submitted_at' => now(),
