@@ -11,6 +11,7 @@ use App\Filament\Supplier\Resources\PurchaseOrders\Pages\ManagePurchaseOrders;
 use App\Models\DeliveryScheduleItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Services\Supplier\SupplierPortalAccessService;
 use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
@@ -103,7 +104,9 @@ class PurchaseOrderResource extends Resource
     {
         $user = auth()->user();
 
-        return $user && ($user->can(SystemPermission::PurchaseOrderAcknowledge->value) || $user->can(SystemPermission::DeliveryManage->value));
+        return $user !== null
+            && app(SupplierPortalAccessService::class)->hasActiveSupplier($user)
+            && ($user->can(SystemPermission::PurchaseOrderAcknowledge->value) || $user->can(SystemPermission::DeliveryManage->value));
     }
 
     public static function canCreate(): bool
@@ -129,7 +132,7 @@ class PurchaseOrderResource extends Resource
 
     private static function supplierIds(): array
     {
-        return auth()->user()?->suppliers()->wherePivot('is_active', true)->pluck('suppliers.id')->map(fn ($id) => (int) $id)->all() ?? [];
+        return app(SupplierPortalAccessService::class)->activeSupplierIds(auth()->user());
     }
 
     private static function itemOptions(PurchaseOrder $po): array
