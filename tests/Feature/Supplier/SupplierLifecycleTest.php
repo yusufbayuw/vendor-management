@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Supplier;
 
-use App\Actions\Auth\ManuallyVerifyPhoneAction;
 use App\Actions\Supplier\ApproveSupplierAction;
 use App\Actions\Supplier\RequestSupplierRevisionAction;
 use App\Actions\Supplier\StartSupplierReviewAction;
@@ -10,11 +9,14 @@ use App\Actions\Supplier\SubmitSupplierAction;
 use App\Actions\Supplier\SuspendSupplierAction;
 use App\Enums\SupplierDocumentStatus;
 use App\Enums\SupplierStatus;
+use App\Models\PhoneVerificationCode;
 use App\Models\Supplier;
 use App\Models\SupplierDocument;
 use App\Models\User;
+use App\Services\Supplier\SupplierPortalAccessService;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class SupplierLifecycleTest extends TestCase
@@ -33,7 +35,7 @@ class SupplierLifecycleTest extends TestCase
         $owner = User::factory()->create([
             'phone' => '081234567890',
         ]);
-        $owner->forceFill(['phone_verified_at' => now()])->save();
+        $this->otpProof($owner);
         $supplier->users()->attach($owner->getKey(), [
             'is_owner' => true,
             'is_active' => true,
@@ -49,13 +51,15 @@ class SupplierLifecycleTest extends TestCase
         app(ApproveSupplierAction::class)->execute($supplier, $reviewer);
         $this->assertSame(SupplierStatus::Active, $supplier->refresh()->status);
         $this->assertSame($reviewer->id, $supplier->verified_by);
+        $this->assertTrue($supplier->approvalAttestation()->exists());
+        $this->assertTrue(app(SupplierPortalAccessService::class)->isOperationallyEligible($supplier->refresh()));
     }
 
-    public function test_supplier_approval_is_blocked_until_owner_phone_is_manually_verified(): void
+    public function test_supplier_approval_is_blocked_until_owner_phone_has_otp_proof(): void
     {
         $supplier = Supplier::query()->create([
-            'code' => 'SUP-MANUAL',
-            'legal_name' => 'CV Pangan Manual',
+            'code' => 'SUP-OTP',
+            'legal_name' => 'CV Pangan OTP',
             'phone' => '081277700000',
         ]);
         $reviewer = User::factory()->create();
@@ -79,11 +83,7 @@ class SupplierLifecycleTest extends TestCase
             $this->assertStringContainsString('Nomor HP PIC/owner supplier harus diverifikasi', $exception->getMessage());
         }
 
-        app(ManuallyVerifyPhoneAction::class)->execute(
-            $owner,
-            $reviewer,
-            'Nomor dikonfirmasi melalui panggilan saat review supplier.',
-        );
+        $this->otpProof($owner);
 
         app(ApproveSupplierAction::class)->execute($supplier, $reviewer);
 
@@ -102,7 +102,7 @@ class SupplierLifecycleTest extends TestCase
         $owner = User::factory()->create([
             'phone' => '081277700011',
         ]);
-        $owner->forceFill(['phone_verified_at' => now()])->save();
+        $this->otpProof($owner);
 
         $supplier->users()->attach($owner->getKey(), [
             'is_owner' => true,
@@ -187,6 +187,25 @@ class SupplierLifecycleTest extends TestCase
         $this->assertSame(SupplierStatus::Submitted, $supplier->refresh()->status);
     }
 
+    public function test_setting_status_active_directly_does_not_bypass_operational_eligibility(): void
+    {
+        $supplier = Supplier::query()->create([
+            'code' => 'SUP-BYPASS',
+            'legal_name' => 'PT Bypass Ditolak',
+            'phone' => '081244400000',
+            'status' => SupplierStatus::Active,
+            'verified_at' => now(),
+            'verified_by' => User::factory()->create()->getKey(),
+            'activated_at' => now(),
+        ]);
+        $owner = User::factory()->create(['phone' => '081244400001']);
+        $this->otpProof($owner);
+        $supplier->users()->attach($owner->getKey(), ['is_owner' => true, 'is_active' => true]);
+        $this->verifiedDocument($supplier);
+
+        $this->assertFalse(app(SupplierPortalAccessService::class)->isOperationallyEligible($supplier));
+    }
+
     public function test_active_supplier_can_be_suspended_with_reason(): void
     {
         $supplier = Supplier::query()->create([
@@ -203,6 +222,22 @@ class SupplierLifecycleTest extends TestCase
         $this->assertSame('Pelanggaran kualitas berulang.', $supplier->suspension_reason);
     }
 
+    private function otpProof(User $user): PhoneVerificationCode
+    {
+        $verifiedAt = now();
+        $user->forceFill(['phone_verified_at' => $verifiedAt])->save();
+
+        return PhoneVerificationCode::query()->create([
+            'user_id' => $user->getKey(),
+            'phone' => $user->phone,
+            'code_hash' => Hash::make('123456'),
+            'attempt_count' => 1,
+            'expires_at' => now()->addMinute(),
+            'verified_at' => $verifiedAt,
+            'sent_at' => now()->subMinute(),
+        ]);
+    }
+
     private function verifiedDocument(Supplier $supplier): SupplierDocument
     {
         return SupplierDocument::query()->create([
@@ -212,6 +247,7 @@ class SupplierLifecycleTest extends TestCase
             'file_path' => 'supplier-documents/'.strtolower($supplier->code).'.pdf',
             'status' => SupplierDocumentStatus::Verified,
             'verified_at' => now(),
+            'verified_by' => User::factory()->create()->getKey(),
         ]);
     }
 
