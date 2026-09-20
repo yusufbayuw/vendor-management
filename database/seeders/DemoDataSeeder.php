@@ -33,6 +33,7 @@ use App\Enums\SupplierStatus;
 use App\Enums\SystemRole;
 use App\Enums\VerificationStatus;
 use App\Models\Organization;
+use App\Models\PhoneVerificationCode;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductProcurementRule;
@@ -49,8 +50,10 @@ use App\Models\SupplierProduct;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\UserAccessScope;
+use App\Services\Supplier\SupplierApprovalAttestationService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
 class DemoDataSeeder extends Seeder
@@ -210,7 +213,26 @@ class DemoDataSeeder extends Seeder
             'phone_verified_at' => now(),
         ])->save();
 
+        $this->seedOtpProof($user);
+
         return $user;
+    }
+
+    private function seedOtpProof(User $user): void
+    {
+        if (blank($user->phone) || $user->phoneVerificationCodes()->where('phone', $user->phone)->whereNotNull('verified_at')->exists()) {
+            return;
+        }
+
+        PhoneVerificationCode::query()->create([
+            'user_id' => $user->getKey(),
+            'phone' => $user->phone,
+            'code_hash' => Hash::make('000000'),
+            'attempt_count' => 1,
+            'expires_at' => now()->subMinute(),
+            'verified_at' => now()->subMinute(),
+            'sent_at' => now()->subMinutes(2),
+        ]);
     }
 
     private function scope(User $user, AccessScopeType $type, int $scopeId, bool $primary = false): void
@@ -496,6 +518,8 @@ class DemoDataSeeder extends Seeder
                 ],
             );
         }
+
+        app(SupplierApprovalAttestationService::class)->issue($supplier, $verifier);
 
         return $supplier;
     }
