@@ -10,6 +10,7 @@ use App\Filament\Supplier\Resources\DeliverySchedules\Pages\ManageDeliverySchedu
 use App\Filament\Support\SecureFileModal;
 use App\Models\DeliverySchedule;
 use App\Services\Files\VendorFileStorage;
+use App\Services\Supplier\SupplierPortalAccessService;
 use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
@@ -103,7 +104,11 @@ class DeliveryScheduleResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()?->can(SystemPermission::DeliveryManage->value) ?? false;
+        $user = auth()->user();
+
+        return $user !== null
+            && app(SupplierPortalAccessService::class)->hasActiveSupplier($user)
+            && $user->can(SystemPermission::DeliveryManage->value);
     }
 
     public static function canCreate(): bool
@@ -131,7 +136,7 @@ class DeliveryScheduleResource extends Resource
 
     private static function supplierIds(): array
     {
-        return auth()->user()?->suppliers()->wherePivot('is_active', true)->pluck('suppliers.id')->map(fn ($id) => (int) $id)->all() ?? [];
+        return app(SupplierPortalAccessService::class)->activeSupplierIds(auth()->user());
     }
 
     private static function run(callable $callback, string $message): void
