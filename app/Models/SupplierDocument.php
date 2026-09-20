@@ -22,6 +22,7 @@ class SupplierDocument extends Model
         'verified_at',
         'verified_by',
         'rejection_reason',
+        'verification_note',
     ];
 
     protected function casts(): array

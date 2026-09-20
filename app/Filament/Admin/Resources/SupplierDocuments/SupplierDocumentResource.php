@@ -56,37 +56,58 @@ class SupplierDocumentResource extends Resource
                 )),
             TextColumn::make('issued_at')->label('Terbit')->date('d/m/Y')->toggleable(),
             TextColumn::make('expires_at')->label('Berlaku Sampai')->date('d/m/Y')->sortable(),
-            TextColumn::make('status')->label('Status')->badge()
+            TextColumn::make('status')->label('Status Catatan')->badge()
                 ->formatStateUsing(fn ($state) => str($state instanceof SupplierDocumentStatus ? $state->value : (string) $state)->replace('_', ' ')->title()),
-            TextColumn::make('verifier.name')->label('Diverifikasi Oleh')->toggleable(),
-            TextColumn::make('rejection_reason')->label('Catatan')->wrap()->toggleable(),
+            TextColumn::make('verifier.name')->label('Diperiksa Oleh')->toggleable(),
+            TextColumn::make('verification_note')->label('Keterangan Verifikasi')->wrap()->toggleable(),
         ])->recordActions([
-            Action::make('verify')->label('Verifikasi')->color('success')->requiresConfirmation()
+            Action::make('verify')
+                ->label('Catat Sesuai')
+                ->color('success')
                 ->visible(fn (SupplierDocument $record) => in_array($record->status, [
                     SupplierDocumentStatus::Uploaded,
                     SupplierDocumentStatus::UnderReview,
                     SupplierDocumentStatus::Rejected,
                 ], true) && static::canVerify($record))
-                ->action(function (SupplierDocument $record): void {
+                ->schema([
+                    Textarea::make('note')
+                        ->label('Keterangan verifikasi')
+                        ->helperText('Catatan ini bersifat administratif/informatif. Keputusan aktivasi supplier tetap dilakukan dari proses verifikasi supplier.')
+                        ->rows(3),
+                ])
+                ->action(function (SupplierDocument $record, array $data): void {
                     abort_unless(static::canVerify($record), 403);
 
                     static::run(
-                        fn () => app(VerifySupplierDocumentAction::class)->execute($record, auth()->user()),
-                        'Dokumen supplier berhasil diverifikasi.',
+                        fn () => app(VerifySupplierDocumentAction::class)->execute(
+                            $record,
+                            auth()->user(),
+                            $data['note'] ?? null,
+                        ),
+                        'Keterangan dokumen supplier tersimpan.',
                     );
                 }),
-            Action::make('reject')->label('Tolak')->color('danger')
+
+            Action::make('reject')
+                ->label('Catat Perlu Perbaikan')
+                ->color('warning')
                 ->visible(fn (SupplierDocument $record) => in_array($record->status, [
                     SupplierDocumentStatus::Uploaded,
                     SupplierDocumentStatus::UnderReview,
                 ], true) && static::canVerify($record))
-                ->schema([Textarea::make('reason')->label('Alasan penolakan')->required()->rows(4)])
+                ->schema([
+                    Textarea::make('reason')
+                        ->label('Keterangan verifikasi')
+                        ->helperText('Jelaskan data yang perlu diperbaiki. Catatan ini tidak otomatis menolak supplier.')
+                        ->required()
+                        ->rows(4),
+                ])
                 ->action(function (SupplierDocument $record, array $data): void {
                     abort_unless(static::canVerify($record), 403);
 
                     static::run(
                         fn () => app(RejectSupplierDocumentAction::class)->execute($record, auth()->user(), $data['reason']),
-                        'Dokumen supplier ditolak.',
+                        'Keterangan perbaikan dokumen tersimpan.',
                     );
                 }),
         ]);

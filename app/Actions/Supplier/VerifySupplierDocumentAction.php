@@ -9,7 +9,7 @@ use DomainException;
 
 class VerifySupplierDocumentAction
 {
-    public function execute(SupplierDocument $document, User $actor): SupplierDocument
+    public function execute(SupplierDocument $document, User $actor, ?string $note = null): SupplierDocument
     {
         if (! in_array($document->status, [
             SupplierDocumentStatus::Uploaded,
@@ -24,6 +24,9 @@ class VerifySupplierDocumentAction
             'verified_at' => now(),
             'verified_by' => $actor->getKey(),
             'rejection_reason' => null,
+            'verification_note' => filled($note)
+                ? trim((string) $note)
+                : 'Dokumen diperiksa dan dicatat sesuai.',
         ])->save();
 
         return $document->refresh();

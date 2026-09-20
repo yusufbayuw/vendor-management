@@ -42,6 +42,7 @@ class Supplier extends Model
         'suspended_at',
         'suspension_reason',
         'notes',
+        'onboarding_exemptions',
     ];
 
     protected function casts(): array
@@ -52,6 +53,7 @@ class Supplier extends Model
             'verified_at' => 'datetime',
             'activated_at' => 'datetime',
             'suspended_at' => 'datetime',
+            'onboarding_exemptions' => 'array',
         ];
     }
 

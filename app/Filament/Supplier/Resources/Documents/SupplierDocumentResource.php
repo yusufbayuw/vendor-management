@@ -92,7 +92,11 @@ class SupplierDocumentResource extends Resource
             TextColumn::make('status')->badge()->formatStateUsing(
                 fn ($state) => str($state instanceof SupplierDocumentStatus ? $state->value : (string) $state)->replace('_', ' ')->title(),
             ),
-            TextColumn::make('rejection_reason')->label('Catatan Verifikasi')->wrap()->toggleable(),
+            TextColumn::make('verification_note')
+                ->label('Keterangan Verifikasi')
+                ->placeholder('Belum ada keterangan')
+                ->wrap()
+                ->toggleable(),
         ])->recordActions([
             EditAction::make()->visible(fn (SupplierDocument $record) => static::canEdit($record)),
             DeleteAction::make()->visible(fn (SupplierDocument $record) => static::canDelete($record)),

@@ -12,11 +12,11 @@ class RejectSupplierDocumentAction
     public function execute(SupplierDocument $document, User $actor, string $reason): SupplierDocument
     {
         if (! in_array($document->status, [SupplierDocumentStatus::Uploaded, SupplierDocumentStatus::UnderReview], true)) {
-            throw new DomainException('Dokumen tidak dapat ditolak pada status saat ini.');
+            throw new DomainException('Dokumen tidak dapat diberi catatan perbaikan pada status saat ini.');
         }
 
         if (blank($reason)) {
-            throw new DomainException('Alasan penolakan dokumen wajib diisi.');
+            throw new DomainException('Keterangan verifikasi wajib diisi.');
         }
 
         $document->forceFill([
@@ -24,6 +24,7 @@ class RejectSupplierDocumentAction
             'verified_at' => now(),
             'verified_by' => $actor->getKey(),
             'rejection_reason' => $reason,
+            'verification_note' => $reason,
         ])->save();
 
         return $document->refresh();

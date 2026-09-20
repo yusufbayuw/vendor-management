@@ -14,6 +14,7 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
@@ -38,58 +39,106 @@ class SupplierProfileResource extends Resource
         return $schema->components([
             TextInput::make('legal_name')->label('Nama Legal')->required(),
             TextInput::make('display_name')->label('Nama Dagang'),
-            Select::make('supplier_type')->label('Jenis')->options([
-                'company' => 'Perusahaan',
-                'individual' => 'Perorangan',
-                'cooperative' => 'Koperasi',
-                'other' => 'Lainnya',
-            ])->required(),
-            TextInput::make('npwp')->label('NPWP'),
-            TextInput::make('nib')->label('NIB'),
+
+            Select::make('supplier_type')
+                ->label('Jenis')
+                ->options([
+                    'company' => 'Perusahaan',
+                    'individual' => 'Perorangan',
+                    'cooperative' => 'Koperasi',
+                    'other' => 'Lainnya',
+                ])
+                ->live()
+                ->required(),
+
+            TextInput::make('npwp')
+                ->label('NPWP')
+                ->required(fn (Get $get): bool => ! (bool) $get('onboarding_exemptions.npwp')),
+
+            Toggle::make('onboarding_exemptions.npwp')
+                ->label('Tidak memiliki NPWP / tidak berlaku')
+                ->helperText('Gunakan hanya bila memang tidak tersedia. Deklarasi ini dihitung sebagai penyelesaian item onboarding.')
+                ->live()
+                ->afterStateUpdated(function ($state, Set $set): void {
+                    if ($state) {
+                        $set('npwp', null);
+                    }
+                }),
+
+            TextInput::make('nib')
+                ->label('NIB')
+                ->required(fn (Get $get): bool => in_array($get('supplier_type'), ['company', 'cooperative'], true)
+                    && ! (bool) $get('onboarding_exemptions.nib')),
+
+            Toggle::make('onboarding_exemptions.nib')
+                ->label('NIB tidak dimiliki / tidak berlaku')
+                ->helperText('Untuk perusahaan/koperasi, NIB atau deklarasi ini perlu tersedia agar onboarding lengkap.')
+                ->visible(fn (Get $get): bool => in_array($get('supplier_type'), ['company', 'cooperative'], true))
+                ->live()
+                ->afterStateUpdated(function ($state, Set $set): void {
+                    if ($state) {
+                        $set('nib', null);
+                    }
+                }),
+
             TextInput::make('email')
                 ->label('Email')
                 ->helperText('Opsional. Supplier tetap dapat menggunakan nomor HP dan username untuk akses portal.')
                 ->email(),
+
             TextInput::make('phone')->label('Telepon')->tel()->required(),
             TextInput::make('website')->label('Website')->url(),
-            Textarea::make('address')->label('Alamat')->columnSpanFull(),
+
+            Textarea::make('address')
+                ->label('Alamat')
+                ->required()
+                ->columnSpanFull(),
+
             Select::make('province_code')
                 ->label('Provinsi')
                 ->placeholder('Pilih provinsi')
                 ->options(fn (): array => app(IndonesiaRegionService::class)->provinces())
                 ->searchable()
                 ->live()
+                ->required()
                 ->afterStateUpdated(function (Set $set): void {
                     $set('regency_code', null);
                     $set('district_code', null);
                     $set('village_code', null);
                 }),
+
             Select::make('regency_code')
                 ->label('Kabupaten / Kota')
                 ->placeholder('Pilih kabupaten / kota')
                 ->options(fn (Get $get): array => app(IndonesiaRegionService::class)->cities($get('province_code')))
                 ->searchable()
                 ->live()
+                ->required()
                 ->disabled(fn (Get $get): bool => blank($get('province_code')))
                 ->afterStateUpdated(function (Set $set): void {
                     $set('district_code', null);
                     $set('village_code', null);
                 }),
+
             Select::make('district_code')
                 ->label('Kecamatan')
                 ->placeholder('Pilih kecamatan')
                 ->options(fn (Get $get): array => app(IndonesiaRegionService::class)->districts($get('regency_code')))
                 ->searchable()
                 ->live()
+                ->required()
                 ->disabled(fn (Get $get): bool => blank($get('regency_code')))
                 ->afterStateUpdated(fn (Set $set) => $set('village_code', null)),
+
             Select::make('village_code')
                 ->label('Desa / Kelurahan')
                 ->placeholder('Pilih desa / kelurahan')
                 ->options(fn (Get $get): array => app(IndonesiaRegionService::class)->villages($get('district_code')))
                 ->searchable()
+                ->required()
                 ->disabled(fn (Get $get): bool => blank($get('district_code'))),
-            TextInput::make('postal_code')->label('Kode Pos'),
+
+            TextInput::make('postal_code')->label('Kode Pos')->maxLength(10),
         ])->columns(2);
     }
 
