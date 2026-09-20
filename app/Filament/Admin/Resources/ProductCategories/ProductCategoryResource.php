@@ -5,6 +5,7 @@ namespace App\Filament\Admin\Resources\ProductCategories;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Concerns\AuthorizesMasterData;
 use App\Filament\Admin\Resources\ProductCategories\Pages\ManageProductCategories;
+use App\Filament\Admin\Support\MasterDataDuplicateGuard;
 use App\Filament\Admin\Support\MasterDataOptionFactory;
 use App\Models\ProductCategory;
 use Filament\Actions\DeleteAction;
@@ -49,7 +50,16 @@ class ProductCategoryResource extends Resource
                     ->preload(),
             ),
             TextInput::make('code')->label('Kode')->required()->maxLength(50)->unique(ignoreRecord: true),
-            TextInput::make('name')->label('Nama')->required()->maxLength(255),
+            TextInput::make('name')
+                ->label('Nama')
+                ->required()
+                ->maxLength(255)
+                ->live(onBlur: true)
+                ->helperText(static fn (?string $state, ?ProductCategory $record): ?string => MasterDataDuplicateGuard::hint(
+                    ProductCategory::class,
+                    $state,
+                    $record?->getKey(),
+                )),
             Textarea::make('description')->label('Deskripsi')->rows(3)->columnSpanFull(),
             Toggle::make('is_active')->label('Aktif')->default(true),
         ])->columns(2);

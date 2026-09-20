@@ -7,6 +7,7 @@ enum SystemRole: string
     case SuperAdmin = 'super_admin';
     case PanelUser = 'panel_user';
     case CentralManager = 'central_manager';
+    case MasterDataSteward = 'master_data_steward';
     case SppgManager = 'sppg_manager';
     case Requester = 'requester';
     case Procurement = 'procurement';

@@ -47,6 +47,14 @@ class DemoUserSeeder extends Seeder
                 [[AccessScopeType::Global, 0]],
             );
             $this->internalUser(
+                'role.masterdata',
+                'Master Data Steward Role Demo',
+                'role.masterdata@example.test',
+                '+628113000014',
+                SystemRole::MasterDataSteward,
+                [[AccessScopeType::Global, 0]],
+            );
+            $this->internalUser(
                 'role.sppg.manager',
                 'SPPG Manager Role Demo',
                 'role.sppg.manager@example.test',

@@ -79,6 +79,7 @@ class User extends Authenticatable implements FilamentUser
             'admin' => $this->hasAnyRole([
                 SystemRole::PanelUser->value,
                 SystemRole::CentralManager->value,
+                SystemRole::MasterDataSteward->value,
                 SystemRole::SppgManager->value,
                 SystemRole::Requester->value,
                 SystemRole::Procurement->value,

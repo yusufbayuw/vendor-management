@@ -4,6 +4,7 @@ namespace App\Filament\Admin\Resources\Products;
 
 use App\Filament\Admin\Resources\Concerns\AuthorizesMasterData;
 use App\Filament\Admin\Resources\Products\Pages\ManageProducts;
+use App\Filament\Admin\Support\MasterDataDuplicateGuard;
 use App\Filament\Admin\Support\MasterDataOptionFactory;
 use App\Models\Product;
 use Filament\Actions\DeleteAction;
@@ -40,7 +41,16 @@ class ProductResource extends Resource
     {
         return $schema->components([
             TextInput::make('code')->label('Kode')->required()->maxLength(50)->unique(ignoreRecord: true),
-            TextInput::make('name')->label('Nama produk')->required()->maxLength(255),
+            TextInput::make('name')
+                ->label('Nama produk')
+                ->required()
+                ->maxLength(255)
+                ->live(onBlur: true)
+                ->helperText(static fn (?string $state, ?Product $record): ?string => MasterDataDuplicateGuard::hint(
+                    Product::class,
+                    $state,
+                    $record?->getKey(),
+                )),
             MasterDataOptionFactory::category(
                 Select::make('category_id')
                     ->label('Kategori')

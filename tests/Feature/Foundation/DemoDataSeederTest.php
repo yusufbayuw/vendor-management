@@ -10,6 +10,7 @@ use App\Enums\SystemRole;
 use App\Models\Invoice;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
+use App\Models\PurchaseRequestTemplate;
 use App\Models\Supplier;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
@@ -80,5 +81,12 @@ class DemoDataSeederTest extends TestCase
         $this->assertSame($lean->getKey(), $leanRequest->approved_by);
 
         $this->assertGreaterThan(0, Invoice::query()->count());
+        $this->assertGreaterThanOrEqual(2, PurchaseRequestTemplate::query()->count());
+        $this->assertTrue(
+            PurchaseRequestTemplate::query()
+                ->where('name', 'Kebutuhan Mingguan - Protein & Pokok')
+                ->whereHas('items')
+                ->exists(),
+        );
     }
 }

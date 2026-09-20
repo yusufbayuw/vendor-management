@@ -14,6 +14,7 @@ Akun pada dokumen ini hanya dibuat oleh `DatabaseSeeder` ketika environment **bu
 | `role.superadmin` | `role.superadmin@example.test` | `super_admin` | Global |
 | `role.panel` | `role.panel@example.test` | `panel_user` | SPPG Bandung |
 | `role.central` | `role.central@example.test` | `central_manager` | Global |
+| `role.masterdata` | `role.masterdata@example.test` | `master_data_steward` | Global |
 | `role.sppg.manager` | `role.sppg.manager@example.test` | `sppg_manager` | SPPG Bandung |
 | `role.requester` | `role.requester@example.test` | `requester` | SPPG Bandung |
 | `role.procurement` | `role.procurement@example.test` | `procurement` | YTB SPPG Demo |

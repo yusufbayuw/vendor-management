@@ -88,13 +88,19 @@ class UserResource extends Resource
                             return $query->where('guard_name', 'web');
                         }
 
+                        $excludedRoles = [
+                            SystemRole::SuperAdmin->value,
+                            SystemRole::SupplierAdmin->value,
+                            SystemRole::SupplierOperator->value,
+                        ];
+
+                        if (! $actor?->can(SystemPermission::MasterDataManage->value)) {
+                            $excludedRoles[] = SystemRole::MasterDataSteward->value;
+                        }
+
                         return $query
                             ->where('guard_name', 'web')
-                            ->whereNotIn('name', [
-                                SystemRole::SuperAdmin->value,
-                                SystemRole::SupplierAdmin->value,
-                                SystemRole::SupplierOperator->value,
-                            ]);
+                            ->whereNotIn('name', $excludedRoles);
                     },
                 )
                 ->getOptionLabelFromRecordUsing(static fn (Role $record): string => Str::headline($record->name))
@@ -196,6 +202,12 @@ class UserResource extends Resource
         }
 
         if ($record->hasRole(SystemRole::SuperAdmin->value) && ! $actor->hasRole(SystemRole::SuperAdmin->value)) {
+            return false;
+        }
+
+        if ($record->hasRole(SystemRole::MasterDataSteward->value)
+            && ! $actor->can(SystemPermission::MasterDataManage->value)
+            && ! $actor->hasRole(SystemRole::SuperAdmin->value)) {
             return false;
         }
 

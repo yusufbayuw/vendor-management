@@ -39,6 +39,7 @@ use App\Models\ProductProcurementRule;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\PurchaseRequestItem;
+use App\Models\PurchaseRequestTemplate;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\SupplierBankAccount;
@@ -62,6 +63,7 @@ class DemoDataSeeder extends Seeder
             $organizations = $this->seedOrganizationsAndKitchens();
             $users = $this->seedInternalUsers($organizations);
             $products = $this->seedProducts();
+            $this->seedPurchaseRequestTemplates($organizations, $users, $products);
             $suppliers = $this->seedSuppliers($users, $products);
             $this->seedDemoFiles();
 
@@ -284,6 +286,63 @@ class DemoDataSeeder extends Seeder
                 'is_active' => true,
             ],
         );
+    }
+
+    private function seedPurchaseRequestTemplates(array $organizations, array $users, array $products): void
+    {
+        $kg = Unit::query()->where('code', 'KG')->firstOrFail();
+        $liter = Unit::query()->where('code', 'L')->firstOrFail();
+        $pcs = Unit::query()->where('code', 'PCS')->firstOrFail();
+
+        $definitions = [
+            [
+                'name' => 'Kebutuhan Mingguan - Protein & Pokok',
+                'description' => 'Template kebutuhan dasar mingguan SPPG Bandung untuk mempercepat pembuatan PR rutin.',
+                'items' => [
+                    [$products['chicken'], $kg, 500, 40_000, 'Ayam segar, suhu rantai dingin terjaga.'],
+                    [$products['rice'], $kg, 300, 15_000, 'Beras premium, bebas kutu dan bau.'],
+                    [$products['egg'], $pcs, 1_000, 2_200, 'Telur utuh, bersih, tidak retak.'],
+                ],
+            ],
+            [
+                'name' => 'Kebutuhan Mingguan - Sayur & Pendukung',
+                'description' => 'Template sayur, bumbu, dan bahan pendukung untuk demo pengadaan berulang.',
+                'items' => [
+                    [$products['carrot'], $kg, 100, 15_000, 'Wortel segar, tidak layu.'],
+                    [$products['chili'], $kg, 50, 35_000, 'Cabai merah segar, tidak busuk.'],
+                    [$products['oil'], $liter, 80, 18_000, 'Minyak goreng kemasan food grade.'],
+                    [$products['flour'], $kg, 100, 13_000, 'Tepung kering dan kemasan utuh.'],
+                ],
+            ],
+        ];
+
+        foreach ($definitions as $definition) {
+            $template = PurchaseRequestTemplate::query()->updateOrCreate(
+                [
+                    'sppg_kitchen_id' => $organizations['bandung']->getKey(),
+                    'name' => $definition['name'],
+                ],
+                [
+                    'created_by' => $users['bandung']->getKey(),
+                    'description' => $definition['description'],
+                    'is_active' => true,
+                ],
+            );
+
+            $template->items()->delete();
+
+            foreach ($definition['items'] as $index => [$product, $unit, $quantity, $price, $quality]) {
+                $template->items()->create([
+                    'product_id' => $product->getKey(),
+                    'unit_id' => $unit->getKey(),
+                    'description' => $product->name,
+                    'quality_specification' => $quality,
+                    'requested_qty' => $quantity,
+                    'estimated_unit_price' => $price,
+                    'sort_order' => $index + 1,
+                ]);
+            }
+        }
     }
 
     /** @return array<string, Supplier> */

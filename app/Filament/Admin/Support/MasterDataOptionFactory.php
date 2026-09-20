@@ -31,7 +31,9 @@ final class MasterDataOptionFactory
                 TextInput::make('name')
                     ->label('Nama kategori')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->live(onBlur: true)
+                    ->helperText(static fn (?string $state): ?string => MasterDataDuplicateGuard::hint(ProductCategory::class, $state)),
                 Textarea::make('description')
                     ->label('Deskripsi')
                     ->rows(3),
@@ -41,6 +43,7 @@ final class MasterDataOptionFactory
             )
             ->createOptionUsing(static function (array $data): int {
                 static::authorizeManage();
+                MasterDataDuplicateGuard::assertNoExactName(ProductCategory::class, (string) $data['name']);
 
                 return ProductCategory::query()->create([
                     'code' => Str::upper(trim((string) $data['code'])),
@@ -63,7 +66,9 @@ final class MasterDataOptionFactory
                 TextInput::make('name')
                     ->label('Nama satuan')
                     ->required()
-                    ->maxLength(100),
+                    ->maxLength(100)
+                    ->live(onBlur: true)
+                    ->helperText(static fn (?string $state): ?string => MasterDataDuplicateGuard::hint(Unit::class, $state)),
                 TextInput::make('symbol')
                     ->label('Simbol')
                     ->required()
@@ -81,6 +86,7 @@ final class MasterDataOptionFactory
             )
             ->createOptionUsing(static function (array $data): int {
                 static::authorizeManage();
+                MasterDataDuplicateGuard::assertNoExactName(Unit::class, (string) $data['name']);
 
                 return Unit::query()->create([
                     'code' => Str::upper(trim((string) $data['code'])),
@@ -128,7 +134,9 @@ final class MasterDataOptionFactory
                 TextInput::make('name')
                     ->label('Nama produk')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->live(onBlur: true)
+                    ->helperText(static fn (?string $state): ?string => MasterDataDuplicateGuard::hint(Product::class, $state)),
                 Textarea::make('description')
                     ->label('Deskripsi / spesifikasi umum')
                     ->rows(3),
@@ -138,6 +146,7 @@ final class MasterDataOptionFactory
             )
             ->createOptionUsing(static function (array $data): int {
                 static::authorizeManage();
+                MasterDataDuplicateGuard::assertNoExactName(Product::class, (string) $data['name']);
 
                 return Product::query()->create([
                     'category_id' => $data['category_id'],

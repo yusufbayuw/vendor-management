@@ -4,6 +4,8 @@ namespace App\Filament\Admin\Resources\PurchaseRequests;
 
 use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
 use App\Actions\Procurement\ApprovePurchaseRequestAction;
+use App\Actions\Procurement\CreatePurchaseRequestTemplateFromRequestAction;
+use App\Actions\Procurement\DuplicatePurchaseRequestAction;
 use App\Actions\Procurement\GeneratePurchaseOrdersAction;
 use App\Actions\Procurement\RejectPurchaseRequestAction;
 use App\Actions\Procurement\SubmitPurchaseRequestAction;
@@ -18,6 +20,7 @@ use App\Filament\Admin\Support\MasterDataOptionFactory;
 use App\Models\Product;
 use App\Models\PurchaseRequest;
 use App\Models\PurchaseRequestItem;
+use App\Models\PurchaseRequestTemplate;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\Unit;
@@ -62,6 +65,63 @@ class PurchaseRequestResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            Select::make('template_id')
+                ->label('Gunakan template PR')
+                ->helperText('Opsional. Memuat dapur, item, jumlah, spesifikasi, dan estimasi harga. Tanggal tetap diisi untuk PR baru.')
+                ->options(static function (): array {
+                    $user = auth()->user();
+
+                    if (! $user) {
+                        return [];
+                    }
+
+                    return app(UserAccessService::class)
+                        ->applyKitchenOwnedScope(
+                            PurchaseRequestTemplate::query()
+                                ->where('is_active', true)
+                                ->with('kitchen')
+                                ->orderBy('name'),
+                            $user,
+                        )
+                        ->get()
+                        ->mapWithKeys(static fn (PurchaseRequestTemplate $template): array => [
+                            $template->getKey() => $template->name.' — '.($template->kitchen?->name ?? 'SPPG'),
+                        ])
+                        ->all();
+                })
+                ->searchable()
+                ->preload()
+                ->dehydrated(false)
+                ->visible(static fn (string $operation): bool => $operation === 'create')
+                ->live()
+                ->afterStateUpdated(static function (Set $set, mixed $state): void {
+                    if (blank($state)) {
+                        return;
+                    }
+
+                    $user = auth()->user();
+                    $template = PurchaseRequestTemplate::query()
+                        ->with('items')
+                        ->find($state);
+
+                    if (! $user || ! $template || ! app(UserAccessService::class)->canAccessKitchen($user, $template->sppg_kitchen_id)) {
+                        return;
+                    }
+
+                    $set('sppg_kitchen_id', $template->sppg_kitchen_id);
+                    $set('description', $template->description);
+                    $set('notes', $template->notes);
+                    $set('items', $template->items->map(static fn ($item): array => [
+                        'product_id' => $item->product_id,
+                        'unit_id' => $item->unit_id,
+                        'requested_qty' => $item->requested_qty,
+                        'estimated_unit_price' => $item->estimated_unit_price,
+                        'description' => $item->description,
+                        'quality_specification' => $item->quality_specification,
+                        'notes' => $item->notes,
+                        'preferred_delivery_date' => null,
+                    ])->values()->all());
+                }),
             Select::make('sppg_kitchen_id')
                 ->label('Dapur SPPG')
                 ->options(static function (): array {
@@ -208,6 +268,53 @@ class PurchaseRequestResource extends Resource
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make()->visible(static fn (PurchaseRequest $record): bool => static::canEdit($record)),
+                Action::make('duplicateAsDraft')
+                    ->label('Salin jadi Draft')
+                    ->icon('heroicon-o-document-duplicate')
+                    ->visible(static fn (PurchaseRequest $record): bool => static::canReuse($record))
+                    ->requiresConfirmation()
+                    ->modalDescription('Item, jumlah, spesifikasi, dan estimasi harga akan disalin. Periode dan tanggal pengiriman sengaja dikosongkan agar tidak memakai tanggal lama.')
+                    ->action(static function (PurchaseRequest $record) {
+                        try {
+                            $copy = app(DuplicatePurchaseRequestAction::class)->execute($record, auth()->user());
+
+                            Notification::make()
+                                ->success()
+                                ->title('Draft PR baru berhasil dibuat.')
+                                ->send();
+
+                            return redirect()->to(static::getUrl('edit', ['record' => $copy]));
+                        } catch (DomainException $exception) {
+                            Notification::make()->danger()->title($exception->getMessage())->send();
+
+                            return null;
+                        }
+                    }),
+                Action::make('saveAsTemplate')
+                    ->label('Simpan sebagai Template')
+                    ->icon('heroicon-o-bookmark-square')
+                    ->visible(static fn (PurchaseRequest $record): bool => static::canReuse($record))
+                    ->schema([
+                        TextInput::make('template_name')
+                            ->label('Nama template')
+                            ->default(static fn (PurchaseRequest $record): string => 'Template '.$record->number)
+                            ->required()
+                            ->maxLength(150),
+                    ])
+                    ->action(static function (PurchaseRequest $record, array $data): void {
+                        try {
+                            $template = app(CreatePurchaseRequestTemplateFromRequestAction::class)
+                                ->execute($record, auth()->user(), (string) $data['template_name']);
+
+                            Notification::make()
+                                ->success()
+                                ->title('Template PR berhasil dibuat.')
+                                ->body($template->name)
+                                ->send();
+                        } catch (DomainException $exception) {
+                            Notification::make()->danger()->title($exception->getMessage())->send();
+                        }
+                    }),
                 Action::make('submit')
                     ->label('Ajukan')
                     ->color('primary')
@@ -341,6 +448,16 @@ class PurchaseRequestResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    private static function canReuse(PurchaseRequest $record): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null
+            && $user->can(SystemPermission::PurchaseRequestSubmit->value)
+            && app(UserAccessService::class)->canAccessKitchen($user, $record->sppg_kitchen_id)
+            && ((int) ($record->getAttribute('items_count') ?? $record->items()->count())) > 0;
     }
 
     private static function canSubmit(PurchaseRequest $record): bool

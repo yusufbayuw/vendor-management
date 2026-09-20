@@ -36,9 +36,11 @@ class DemoReferenceAndInlineCreatePolicyTest extends TestCase
         $this->seed(DatabaseSeeder::class);
 
         $central = User::query()->where('email', 'role.central@example.test')->firstOrFail();
+        $steward = User::query()->where('email', 'role.masterdata@example.test')->firstOrFail();
         $requester = User::query()->where('email', 'role.requester@example.test')->firstOrFail();
 
-        $this->assertTrue($central->can(SystemPermission::MasterDataManage->value));
+        $this->assertFalse($central->can(SystemPermission::MasterDataManage->value));
+        $this->assertTrue($steward->can(SystemPermission::MasterDataManage->value));
         $this->assertFalse($requester->can(SystemPermission::MasterDataManage->value));
     }
 }

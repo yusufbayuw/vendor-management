@@ -34,7 +34,6 @@ class RoleAndPermissionSeeder extends Seeder
             SystemPermission::UserView,
             SystemPermission::UserManage,
             SystemPermission::MasterDataView,
-            SystemPermission::MasterDataManage,
             SystemPermission::SupplierView,
             SystemPermission::SupplierVerify,
             SystemPermission::SupplierSuspend,
@@ -46,6 +45,11 @@ class RoleAndPermissionSeeder extends Seeder
             SystemPermission::PaymentVerify,
             SystemPermission::ReportsView,
             SystemPermission::AuditView,
+        ]);
+
+        $this->sync(SystemRole::MasterDataSteward, [
+            SystemPermission::MasterDataView,
+            SystemPermission::MasterDataManage,
         ]);
 
         $this->sync(SystemRole::SppgManager, [

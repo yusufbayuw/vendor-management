@@ -140,14 +140,17 @@ class ActionQueue extends StatsOverviewWidget
         $this->pushTask(
             $stats,
             $can(SystemPermission::GoodsReceiptCreate),
-            $deliverySchedules()->whereIn('status', [
-                DeliveryScheduleStatus::Confirmed->value,
-                DeliveryScheduleStatus::InTransit->value,
-                DeliveryScheduleStatus::Arrived->value,
-                DeliveryScheduleStatus::PartiallyReceived->value,
-            ])->count(),
-            'Penerimaan Barang',
-            'Catat barang yang sudah datang',
+            $deliverySchedules()
+                ->whereIn('status', [
+                    DeliveryScheduleStatus::Confirmed->value,
+                    DeliveryScheduleStatus::InTransit->value,
+                    DeliveryScheduleStatus::Arrived->value,
+                    DeliveryScheduleStatus::PartiallyReceived->value,
+                ])
+                ->whereDate('planned_delivery_at', '<=', today())
+                ->count(),
+            'Penerimaan Jatuh Tempo',
+            'Catat pengiriman hari ini atau yang sudah melewati jadwal',
             'heroicon-o-arrow-down-tray',
             DeliveryScheduleResource::getUrl('index'),
         );
