@@ -8,6 +8,7 @@ use App\Filament\Exports\FinanceAnalyticsExporter;
 use App\Models\Invoice;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
+use App\Services\Analytics\AnalyticsPeriodDefaults;
 use App\Services\Access\UserAccessService;
 use App\Services\Analytics\FinanceAnalyticsService;
 use BackedEnum;
@@ -167,10 +168,10 @@ class FinanceAnalytics extends Page implements HasTable
                     ->schema([
                         DatePicker::make('from')
                             ->label('Dari tanggal')
-                            ->default(today()->subMonths(3)->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->invoices(auth()->user())['from']),
                         DatePicker::make('to')
                             ->label('Sampai tanggal')
-                            ->default(today()->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->invoices(auth()->user())['to']),
                     ])
                     ->columns(2)
                     ->query(fn (Builder $query, array $data): Builder => $query
