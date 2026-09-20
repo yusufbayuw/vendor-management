@@ -26,17 +26,6 @@ class SupplierOnboardingOverview extends StatsOverviewWidget
             return false;
         }
 
-        if (! in_array($supplier->status, [
-            SupplierStatus::Draft,
-            SupplierStatus::Submitted,
-            SupplierStatus::UnderReview,
-            SupplierStatus::RevisionRequired,
-            SupplierStatus::Approved,
-            SupplierStatus::Rejected,
-        ], true)) {
-            return false;
-        }
-
         return ! app(SupplierOnboardingService::class)->summary($supplier)['complete'];
     }
 
@@ -115,7 +104,10 @@ class SupplierOnboardingOverview extends StatsOverviewWidget
             SupplierStatus::UnderReview => 'Tim sedang memeriksa data supplier.',
             SupplierStatus::RevisionRequired => 'Ada data yang perlu diperbaiki sebelum diajukan ulang.',
             SupplierStatus::Approved => 'Pengajuan disetujui dan menunggu aktivasi.',
+            SupplierStatus::Active => 'Supplier aktif. Lengkapi data yang masih kosong agar profil operasional tetap utuh.',
+            SupplierStatus::Suspended => 'Supplier ditangguhkan. Data profil tetap dapat dipantau kelengkapannya.',
             SupplierStatus::Rejected => 'Tinjau catatan verifikasi atau hubungi tim.',
+            SupplierStatus::Inactive => 'Supplier tidak aktif. Data profil tetap tersimpan.',
             default => 'Pantau status pendaftaran supplier.',
         };
     }
@@ -126,7 +118,8 @@ class SupplierOnboardingOverview extends StatsOverviewWidget
             SupplierStatus::Draft => 'gray',
             SupplierStatus::Submitted, SupplierStatus::UnderReview => 'warning',
             SupplierStatus::RevisionRequired, SupplierStatus::Rejected => 'danger',
-            SupplierStatus::Approved => 'success',
+            SupplierStatus::Approved, SupplierStatus::Active => 'success',
+            SupplierStatus::Suspended, SupplierStatus::Inactive => 'danger',
             default => 'primary',
         };
     }
