@@ -24,6 +24,8 @@ class SuspendSupplierAction
             'suspension_reason' => $reason,
         ])->save();
 
+        $supplier->approvalAttestation()->delete();
+
         return $supplier->refresh();
     }
 }
