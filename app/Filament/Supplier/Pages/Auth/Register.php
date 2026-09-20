@@ -312,7 +312,7 @@ class Register extends BaseRegister
             return $user;
         });
 
-        if (config('phone-verification.mode', 'manual') === 'otp') {
+        if (config('phone-verification.mode', 'otp') === 'otp') {
             try {
                 app(PhoneVerificationService::class)->send($user, request()->ip());
             } catch (Throwable $exception) {
