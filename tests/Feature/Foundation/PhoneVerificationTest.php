@@ -5,7 +5,6 @@ namespace Tests\Feature\Foundation;
 use App\Contracts\OtpChannel;
 use App\Enums\SystemRole;
 use App\Models\User;
-use App\Services\Auth\LogOtpChannel;
 use App\Services\Auth\PhoneVerificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -52,6 +51,7 @@ class PhoneVerificationTest extends TestCase
 
         $this->assertNotNull($user->fresh()->phone_verified_at);
         $this->assertNotNull($verification->fresh()->verified_at);
+        $this->assertTrue($user->fresh()->hasOtpVerifiedPhone());
     }
 
     public function test_changing_phone_resets_verification(): void
@@ -69,14 +69,14 @@ class PhoneVerificationTest extends TestCase
         $this->assertFalse($user->fresh()->hasVerifiedPhone());
     }
 
-    public function test_manual_mode_allows_unverified_supplier_to_use_portal(): void
+    public function test_disabled_mode_allows_unverified_supplier_only_in_testing(): void
     {
-        config(['phone-verification.mode' => 'manual']);
+        config(['phone-verification.mode' => 'disabled']);
         Role::findOrCreate(SystemRole::SupplierAdmin->value, 'web');
 
         $user = User::factory()->create([
             'email' => null,
-            'username' => 'suppliermanual',
+            'username' => 'supplierdisabled',
             'phone' => '081234567890',
             'phone_verified_at' => null,
         ]);
@@ -132,19 +132,36 @@ class PhoneVerificationTest extends TestCase
         }
     }
 
-    public function test_production_manual_mode_can_keep_log_channel_unresolved_from_users(): void
+    public function test_manual_mode_is_rejected(): void
+    {
+        config([
+            'phone-verification.mode' => 'manual',
+            'phone-verification.driver' => 'log',
+        ]);
+        $this->app->forgetInstance(OtpChannel::class);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('PHONE_VERIFICATION_MODE hanya mendukung otp atau disabled');
+
+        $this->app->make(OtpChannel::class);
+    }
+
+    public function test_production_disabled_mode_is_rejected(): void
     {
         $originalEnvironment = $this->app['env'];
 
         try {
             config([
-                'phone-verification.mode' => 'manual',
+                'phone-verification.mode' => 'disabled',
                 'phone-verification.driver' => 'log',
             ]);
             $this->app['env'] = 'production';
             $this->app->forgetInstance(OtpChannel::class);
 
-            $this->assertInstanceOf(LogOtpChannel::class, $this->app->make(OtpChannel::class));
+            $this->app->make(OtpChannel::class);
+            $this->fail('Production tidak boleh menonaktifkan verifikasi OTP supplier.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertStringContainsString('PHONE_VERIFICATION_MODE wajib otp di production', $exception->getMessage());
         } finally {
             $this->app['env'] = $originalEnvironment;
             $this->app->forgetInstance(OtpChannel::class);
