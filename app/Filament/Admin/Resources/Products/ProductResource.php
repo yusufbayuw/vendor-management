@@ -4,6 +4,7 @@ namespace App\Filament\Admin\Resources\Products;
 
 use App\Filament\Admin\Resources\Concerns\AuthorizesMasterData;
 use App\Filament\Admin\Resources\Products\Pages\ManageProducts;
+use App\Filament\Admin\Support\MasterDataOptionFactory;
 use App\Models\Product;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -40,18 +41,22 @@ class ProductResource extends Resource
         return $schema->components([
             TextInput::make('code')->label('Kode')->required()->maxLength(50)->unique(ignoreRecord: true),
             TextInput::make('name')->label('Nama produk')->required()->maxLength(255),
-            Select::make('category_id')
-                ->label('Kategori')
-                ->relationship('category', 'name', modifyQueryUsing: static fn ($query) => $query->where('is_active', true)->orderBy('name'))
-                ->searchable()
-                ->preload()
-                ->required(),
-            Select::make('default_unit_id')
-                ->label('Satuan default')
-                ->relationship('defaultUnit', 'name', modifyQueryUsing: static fn ($query) => $query->where('is_active', true)->orderBy('name'))
-                ->searchable()
-                ->preload()
-                ->required(),
+            MasterDataOptionFactory::category(
+                Select::make('category_id')
+                    ->label('Kategori')
+                    ->relationship('category', 'name', modifyQueryUsing: static fn ($query) => $query->where('is_active', true)->orderBy('name'))
+                    ->searchable()
+                    ->preload()
+                    ->required(),
+            ),
+            MasterDataOptionFactory::unit(
+                Select::make('default_unit_id')
+                    ->label('Satuan default')
+                    ->relationship('defaultUnit', 'name', modifyQueryUsing: static fn ($query) => $query->where('is_active', true)->orderBy('name'))
+                    ->searchable()
+                    ->preload()
+                    ->required(),
+            ),
             Textarea::make('description')->label('Deskripsi / spesifikasi umum')->rows(3)->columnSpanFull(),
             Toggle::make('is_active')->label('Aktif')->default(true),
         ])->columns(2);

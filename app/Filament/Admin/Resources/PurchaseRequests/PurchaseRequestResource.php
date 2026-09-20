@@ -14,6 +14,7 @@ use App\Filament\Admin\Resources\PurchaseRequests\Pages\CreatePurchaseRequest;
 use App\Filament\Admin\Resources\PurchaseRequests\Pages\EditPurchaseRequest;
 use App\Filament\Admin\Resources\PurchaseRequests\Pages\ListPurchaseRequests;
 use App\Filament\Admin\Resources\PurchaseRequests\Pages\ViewPurchaseRequest;
+use App\Filament\Admin\Support\MasterDataOptionFactory;
 use App\Models\Product;
 use App\Models\PurchaseRequest;
 use App\Models\PurchaseRequestItem;
@@ -87,10 +88,13 @@ class PurchaseRequestResource extends Resource
                 ->label('Item Kebutuhan')
                 ->relationship()
                 ->schema([
-                    Select::make('product_id')
-                        ->label('Produk')
-                        ->options(Product::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
-                        ->searchable()
+                    MasterDataOptionFactory::product(
+                        Select::make('product_id')
+                            ->label('Produk')
+                            ->options(static fn (): array => Product::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+                            ->searchable()
+                            ->preload(),
+                    )
                         ->live()
                         ->afterStateUpdated(static function (Set $set, mixed $state): void {
                             $unitId = filled($state)
@@ -100,12 +104,15 @@ class PurchaseRequestResource extends Resource
                             $set('unit_id', $unitId);
                         })
                         ->required(),
-                    Select::make('unit_id')
-                        ->label('Satuan')
-                        ->helperText('Otomatis mengikuti satuan default produk. Dapat diubah bila kebutuhan menggunakan satuan lain.')
-                        ->options(Unit::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
-                        ->searchable()
-                        ->required(),
+                    MasterDataOptionFactory::unit(
+                        Select::make('unit_id')
+                            ->label('Satuan')
+                            ->helperText('Otomatis mengikuti satuan default produk. Dapat diubah bila kebutuhan menggunakan satuan lain.')
+                            ->options(static fn (): array => Unit::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+                            ->searchable()
+                            ->preload()
+                            ->required(),
+                    ),
                     TextInput::make('requested_qty')->label('Jumlah')->numeric()->minValue(0.0001)->required(),
                     TextInput::make('estimated_unit_price')->label('Estimasi harga satuan')->numeric()->prefix('Rp')->minValue(0),
                     DatePicker::make('preferred_delivery_date')->label('Tanggal pengiriman pilihan')->native(false),

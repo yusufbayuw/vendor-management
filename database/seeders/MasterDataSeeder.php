@@ -16,8 +16,12 @@ class MasterDataSeeder extends Seeder
             ['code' => 'L', 'name' => 'Liter', 'symbol' => 'L', 'decimal_places' => 4],
             ['code' => 'ML', 'name' => 'Mililiter', 'symbol' => 'ml', 'decimal_places' => 2],
             ['code' => 'PCS', 'name' => 'Pieces', 'symbol' => 'pcs', 'decimal_places' => 0],
+            ['code' => 'PACK', 'name' => 'Pack', 'symbol' => 'pack', 'decimal_places' => 0],
             ['code' => 'BOX', 'name' => 'Box', 'symbol' => 'box', 'decimal_places' => 0],
+            ['code' => 'TRAY', 'name' => 'Tray', 'symbol' => 'tray', 'decimal_places' => 0],
             ['code' => 'SACK', 'name' => 'Karung', 'symbol' => 'karung', 'decimal_places' => 0],
+            ['code' => 'BUNCH', 'name' => 'Ikat', 'symbol' => 'ikat', 'decimal_places' => 0],
+            ['code' => 'TON', 'name' => 'Ton', 'symbol' => 'ton', 'decimal_places' => 4],
         ];
 
         foreach ($units as $unit) {
@@ -26,10 +30,14 @@ class MasterDataSeeder extends Seeder
 
         $categories = [
             ['code' => 'PROTEIN-HEWANI', 'name' => 'Protein Hewani'],
+            ['code' => 'PROTEIN-NABATI', 'name' => 'Protein Nabati'],
             ['code' => 'SAYURAN', 'name' => 'Sayuran'],
             ['code' => 'BAHAN-POKOK', 'name' => 'Bahan Pokok'],
             ['code' => 'BUAH', 'name' => 'Buah'],
             ['code' => 'BUMBU', 'name' => 'Bumbu dan Rempah'],
+            ['code' => 'MINYAK-LEMAK', 'name' => 'Minyak dan Lemak'],
+            ['code' => 'IKAN-HASIL-LAUT', 'name' => 'Ikan dan Hasil Laut'],
+            ['code' => 'BAHAN-PENDUKUNG', 'name' => 'Bahan Pendukung'],
             ['code' => 'LAINNYA', 'name' => 'Lainnya'],
         ];
 

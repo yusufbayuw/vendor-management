@@ -5,6 +5,7 @@ namespace App\Filament\Admin\Resources\ProductCategories;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Concerns\AuthorizesMasterData;
 use App\Filament\Admin\Resources\ProductCategories\Pages\ManageProductCategories;
+use App\Filament\Admin\Support\MasterDataOptionFactory;
 use App\Models\ProductCategory;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -40,11 +41,13 @@ class ProductCategoryResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('parent_id')
-                ->label('Kategori induk')
-                ->relationship('parent', 'name')
-                ->searchable()
-                ->preload(),
+            MasterDataOptionFactory::category(
+                Select::make('parent_id')
+                    ->label('Kategori induk')
+                    ->relationship('parent', 'name')
+                    ->searchable()
+                    ->preload(),
+            ),
             TextInput::make('code')->label('Kode')->required()->maxLength(50)->unique(ignoreRecord: true),
             TextInput::make('name')->label('Nama')->required()->maxLength(255),
             Textarea::make('description')->label('Deskripsi')->rows(3)->columnSpanFull(),
