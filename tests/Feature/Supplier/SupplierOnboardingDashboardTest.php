@@ -20,12 +20,31 @@ class SupplierOnboardingDashboardTest extends TestCase
         $this->actingAs($user)
             ->get('/supplier')
             ->assertOk()
+            ->assertSee('Akses Portal')
+            ->assertSee('Onboarding / Terbatas')
             ->assertSee('Status Pendaftaran')
             ->assertSee('Progress Onboarding')
             ->assertSee('Profil Supplier')
             ->assertSee('Dokumen Legal')
             ->assertSee('Rekening Bank')
             ->assertSee('Katalog Produk');
+    }
+
+    public function test_pending_supplier_cannot_access_operational_resources(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $user = User::query()->where('email', 'supplier.pending.operator@example.test')->firstOrFail();
+
+        $this->actingAs($user)
+            ->get(route('filament.supplier.resources.purchase-orders.index'))
+            ->assertForbidden();
+
+        $this->get(route('filament.supplier.resources.delivery-schedules.index'))
+            ->assertForbidden();
+
+        $this->get(route('filament.supplier.resources.invoices.index'))
+            ->assertForbidden();
     }
 
     public function test_active_supplier_with_incomplete_profile_still_sees_onboarding_widget(): void
@@ -37,7 +56,8 @@ class SupplierOnboardingDashboardTest extends TestCase
         $this->actingAs($user)
             ->get('/supplier')
             ->assertOk()
-            ->assertSee('Progress Onboarding');
+            ->assertSee('Progress Onboarding')
+            ->assertDontSee('Onboarding / Terbatas');
     }
 
     public function test_onboarding_widget_disappears_after_profile_is_complete(): void
