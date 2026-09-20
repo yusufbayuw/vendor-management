@@ -49,12 +49,20 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(OtpChannel::class, function ($app): OtpChannel {
-            $mode = (string) config('phone-verification.mode', 'manual');
+            $mode = (string) config('phone-verification.mode', 'otp');
             $driver = (string) config('phone-verification.driver', 'log');
 
-            if ($app->environment('production') && $mode === 'otp' && $driver === 'log') {
+            if (! in_array($mode, ['otp', 'disabled'], true)) {
+                throw new InvalidArgumentException('PHONE_VERIFICATION_MODE hanya mendukung otp atau disabled.');
+            }
+
+            if ($app->environment('production') && $mode !== 'otp') {
+                throw new InvalidArgumentException('PHONE_VERIFICATION_MODE wajib otp di production.');
+            }
+
+            if ($app->environment('production') && $driver === 'log') {
                 throw new InvalidArgumentException(
-                    'OTP_CHANNEL=log tidak boleh digunakan saat PHONE_VERIFICATION_MODE=otp di production.',
+                    'OTP_CHANNEL=log tidak boleh digunakan untuk verifikasi supplier di production.',
                 );
             }
 
