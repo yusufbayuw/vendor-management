@@ -23,8 +23,8 @@ class PhoneVerificationService
                 throw new DomainException('Nomor HP belum tersedia pada akun.');
             }
 
-            if ($lockedUser->phone_verified_at !== null) {
-                throw new DomainException('Nomor HP sudah terverifikasi.');
+            if ($lockedUser->hasOtpVerifiedPhone()) {
+                throw new DomainException('Nomor HP sudah terverifikasi melalui OTP.');
             }
 
             $cooldown = (int) config('phone-verification.resend_cooldown_seconds', 60);
@@ -99,7 +99,7 @@ class PhoneVerificationService
                 throw new DomainException('Nomor HP belum tersedia pada akun.');
             }
 
-            if ($lockedUser->phone_verified_at !== null) {
+            if ($lockedUser->hasOtpVerifiedPhone()) {
                 return $lockedUser;
             }
 
