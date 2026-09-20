@@ -2,6 +2,7 @@
 
 namespace App\Filament\Supplier\Widgets;
 
+use App\Enums\SupplierDocumentStatus;
 use App\Enums\SupplierStatus;
 use App\Filament\Supplier\Resources\BankAccounts\SupplierBankAccountResource;
 use App\Filament\Supplier\Resources\Documents\SupplierDocumentResource;
@@ -42,6 +43,29 @@ class SupplierOnboardingOverview extends StatsOverviewWidget
         $missingPreview = collect($summary['missing'])->take(3)->implode(', ');
         $remaining = count($summary['missing']);
 
+        $supplier->loadMissing('documents');
+        $documents = $supplier->documents;
+        $documentsVerified = $documents->isNotEmpty() && $documents->every(
+            static fn ($document): bool => filled($document->file_path)
+                && $document->status === SupplierDocumentStatus::Verified
+                && ($document->expires_at === null || ! $document->expires_at->isPast()),
+        );
+        $documentsRejected = $documents->contains(
+            static fn ($document): bool => $document->status === SupplierDocumentStatus::Rejected,
+        );
+        $documentState = match (true) {
+            $documents->isEmpty() => 'Belum tersedia',
+            $documentsRejected => 'Perlu perbaikan',
+            $documentsVerified => 'Terverifikasi',
+            default => 'Menunggu verifikasi',
+        };
+        $documentDescription = match (true) {
+            $documents->isEmpty() => 'Upload minimal satu dokumen legal sebelum mengajukan verifikasi.',
+            $documentsRejected => 'Periksa keterangan petugas dan perbaiki dokumen yang ditolak.',
+            $documentsVerified => 'Seluruh dokumen legal yang diajukan sudah diverifikasi.',
+            default => 'Dokumen sudah tersedia dan menunggu pemeriksaan petugas.',
+        };
+
         return [
             Stat::make('Status Pendaftaran', $supplier->status->label())
                 ->description($this->statusDescription($supplier->status))
@@ -61,10 +85,10 @@ class SupplierOnboardingOverview extends StatsOverviewWidget
                 ->color($sections['profile'] ? 'success' : 'warning')
                 ->url(SupplierProfileResource::getUrl('index')),
 
-            Stat::make('Dokumen Legal', $sections['documents'] ? 'Tersedia' : 'Belum tersedia')
-                ->description('Upload dokumen pendukung legalitas supplier')
-                ->icon($sections['documents'] ? 'heroicon-o-check-circle' : 'heroicon-o-document-plus')
-                ->color($sections['documents'] ? 'success' : 'warning')
+            Stat::make('Dokumen Legal', $documentState)
+                ->description($documentDescription)
+                ->icon($documentsVerified ? 'heroicon-o-check-circle' : 'heroicon-o-document-text')
+                ->color($documentsVerified ? 'success' : ($documentsRejected ? 'danger' : 'warning'))
                 ->url(SupplierDocumentResource::getUrl('index')),
 
             Stat::make('Rekening Bank', $sections['bank'] ? 'Lengkap' : 'Belum lengkap')
