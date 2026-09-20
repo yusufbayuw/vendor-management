@@ -28,6 +28,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema as DatabaseSchema;
 use Illuminate\Support\Str;
 use SensitiveParameter;
 use Throwable;
@@ -165,15 +166,17 @@ class Register extends BaseRegister
             Select::make('product_ids')
                 ->label('Komoditas / produk yang dapat dipasok')
                 ->helperText('Pilih dari master produk yang sudah tersedia. Data ini langsung menjadi katalog supplier.')
-                ->options(fn (): array => Product::query()
-                    ->with('category')
-                    ->where('is_active', true)
-                    ->orderBy('name')
-                    ->get()
-                    ->mapWithKeys(static fn (Product $product): array => [
-                        $product->getKey() => ($product->category?->name ? $product->category->name.' — ' : '').$product->name,
-                    ])
-                    ->all())
+                ->options(fn (): array => DatabaseSchema::hasTable('products')
+                    ? Product::query()
+                        ->with('category')
+                        ->where('is_active', true)
+                        ->orderBy('name')
+                        ->get()
+                        ->mapWithKeys(static fn (Product $product): array => [
+                            $product->getKey() => ($product->category?->name ? $product->category->name.' — ' : '').$product->name,
+                        ])
+                        ->all()
+                    : [])
                 ->multiple()
                 ->searchable()
                 ->preload()
