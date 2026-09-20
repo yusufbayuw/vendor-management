@@ -9,6 +9,7 @@ use App\Enums\DeliveryScheduleStatus;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\DeliverySchedules\Pages\ManageDeliverySchedules;
+use App\Filament\Support\ReferencePreviewModal;
 use App\Filament\Support\SecureFileModal;
 use App\Models\DeliverySchedule;
 use App\Models\DeliveryScheduleItem;
@@ -50,7 +51,16 @@ class DeliveryScheduleResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('number')->label('Nomor Jadwal')->searchable()->sortable(),
-                TextColumn::make('purchaseOrder.number')->label('PO')->searchable()->sortable(),
+                TextColumn::make('purchaseOrder.number')
+                    ->label('PO')
+                    ->searchable()
+                    ->sortable()
+                    ->color('primary')
+                    ->tooltip('Klik untuk preview purchase order')
+                    ->action(ReferencePreviewModal::purchaseOrder(
+                        'previewPurchaseOrder',
+                        static fn (DeliverySchedule $record) => $record->purchaseOrder,
+                    )),
                 TextColumn::make('purchaseOrder.supplier.display_name')->label('Supplier')->searchable(),
                 TextColumn::make('purchaseOrder.kitchen.name')->label('SPPG')->searchable(),
                 TextColumn::make('planned_delivery_at')->label('Jadwal')->dateTime('d/m/Y H:i')->sortable(),
