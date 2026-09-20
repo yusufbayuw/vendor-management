@@ -180,8 +180,7 @@ class Register extends BaseRegister
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->minItems(1)
-                ->required()
+                ->helperText('Boleh dilengkapi setelah login. Pilihan yang diisi saat registrasi langsung menjadi katalog supplier.')
                 ->columnSpanFull(),
 
             Select::make('legal_document_type')
@@ -204,13 +203,12 @@ class Register extends BaseRegister
 
             FileUpload::make('legal_document_file')
                 ->label('Upload dokumen legal')
-                ->helperText('PDF/JPG/PNG/WebP, maksimum 10 MB. File disimpan privat dan hanya dapat dilihat pihak berwenang.')
+                ->helperText('Boleh dilengkapi setelah login. Minimal satu dokumen legal wajib tersedia sebelum pengajuan verifikasi. PDF/JPG/PNG/WebP, maksimum 10 MB.')
                 ->disk(VendorFileStorage::DISK)
                 ->directory('supplier-documents')
                 ->visibility('private')
                 ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
                 ->maxSize(10240)
-                ->required()
                 ->columnSpanFull(),
 
             TextInput::make('bank_name')
@@ -277,13 +275,15 @@ class Register extends BaseRegister
                 'is_active' => true,
             ]);
 
-            SupplierDocument::query()->create([
-                'supplier_id' => $supplier->getKey(),
-                'document_type' => $data['legal_document_type'],
-                'document_number' => ($data['legal_document_number'] ?? null) ?: null,
-                'file_path' => $data['legal_document_file'],
-                'status' => SupplierDocumentStatus::Uploaded,
-            ]);
+            if (filled($data['legal_document_file'] ?? null)) {
+                SupplierDocument::query()->create([
+                    'supplier_id' => $supplier->getKey(),
+                    'document_type' => $data['legal_document_type'],
+                    'document_number' => ($data['legal_document_number'] ?? null) ?: null,
+                    'file_path' => $data['legal_document_file'],
+                    'status' => SupplierDocumentStatus::Uploaded,
+                ]);
+            }
 
             foreach (array_unique(array_map('intval', $data['product_ids'] ?? [])) as $productId) {
                 SupplierProduct::query()->create([
