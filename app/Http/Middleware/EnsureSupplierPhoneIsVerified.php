@@ -10,13 +10,17 @@ class EnsureSupplierPhoneIsVerified
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (config('phone-verification.mode', 'manual') !== 'otp') {
+        $mode = (string) config('phone-verification.mode', 'otp');
+
+        if ($mode === 'disabled' && app()->environment(['local', 'testing'])) {
             return $next($request);
         }
 
+        abort_unless($mode === 'otp', 503, 'Konfigurasi verifikasi nomor HP supplier tidak aman.');
+
         $user = $request->user();
 
-        if (! $user || $user->hasVerifiedPhone()) {
+        if (! $user || $user->hasOtpVerifiedPhone()) {
             return $next($request);
         }
 
