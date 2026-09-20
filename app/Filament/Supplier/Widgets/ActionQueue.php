@@ -12,6 +12,7 @@ use App\Filament\Supplier\Resources\PurchaseOrders\PurchaseOrderResource;
 use App\Models\DeliverySchedule;
 use App\Models\Invoice;
 use App\Models\PurchaseOrder;
+use App\Services\Supplier\SupplierPortalAccessService;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Database\Eloquent\Builder;
@@ -26,11 +27,13 @@ class ActionQueue extends StatsOverviewWidget
     {
         $user = auth()->user();
 
-        return $user !== null && collect([
-            SystemPermission::PurchaseOrderAcknowledge,
-            SystemPermission::DeliveryManage,
-            SystemPermission::InvoiceSubmit,
-        ])->contains(static fn (SystemPermission $permission): bool => $user->can($permission->value));
+        return $user !== null
+            && app(SupplierPortalAccessService::class)->hasActiveSupplier($user)
+            && collect([
+                SystemPermission::PurchaseOrderAcknowledge,
+                SystemPermission::DeliveryManage,
+                SystemPermission::InvoiceSubmit,
+            ])->contains(static fn (SystemPermission $permission): bool => $user->can($permission->value));
     }
 
     protected function getStats(): array
@@ -41,9 +44,7 @@ class ActionQueue extends StatsOverviewWidget
             return [];
         }
 
-        $supplierIds = $user->suppliers()
-            ->wherePivot('is_active', true)
-            ->pluck('suppliers.id');
+        $supplierIds = app(SupplierPortalAccessService::class)->activeSupplierIds($user);
         $stats = [];
         $can = static fn (SystemPermission $permission): bool => $user->can($permission->value);
         $purchaseOrders = static fn (): Builder => PurchaseOrder::query()->whereIn('supplier_id', $supplierIds);
