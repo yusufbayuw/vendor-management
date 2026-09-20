@@ -8,6 +8,7 @@ use App\Enums\GoodsReceiptAttachmentType;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\GoodsReceipts\Pages\ManageGoodsReceipts;
+use App\Filament\Support\ReferencePreviewModal;
 use App\Filament\Support\SecureFileGalleryModal;
 use App\Models\GoodsReceipt;
 use App\Models\GoodsReceiptAttachment;
@@ -51,8 +52,26 @@ class GoodsReceiptResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('number')->label('Nomor GR')->searchable()->sortable(),
-                TextColumn::make('purchaseOrder.number')->label('PO')->searchable()->sortable(),
-                TextColumn::make('deliverySchedule.number')->label('Jadwal')->searchable()->toggleable(),
+                TextColumn::make('purchaseOrder.number')
+                    ->label('PO')
+                    ->searchable()
+                    ->sortable()
+                    ->color('primary')
+                    ->tooltip('Klik untuk preview purchase order')
+                    ->action(ReferencePreviewModal::purchaseOrder(
+                        'previewPurchaseOrder',
+                        static fn (GoodsReceipt $record) => $record->purchaseOrder,
+                    )),
+                TextColumn::make('deliverySchedule.number')
+                    ->label('Jadwal')
+                    ->searchable()
+                    ->toggleable()
+                    ->color('primary')
+                    ->tooltip('Klik untuk preview jadwal pengiriman')
+                    ->action(ReferencePreviewModal::deliverySchedule(
+                        'previewDeliverySchedule',
+                        static fn (GoodsReceipt $record) => $record->deliverySchedule,
+                    )),
                 TextColumn::make('supplier.display_name')->label('Supplier')->searchable(),
                 TextColumn::make('kitchen.name')->label('SPPG')->searchable(),
                 TextColumn::make('received_at')->label('Diterima')->dateTime('d/m/Y H:i')->sortable(),
