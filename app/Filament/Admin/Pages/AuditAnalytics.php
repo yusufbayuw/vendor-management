@@ -6,6 +6,7 @@ use App\Enums\SystemPermission;
 use App\Filament\Exports\AuditAnalyticsExporter;
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Services\Analytics\AnalyticsPeriodDefaults;
 use App\Services\Analytics\AuditAnalyticsService;
 use BackedEnum;
 use Filament\Actions\ExportAction;
@@ -122,10 +123,10 @@ class AuditAnalytics extends Page implements HasTable
                     ->schema([
                         DatePicker::make('from')
                             ->label('Dari tanggal')
-                            ->default(today()->subMonths(3)->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->audit()['from']),
                         DatePicker::make('to')
                             ->label('Sampai tanggal')
-                            ->default(today()->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->audit()['to']),
                     ])
                     ->columns(2)
                     ->query(fn (Builder $query, array $data): Builder => $query
