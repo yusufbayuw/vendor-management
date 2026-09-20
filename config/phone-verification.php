@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'mode' => env('PHONE_VERIFICATION_MODE', 'manual'),
+    'mode' => env('PHONE_VERIFICATION_MODE', 'otp'),
 
     'driver' => env('OTP_CHANNEL', 'log'),
 
