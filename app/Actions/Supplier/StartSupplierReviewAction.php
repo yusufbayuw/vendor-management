@@ -19,9 +19,14 @@ class StartSupplierReviewAction
         return DB::transaction(function () use ($supplier): Supplier {
             $supplier->update(['status' => SupplierStatus::UnderReview]);
 
-            $supplier->documents()
+            $documents = $supplier->documents()
                 ->where('status', SupplierDocumentStatus::Uploaded->value)
-                ->update(['status' => SupplierDocumentStatus::UnderReview->value]);
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($documents as $document) {
+                $document->update(['status' => SupplierDocumentStatus::UnderReview]);
+            }
 
             return $supplier->refresh();
         });

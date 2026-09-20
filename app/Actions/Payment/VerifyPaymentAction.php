@@ -65,11 +65,16 @@ class VerifyPaymentAction
 
             if ($verifiedAmount + 0.01 >= (float) $invoice->payable_amount) {
                 $invoice->update(['status' => InvoiceStatus::Paid]);
-                $invoice->purchaseOrder()->update([
+
+                $purchaseOrder = $invoice->purchaseOrder()
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $purchaseOrder->forceFill([
                     'status' => PurchaseOrderStatus::Closed,
                     'paid_at' => now(),
                     'closed_at' => now(),
-                ]);
+                ])->save();
             } else {
                 $invoice->update(['status' => InvoiceStatus::PartiallyPaid]);
             }

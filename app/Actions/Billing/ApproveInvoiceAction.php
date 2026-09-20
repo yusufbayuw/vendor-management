@@ -49,14 +49,18 @@ class ApproveInvoiceAction
             );
 
             if ($approvalRequest->status === ApprovalStatus::Approved) {
-                $invoice->adjustments()
+                $adjustments = $invoice->adjustments()
                     ->where('status', InvoiceAdjustmentStatus::Pending->value)
-                    ->update([
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($adjustments as $adjustment) {
+                    $adjustment->forceFill([
                         'status' => InvoiceAdjustmentStatus::Approved->value,
                         'approved_by' => $actor->getKey(),
                         'approved_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    ])->save();
+                }
 
                 $this->calculator->recalculate($invoice);
 
@@ -66,7 +70,11 @@ class ApproveInvoiceAction
                     'approved_by' => $actor->getKey(),
                 ])->save();
 
-                $invoice->purchaseOrder()->update(['status' => PurchaseOrderStatus::Invoiced]);
+                $purchaseOrder = $invoice->purchaseOrder()
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $purchaseOrder->update(['status' => PurchaseOrderStatus::Invoiced]);
             } else {
                 $invoice->update(['status' => InvoiceStatus::UnderReview]);
             }

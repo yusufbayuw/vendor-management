@@ -6,17 +6,23 @@ use App\Contracts\OtpChannel;
 use App\Models\ApprovalAction;
 use App\Models\ApprovalRequest;
 use App\Models\DeliverySchedule;
+use App\Models\DeliveryScheduleItem;
 use App\Models\FulfillmentDiscrepancy;
 use App\Models\GoodsReceipt;
+use App\Models\GoodsReceiptItem;
 use App\Models\GovernancePolicy;
 use App\Models\Invoice;
 use App\Models\InvoiceAdjustment;
 use App\Models\Payment;
 use App\Models\PurchaseAllocation;
 use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderItem;
 use App\Models\PurchaseRequest;
+use App\Models\PurchaseRequestItem;
 use App\Models\Supplier;
 use App\Models\SupplierBankAccount;
+use App\Models\SupplierDocument;
+use App\Models\SupplierProduct;
 use App\Observers\AuditableObserver;
 use App\Observers\TransactionNotificationObserver;
 use App\Policies\RolePolicy;
@@ -142,14 +148,20 @@ class AppServiceProvider extends ServiceProvider
         return [
             Supplier::class,
             SupplierBankAccount::class,
+            SupplierDocument::class,
+            SupplierProduct::class,
             GovernancePolicy::class,
             PurchaseRequest::class,
+            PurchaseRequestItem::class,
             ApprovalRequest::class,
             ApprovalAction::class,
             PurchaseAllocation::class,
             PurchaseOrder::class,
+            PurchaseOrderItem::class,
             DeliverySchedule::class,
+            DeliveryScheduleItem::class,
             GoodsReceipt::class,
+            GoodsReceiptItem::class,
             FulfillmentDiscrepancy::class,
             Invoice::class,
             InvoiceAdjustment::class,

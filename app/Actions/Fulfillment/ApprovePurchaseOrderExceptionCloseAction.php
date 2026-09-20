@@ -49,16 +49,20 @@ class ApprovePurchaseOrderExceptionCloseAction
             );
 
             if ($approvalRequest->status === ApprovalStatus::Approved) {
-                $purchaseOrder->discrepancies()
+                $discrepancies = $purchaseOrder->discrepancies()
                     ->where('status', DiscrepancyStatus::Open->value)
-                    ->update([
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($discrepancies as $discrepancy) {
+                    $discrepancy->forceFill([
                         'resolution' => DiscrepancyResolution::AcceptedException->value,
                         'resolution_notes' => $resolutionNotes,
                         'status' => DiscrepancyStatus::Resolved->value,
                         'approved_by' => $actor->getKey(),
                         'resolved_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    ])->save();
+                }
 
                 $purchaseOrder->update(['status' => PurchaseOrderStatus::ClosedWithException]);
             }
