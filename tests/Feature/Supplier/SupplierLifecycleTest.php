@@ -138,6 +138,20 @@ class SupplierLifecycleTest extends TestCase
         $this->assertSame(SupplierStatus::Active, $supplier->refresh()->status);
     }
 
+    public function test_supplier_cannot_submit_verification_without_legal_document(): void
+    {
+        $supplier = Supplier::query()->create([
+            'code' => 'SUP-NO-DOC',
+            'legal_name' => 'Supplier Tanpa Dokumen',
+            'phone' => '081234567899',
+        ]);
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('dokumen legal');
+
+        app(SubmitSupplierAction::class)->execute($supplier);
+    }
+
     public function test_supplier_without_email_can_be_submitted_using_phone(): void
     {
         $supplier = Supplier::query()->create([
@@ -146,6 +160,7 @@ class SupplierLifecycleTest extends TestCase
             'email' => null,
             'phone' => '081234567890',
         ]);
+        $this->verifiedDocument($supplier);
 
         app(SubmitSupplierAction::class)->execute($supplier);
 
@@ -160,6 +175,7 @@ class SupplierLifecycleTest extends TestCase
             'email' => 'tani@example.test',
             'phone' => '08120000000',
         ]);
+        $this->verifiedDocument($supplier);
 
         app(SubmitSupplierAction::class)->execute($supplier);
         app(RequestSupplierRevisionAction::class)->execute($supplier, 'Dokumen NIB belum sesuai.');
