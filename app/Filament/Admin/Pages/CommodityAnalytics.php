@@ -9,6 +9,7 @@ use App\Models\ProductCategory;
 use App\Models\PurchaseOrderItem;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
+use App\Services\Analytics\AnalyticsPeriodDefaults;
 use App\Services\Access\UserAccessService;
 use App\Services\Analytics\CommodityAnalyticsService;
 use BackedEnum;
@@ -64,7 +65,7 @@ class CommodityAnalytics extends Page implements HasTable
         return $table
             ->query(app(CommodityAnalyticsService::class)->query($user))
             ->heading('Realisasi Pengadaan Komoditas')
-            ->description('Default periode tiga bulan terakhir. Gunakan grouping untuk membandingkan SPPG, kategori, komoditas, atau supplier.')
+            ->description('Default periode mengikuti data terbaru yang tersedia dalam scope. Gunakan grouping untuk membandingkan SPPG, kategori, komoditas, atau supplier.')
             ->headerActions([
                 ExportAction::make('export')
                     ->label('Export CSV / XLSX')
@@ -141,10 +142,10 @@ class CommodityAnalytics extends Page implements HasTable
                     ->schema([
                         DatePicker::make('from')
                             ->label('Dari tanggal')
-                            ->default(today()->subMonths(3)->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->purchaseOrders(auth()->user())['from']),
                         DatePicker::make('to')
                             ->label('Sampai tanggal')
-                            ->default(today()->toDateString()),
+                            ->default(fn (): string => app(AnalyticsPeriodDefaults::class)->purchaseOrders(auth()->user())['to']),
                     ])
                     ->columns(2)
                     ->query(function (Builder $query, array $data): Builder {
