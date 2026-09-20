@@ -61,6 +61,18 @@ class User extends Authenticatable implements FilamentUser
         return filled($this->phone) && $this->phone_verified_at !== null;
     }
 
+    public function hasOtpVerifiedPhone(): bool
+    {
+        if (blank($this->phone) || $this->phone_verified_at === null) {
+            return false;
+        }
+
+        return $this->phoneVerificationCodes()
+            ->where('phone', $this->phone)
+            ->whereNotNull('verified_at')
+            ->exists();
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
         if (! $this->is_active) {
