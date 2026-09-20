@@ -5,6 +5,8 @@ namespace Tests\Feature\Foundation;
 use App\Actions\Procurement\SubmitPurchaseRequestAction;
 use App\Enums\AccessScopeType;
 use App\Enums\SystemRole;
+use App\Enums\GoodsReceiptStatus;
+use App\Models\GoodsReceipt;
 use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
@@ -153,12 +155,18 @@ class PreE2EInfrastructureTest extends TestCase
         $this->assertSame(0, $second);
     }
 
-    public function test_seeded_goods_receipts_have_generated_qc_notifications(): void
+    public function test_completed_seeded_goods_receipts_do_not_leave_stale_qc_notifications(): void
     {
         $bandung = User::query()->where('email', 'sppg.bandung@example.test')->firstOrFail();
+        $completedReceiptIds = GoodsReceipt::query()
+            ->where('status', GoodsReceiptStatus::Completed->value)
+            ->pluck('id');
 
-        $this->assertTrue($bandung->notifications->contains(
-            fn ($notification): bool => data_get($notification->data, 'title') === 'Penerimaan barang menunggu QC',
+        $this->assertNotEmpty($completedReceiptIds);
+
+        $this->assertFalse($bandung->notifications->contains(
+            fn ($notification): bool => data_get($notification->data, 'title') === 'Penerimaan barang menunggu QC'
+                && $completedReceiptIds->contains((int) data_get($notification->data, 'entity_id')),
         ));
 
         $this->assertTrue(Supplier::query()->where('code', 'SUP-AYAM')->exists());
