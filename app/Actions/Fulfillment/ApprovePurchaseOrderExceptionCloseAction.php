@@ -3,6 +3,7 @@
 namespace App\Actions\Fulfillment;
 
 use App\Actions\Approval\ApproveApprovalRequestAction;
+use App\Enums\ApprovalDecisionSource;
 use App\Enums\ApprovalStatus;
 use App\Enums\DiscrepancyResolution;
 use App\Enums\DiscrepancyStatus;
@@ -23,6 +24,7 @@ class ApprovePurchaseOrderExceptionCloseAction
         User $actor,
         string $resolutionNotes,
         ?string $overrideReason = null,
+        ApprovalDecisionSource $decisionSource = ApprovalDecisionSource::Manual,
     ): PurchaseOrder {
         if ($purchaseOrder->status !== PurchaseOrderStatus::PendingExceptionClosure) {
             throw new DomainException('PO tidak sedang menunggu persetujuan close with exception.');
@@ -32,7 +34,7 @@ class ApprovePurchaseOrderExceptionCloseAction
             throw new DomainException('Catatan penyelesaian discrepancy wajib diisi.');
         }
 
-        return DB::transaction(function () use ($purchaseOrder, $actor, $resolutionNotes, $overrideReason): PurchaseOrder {
+        return DB::transaction(function () use ($purchaseOrder, $actor, $resolutionNotes, $overrideReason, $decisionSource): PurchaseOrder {
             $approvalRequest = ApprovalRequest::query()
                 ->where('approvable_type', $purchaseOrder->getMorphClass())
                 ->where('approvable_id', $purchaseOrder->getKey())
@@ -46,6 +48,7 @@ class ApprovePurchaseOrderExceptionCloseAction
                 $actor,
                 $resolutionNotes,
                 $overrideReason,
+                $decisionSource,
             );
 
             if ($approvalRequest->status === ApprovalStatus::Approved) {
