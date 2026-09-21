@@ -15,6 +15,7 @@ use App\Models\Payment;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\Supplier;
+use App\Support\ImportExecutionContext;
 use BackedEnum;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,10 @@ class TransactionNotificationObserver
 {
     public function created(Model $model): void
     {
+        if (ImportExecutionContext::suppressesNotifications()) {
+            return;
+        }
+
         if ($model instanceof GoodsReceipt && $model->status === GoodsReceiptStatus::PendingInspection) {
             $this->dispatchAfterCommit(new GoodsReceiptStatusChanged(
                 $model->getKey(),
@@ -34,6 +39,10 @@ class TransactionNotificationObserver
 
     public function updated(Model $model): void
     {
+        if (ImportExecutionContext::suppressesNotifications()) {
+            return;
+        }
+
         if (! $model->wasChanged('status')) {
             return;
         }

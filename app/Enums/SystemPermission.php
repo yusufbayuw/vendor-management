@@ -13,6 +13,7 @@ enum SystemPermission: string
     case MasterDataView = 'master_data.view';
     case MasterDataManage = 'master_data.manage';
     case GovernanceManage = 'governance.manage';
+    case LegacyImportManage = 'legacy_import.manage';
     case SupplierView = 'supplier.view';
     case SupplierManage = 'supplier.manage';
     case SupplierVerify = 'supplier.verify';

@@ -6,6 +6,7 @@ use App\Contracts\OtpChannel;
 use App\Models\ApprovalAction;
 use App\Models\ApprovalRequest;
 use App\Models\DeliverySchedule;
+use App\Models\DataProvenance;
 use App\Models\DeliveryScheduleItem;
 use App\Models\FulfillmentDiscrepancy;
 use App\Models\GoodsReceipt;
@@ -13,6 +14,7 @@ use App\Models\GoodsReceiptItem;
 use App\Models\GovernancePolicy;
 use App\Models\Invoice;
 use App\Models\InvoiceAdjustment;
+use App\Models\LegacyImportBatch;
 use App\Models\Payment;
 use App\Models\PurchaseAllocation;
 use App\Models\PurchaseOrder;
@@ -159,6 +161,8 @@ class AppServiceProvider extends ServiceProvider
             SupplierDocument::class,
             SupplierProduct::class,
             GovernancePolicy::class,
+            LegacyImportBatch::class,
+            DataProvenance::class,
             PurchaseRequest::class,
             PurchaseRequestItem::class,
             ApprovalRequest::class,
