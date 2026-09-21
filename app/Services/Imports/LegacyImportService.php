@@ -79,9 +79,9 @@ class LegacyImportService
                 $batch,
                 $actor,
                 $rows,
-                & $imported,
-                & $failed,
-                & $errors,
+                &$imported,
+                &$failed,
+                &$errors,
             ): void {
                 foreach ($rows as $row) {
                     try {
