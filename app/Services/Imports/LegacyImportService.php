@@ -71,18 +71,11 @@ class LegacyImportService
             );
             $this->assertColumns($batch->import_type, $rows);
 
-            $imported = 0;
-            $failed = 0;
-            $errors = [];
+            $result = ImportExecutionContext::withoutWorkflowNotifications(function () use ($batch, $actor, $rows): array {
+                $imported = 0;
+                $failed = 0;
+                $errors = [];
 
-            ImportExecutionContext::withoutWorkflowNotifications(function () use (
-                $batch,
-                $actor,
-                $rows,
-                &$imported,
-                &$failed,
-                &$errors,
-            ): void {
                 foreach ($rows as $row) {
                     try {
                         DB::transaction(function () use ($batch, $actor, $row): void {
@@ -102,7 +95,17 @@ class LegacyImportService
                         }
                     }
                 }
+
+                return [
+                    'imported' => $imported,
+                    'failed' => $failed,
+                    'errors' => $errors,
+                ];
             });
+
+            $imported = $result['imported'];
+            $failed = $result['failed'];
+            $errors = $result['errors'];
 
             $batch->forceFill([
                 'status' => $failed > 0 ? 'completed_with_errors' : 'completed',
