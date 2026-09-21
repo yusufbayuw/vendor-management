@@ -28,10 +28,10 @@ enum LegacyImportType: string
         return match ($this) {
             self::Suppliers => ['code', 'legal_name'],
             self::PurchaseRequests => ['number', 'kitchen_code', 'status'],
-            self::PurchaseOrders => ['number', 'purchase_request_number', 'supplier_code', 'kitchen_code', 'order_date', 'status'],
-            self::GoodsReceipts => ['number', 'purchase_order_number', 'received_at', 'status'],
-            self::Invoices => ['number', 'purchase_order_number', 'invoice_date', 'status', 'payable_amount'],
-            self::Payments => ['number', 'invoice_number', 'payment_date', 'amount', 'payment_method', 'status'],
+            self::PurchaseOrders => ['number', 'supplier_code', 'kitchen_code', 'order_date', 'status'],
+            self::GoodsReceipts => ['number', 'received_at', 'status'],
+            self::Invoices => ['number', 'invoice_date', 'status', 'payable_amount'],
+            self::Payments => ['number', 'payment_date', 'amount', 'payment_method', 'status'],
         };
     }
 }
