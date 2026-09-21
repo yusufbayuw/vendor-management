@@ -106,6 +106,10 @@ class LegacyImportService
             $imported = $result['imported'];
             $failed = $result['failed'];
             $errors = $result['errors'];
+            $syntheticRecords = DataProvenance::query()
+                ->where('legacy_import_batch_id', $batch->getKey())
+                ->where('provenance_type', 'legacy_import_synthetic')
+                ->count();
 
             $batch->forceFill([
                 'status' => $failed > 0 ? 'completed_with_errors' : 'completed',
@@ -114,6 +118,7 @@ class LegacyImportService
                 'failed_rows' => $failed,
                 'summary' => [
                     'workflow_replayed' => false,
+                    'synthetic_upstream_records' => $syntheticRecords,
                     'errors' => $errors,
                 ],
                 'imported_at' => now(),
@@ -231,9 +236,15 @@ class LegacyImportService
 
     private function importPurchaseOrder(LegacyImportBatch $batch, array $row, User $actor): PurchaseOrder
     {
-        $request = PurchaseRequest::query()->where('number', $this->required($row, 'purchase_request_number'))->firstOrFail();
         $supplier = Supplier::query()->where('code', $this->required($row, 'supplier_code'))->firstOrFail();
         $kitchen = $this->kitchen($batch, $row);
+        $request = $this->resolvePurchaseRequestForPurchaseOrder(
+            $batch,
+            $row,
+            $actor,
+            $kitchen,
+            $this->required($row, 'number'),
+        );
         $status = $this->enumValue(PurchaseOrderStatus::class, $this->required($row, 'status'));
 
         $purchaseOrder = PurchaseOrder::query()->updateOrCreate(
@@ -261,13 +272,17 @@ class LegacyImportService
         if (filled($this->value($row, 'product_code'))) {
             $product = Product::query()->where('code', $this->required($row, 'product_code'))->firstOrFail();
             $unit = $this->unit($row, $product->default_unit_id);
-            $requestItem = PurchaseRequestItem::query()
-                ->where('purchase_request_id', $request->getKey())
-                ->where('product_id', $product->getKey())
-                ->where('unit_id', $unit->getKey())
-                ->firstOrFail();
             $quantity = $this->number($row, 'ordered_qty', 0);
             $unitPrice = $this->number($row, 'unit_price', 0);
+            $requestItem = $this->resolvePurchaseRequestItem(
+                $batch,
+                $row,
+                $request,
+                $product,
+                $unit,
+                max(0.0001, $quantity),
+                $unitPrice,
+            );
 
             $allocation = PurchaseAllocation::query()->firstOrCreate(
                 [
@@ -309,12 +324,20 @@ class LegacyImportService
 
     private function importGoodsReceipt(LegacyImportBatch $batch, array $row, User $actor): GoodsReceipt
     {
-        $purchaseOrder = PurchaseOrder::query()
-            ->where('number', $this->required($row, 'purchase_order_number'))
-            ->firstOrFail();
         $receivedAt = $this->requiredDateTime($row, 'received_at');
         $status = $this->enumValue(GoodsReceiptStatus::class, $this->required($row, 'status'));
         $receiptNumber = $this->required($row, 'number');
+        $purchaseOrder = $this->resolvePurchaseOrderForDownstream(
+            $batch,
+            $row,
+            $actor,
+            $status === GoodsReceiptStatus::Completed
+                ? PurchaseOrderStatus::Fulfilled
+                : PurchaseOrderStatus::PartiallyDelivered,
+            $receivedAt->toDateString(),
+            $this->number($row, 'po_amount', 0),
+            'Penerimaan barang diimport tanpa PO upstream yang sudah tersedia.',
+        );
         $scheduleNumber = $this->value($row, 'delivery_schedule_number') ?: 'LEGACY-'.$receiptNumber;
 
         $schedule = DeliverySchedule::query()->updateOrCreate(
@@ -348,11 +371,14 @@ class LegacyImportService
         if (filled($this->value($row, 'product_code'))) {
             $product = Product::query()->where('code', $this->required($row, 'product_code'))->firstOrFail();
             $unit = $this->unit($row, $product->default_unit_id);
-            $poItem = PurchaseOrderItem::query()
-                ->where('purchase_order_id', $purchaseOrder->getKey())
-                ->where('product_id', $product->getKey())
-                ->where('unit_id', $unit->getKey())
-                ->firstOrFail();
+            $poItem = $this->resolvePurchaseOrderItemForDownstream(
+                $batch,
+                $row,
+                $actor,
+                $purchaseOrder,
+                $product,
+                $unit,
+            );
 
             $planned = $this->number($row, 'planned_qty', (float) $poItem->ordered_qty);
             $received = $this->number($row, 'received_qty', $planned);
@@ -400,11 +426,18 @@ class LegacyImportService
 
     private function importInvoice(LegacyImportBatch $batch, array $row, User $actor): Invoice
     {
-        $purchaseOrder = PurchaseOrder::query()
-            ->where('number', $this->required($row, 'purchase_order_number'))
-            ->firstOrFail();
         $status = $this->enumValue(InvoiceStatus::class, $this->required($row, 'status'));
         $payable = $this->number($row, 'payable_amount', 0);
+        $invoiceDate = $this->requiredDate($row, 'invoice_date');
+        $purchaseOrder = $this->resolvePurchaseOrderForDownstream(
+            $batch,
+            $row,
+            $actor,
+            PurchaseOrderStatus::Invoiced,
+            $this->date($row, 'order_date') ?? $invoiceDate,
+            $this->number($row, 'po_amount', $payable),
+            'Invoice diimport tanpa PO upstream yang sudah tersedia.',
+        );
 
         return Invoice::query()->updateOrCreate(
             ['number' => $this->required($row, 'number')],
@@ -413,7 +446,7 @@ class LegacyImportService
                 'purchase_order_id' => $purchaseOrder->getKey(),
                 'supplier_id' => $purchaseOrder->supplier_id,
                 'sppg_kitchen_id' => $purchaseOrder->sppg_kitchen_id,
-                'invoice_date' => $this->requiredDate($row, 'invoice_date'),
+                'invoice_date' => $invoiceDate,
                 'due_date' => $this->date($row, 'due_date'),
                 'po_amount' => $this->number($row, 'po_amount', (float) $purchaseOrder->total_amount),
                 'adjustment_amount' => $this->number($row, 'adjustment_amount', 0),
@@ -431,16 +464,18 @@ class LegacyImportService
 
     private function importPayment(LegacyImportBatch $batch, array $row, User $actor): Payment
     {
-        $invoice = Invoice::query()->where('number', $this->required($row, 'invoice_number'))->firstOrFail();
         $status = $this->enumValue(PaymentStatus::class, $this->required($row, 'status'));
         $method = $this->enumValue(PaymentMethod::class, $this->required($row, 'payment_method'));
+        $paymentDate = $this->requiredDate($row, 'payment_date');
+        $amount = $this->number($row, 'amount', 0);
+        $invoice = $this->resolveInvoiceForPayment($batch, $row, $actor, $paymentDate, $amount);
 
-        return Payment::query()->updateOrCreate(
+        $payment = Payment::query()->updateOrCreate(
             ['number' => $this->required($row, 'number')],
             [
                 'invoice_id' => $invoice->getKey(),
-                'payment_date' => $this->requiredDate($row, 'payment_date'),
-                'amount' => $this->number($row, 'amount', 0),
+                'payment_date' => $paymentDate,
+                'amount' => $amount,
                 'payment_method' => $method,
                 'source_bank_name' => $this->value($row, 'source_bank_name'),
                 'destination_bank_name' => $this->value($row, 'destination_bank_name'),
@@ -453,6 +488,335 @@ class LegacyImportService
                     ? ($this->dateTime($row, 'verified_at') ?? $this->dateTime($row, 'payment_date'))
                     : null,
                 'notes' => $this->value($row, 'notes'),
+            ],
+        );
+
+        if ($status === PaymentStatus::Verified) {
+            $verifiedAmount = (float) $invoice->payments()
+                ->where('status', PaymentStatus::Verified->value)
+                ->sum('amount');
+
+            if ($verifiedAmount + 0.01 >= (float) $invoice->payable_amount) {
+                $invoice->forceFill(['status' => InvoiceStatus::Paid])->save();
+                $purchaseOrder = $invoice->purchaseOrder()->firstOrFail();
+                $closedAt = $this->dateTime($row, 'verified_at')
+                    ?? $this->dateTime($row, 'payment_date')
+                    ?? now();
+
+                $purchaseOrder->forceFill([
+                    'status' => PurchaseOrderStatus::Closed,
+                    'paid_at' => $closedAt,
+                    'closed_at' => $closedAt,
+                ])->save();
+            } else {
+                $invoice->forceFill(['status' => InvoiceStatus::PartiallyPaid])->save();
+            }
+        }
+
+        return $payment->refresh();
+    }
+
+    private function resolvePurchaseRequestForPurchaseOrder(
+        LegacyImportBatch $batch,
+        array $row,
+        User $actor,
+        SppgKitchen $kitchen,
+        string $purchaseOrderNumber,
+    ): PurchaseRequest {
+        $number = $this->value($row, 'purchase_request_number') ?: 'LEGACY-PR-'.$purchaseOrderNumber;
+        $existing = PurchaseRequest::query()->where('number', $number)->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $request = PurchaseRequest::query()->create([
+            'number' => $number,
+            'sppg_kitchen_id' => $kitchen->getKey(),
+            'requested_by' => $actor->getKey(),
+            'status' => PurchaseRequestStatus::PoGenerated,
+            'submitted_at' => $this->dateTime($row, 'submitted_at')
+                ?? $this->dateTime($row, 'order_date')
+                ?? now(),
+            'approved_at' => $this->dateTime($row, 'approved_at')
+                ?? $this->dateTime($row, 'order_date')
+                ?? now(),
+            'notes' => 'Synthetic upstream record for legacy migration; workflow was not replayed.',
+        ]);
+
+        $this->recordSyntheticProvenance(
+            $batch,
+            $request,
+            $row,
+            'Purchase Request placeholder dibuat untuk menjaga relasi transaksi legacy yang mulai dari PO atau tahap sesudahnya.',
+        );
+
+        return $request;
+    }
+
+    private function resolvePurchaseRequestItem(
+        LegacyImportBatch $batch,
+        array $row,
+        PurchaseRequest $request,
+        Product $product,
+        Unit $unit,
+        float $quantity,
+        float $unitPrice = 0,
+    ): PurchaseRequestItem {
+        $existing = PurchaseRequestItem::query()
+            ->where('purchase_request_id', $request->getKey())
+            ->where('product_id', $product->getKey())
+            ->where('unit_id', $unit->getKey())
+            ->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $item = PurchaseRequestItem::query()->create([
+            'purchase_request_id' => $request->getKey(),
+            'product_id' => $product->getKey(),
+            'unit_id' => $unit->getKey(),
+            'description' => $this->value($row, 'item_description'),
+            'requested_qty' => max(0.0001, $quantity),
+            'estimated_unit_price' => $unitPrice,
+            'estimated_total' => round(max(0.0001, $quantity) * $unitPrice, 2),
+            'notes' => 'Synthetic upstream item for legacy migration.',
+        ]);
+
+        $this->recordSyntheticProvenance(
+            $batch,
+            $item,
+            $row,
+            'Purchase Request item placeholder dibuat dari item transaksi downstream.',
+        );
+
+        return $item;
+    }
+
+    private function resolvePurchaseOrderForDownstream(
+        LegacyImportBatch $batch,
+        array $row,
+        User $actor,
+        PurchaseOrderStatus $syntheticStatus,
+        string $orderDate,
+        float $amount,
+        string $reason,
+    ): PurchaseOrder {
+        $number = $this->value($row, 'purchase_order_number') ?: 'LEGACY-PO-'.$this->required($row, 'number');
+        $existing = PurchaseOrder::query()->where('number', $number)->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $supplierCode = $this->required($row, 'supplier_code');
+        $supplier = Supplier::query()->where('code', $supplierCode)->first();
+
+        if ($supplier === null) {
+            throw new DomainException("Supplier {$supplierCode} tidak ditemukan. Import master supplier terlebih dahulu.");
+        }
+
+        $kitchen = $this->kitchen($batch, $row);
+        $request = $this->resolvePurchaseRequestForPurchaseOrder($batch, $row, $actor, $kitchen, $number);
+
+        $purchaseOrder = PurchaseOrder::query()->create([
+            'number' => $number,
+            'supplier_id' => $supplier->getKey(),
+            'sppg_kitchen_id' => $kitchen->getKey(),
+            'purchase_request_id' => $request->getKey(),
+            'order_date' => $orderDate,
+            'subtotal' => $amount,
+            'total_amount' => $amount,
+            'status' => $syntheticStatus,
+            'approved_at' => $this->dateTime($row, 'approved_at')
+                ?? $this->dateTime($row, 'invoice_date')
+                ?? $this->dateTime($row, 'received_at')
+                ?? now(),
+            'issued_at' => $this->dateTime($row, 'issued_at')
+                ?? $this->dateTime($row, 'invoice_date')
+                ?? $this->dateTime($row, 'received_at')
+                ?? now(),
+            'notes' => 'Synthetic upstream record for legacy migration; workflow was not replayed.',
+            'created_by' => $actor->getKey(),
+        ]);
+
+        $this->recordSyntheticProvenance($batch, $purchaseOrder, $row, $reason);
+
+        return $purchaseOrder;
+    }
+
+    private function resolvePurchaseOrderItemForDownstream(
+        LegacyImportBatch $batch,
+        array $row,
+        User $actor,
+        PurchaseOrder $purchaseOrder,
+        Product $product,
+        Unit $unit,
+    ): PurchaseOrderItem {
+        $existing = PurchaseOrderItem::query()
+            ->where('purchase_order_id', $purchaseOrder->getKey())
+            ->where('product_id', $product->getKey())
+            ->where('unit_id', $unit->getKey())
+            ->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $quantity = $this->number(
+            $row,
+            'ordered_qty',
+            $this->number($row, 'planned_qty', $this->number($row, 'received_qty', 1)),
+        );
+        $quantity = max(0.0001, $quantity);
+        $unitPrice = $this->number($row, 'unit_price', 0);
+        $request = $purchaseOrder->purchaseRequest()->firstOrFail();
+        $requestItem = $this->resolvePurchaseRequestItem(
+            $batch,
+            $row,
+            $request,
+            $product,
+            $unit,
+            $quantity,
+            $unitPrice,
+        );
+
+        $allocation = PurchaseAllocation::query()
+            ->where('purchase_request_item_id', $requestItem->getKey())
+            ->where('supplier_id', $purchaseOrder->supplier_id)
+            ->first();
+
+        if ($allocation === null) {
+            $allocation = PurchaseAllocation::query()->create([
+                'purchase_request_item_id' => $requestItem->getKey(),
+                'supplier_id' => $purchaseOrder->supplier_id,
+                'allocated_qty' => $quantity,
+                'unit_price' => $unitPrice,
+                'subtotal' => round($quantity * $unitPrice, 2),
+                'status' => PurchaseAllocationStatus::PoGenerated,
+                'notes' => 'Synthetic upstream allocation for legacy migration.',
+                'allocated_by' => $actor->getKey(),
+                'allocated_at' => now(),
+            ]);
+
+            $this->recordSyntheticProvenance(
+                $batch,
+                $allocation,
+                $row,
+                'Allocation placeholder dibuat agar item penerimaan legacy tetap terhubung ke PO.',
+            );
+        }
+
+        $item = PurchaseOrderItem::query()->create([
+            'purchase_order_id' => $purchaseOrder->getKey(),
+            'purchase_request_item_id' => $requestItem->getKey(),
+            'purchase_allocation_id' => $allocation->getKey(),
+            'product_id' => $product->getKey(),
+            'unit_id' => $unit->getKey(),
+            'product_name_snapshot' => $product->name,
+            'description_snapshot' => $this->value($row, 'item_description'),
+            'unit_name_snapshot' => $unit->symbol ?: $unit->name,
+            'ordered_qty' => $quantity,
+            'unit_price' => $unitPrice,
+            'subtotal' => round($quantity * $unitPrice, 2),
+            'delivered_qty' => 0,
+            'accepted_qty' => 0,
+            'rejected_qty' => 0,
+        ]);
+
+        $this->recordSyntheticProvenance(
+            $batch,
+            $item,
+            $row,
+            'PO item placeholder dibuat dari item penerimaan legacy.',
+        );
+
+        return $item;
+    }
+
+    private function resolveInvoiceForPayment(
+        LegacyImportBatch $batch,
+        array $row,
+        User $actor,
+        string $paymentDate,
+        float $amount,
+    ): Invoice {
+        $number = $this->value($row, 'invoice_number') ?: 'LEGACY-INV-'.$this->required($row, 'number');
+        $existing = Invoice::query()->where('number', $number)->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $invoiceDate = $this->date($row, 'invoice_date') ?? $paymentDate;
+        $payable = $this->number($row, 'payable_amount', $this->number($row, 'invoice_amount', $amount));
+        $purchaseOrder = $this->resolvePurchaseOrderForDownstream(
+            $batch,
+            $row,
+            $actor,
+            PurchaseOrderStatus::Invoiced,
+            $this->date($row, 'order_date') ?? $invoiceDate,
+            $this->number($row, 'po_amount', $payable),
+            'Pembayaran diimport tanpa PO upstream yang sudah tersedia.',
+        );
+
+        $invoice = Invoice::query()->create([
+            'number' => $number,
+            'supplier_invoice_number' => $this->value($row, 'supplier_invoice_number'),
+            'purchase_order_id' => $purchaseOrder->getKey(),
+            'supplier_id' => $purchaseOrder->supplier_id,
+            'sppg_kitchen_id' => $purchaseOrder->sppg_kitchen_id,
+            'invoice_date' => $invoiceDate,
+            'due_date' => $this->date($row, 'due_date'),
+            'po_amount' => $this->number($row, 'po_amount', (float) $purchaseOrder->total_amount),
+            'adjustment_amount' => 0,
+            'withholding_tax_amount' => 0,
+            'total_amount' => $payable,
+            'payable_amount' => $payable,
+            'status' => InvoiceStatus::Approved,
+            'issued_at' => $this->dateTime($row, 'issued_at') ?? Carbon::parse($invoiceDate),
+            'approved_at' => $this->dateTime($row, 'approved_at') ?? Carbon::parse($invoiceDate),
+            'notes' => 'Synthetic upstream record for legacy migration; workflow was not replayed.',
+            'created_by' => $actor->getKey(),
+        ]);
+
+        $this->recordSyntheticProvenance(
+            $batch,
+            $invoice,
+            $row,
+            'Invoice placeholder dibuat untuk pembayaran legacy yang masuk tanpa invoice upstream terimport.',
+        );
+
+        return $invoice;
+    }
+
+    private function recordSyntheticProvenance(
+        LegacyImportBatch $batch,
+        Model $sourceable,
+        array $row,
+        string $reason,
+    ): void {
+        DataProvenance::query()->updateOrCreate(
+            [
+                'sourceable_type' => $sourceable->getMorphClass(),
+                'sourceable_id' => $sourceable->getKey(),
+                'legacy_import_batch_id' => $batch->getKey(),
+                'source_row' => (int) ($row['_source_row'] ?? 0),
+            ],
+            [
+                'provenance_type' => 'legacy_import_synthetic',
+                'source_file' => $batch->original_filename,
+                'source_sheet' => $this->value($row, '_source_sheet'),
+                'source_key' => $sourceable->getAttribute('number')
+                    ?: $sourceable->getAttribute('code'),
+                'metadata' => [
+                    'import_type' => $batch->import_type->value,
+                    'workflow_replayed' => false,
+                    'synthetic_record' => true,
+                    'synthetic_reason' => $reason,
+                    'historical_actor_may_be_unknown' => true,
+                ],
             ],
         );
     }
