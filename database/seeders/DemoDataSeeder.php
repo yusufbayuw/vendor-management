@@ -886,12 +886,6 @@ class DemoDataSeeder extends Seeder
         $item = $this->requestItem($request, $products['carrot'], $kg, 50, 15_000, 'Wortel segar.');
 
         app(SubmitPurchaseRequestAction::class)->execute($request, $users['lean']);
-        app(ApprovePurchaseRequestAction::class)->execute(
-            $request->refresh(),
-            $users['lean'],
-            'Self approval diizinkan oleh operational profile lean.',
-            'Demo satu orang menangani seluruh SPPG dalam organisasi lean.',
-        );
         app(AllocatePurchaseRequestItemAction::class)->execute($item, $suppliers['farmer'], 50, 15_000, $users['lean']);
         app(GeneratePurchaseOrdersAction::class)->execute($request->refresh(), $users['lean']);
     }
