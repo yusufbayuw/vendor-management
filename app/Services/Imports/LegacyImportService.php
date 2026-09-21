@@ -523,7 +523,10 @@ class LegacyImportService
         SppgKitchen $kitchen,
         string $purchaseOrderNumber,
     ): PurchaseRequest {
-        $number = $this->value($row, 'purchase_request_number') ?: 'LEGACY-PR-'.$purchaseOrderNumber;
+        $fallbackNumber = Str::startsWith($purchaseOrderNumber, 'LEGACY-PO-')
+            ? 'LEGACY-PR-'.Str::after($purchaseOrderNumber, 'LEGACY-PO-')
+            : 'LEGACY-PR-'.$purchaseOrderNumber;
+        $number = $this->value($row, 'purchase_request_number') ?: $fallbackNumber;
         $existing = PurchaseRequest::query()->where('number', $number)->first();
 
         if ($existing !== null) {
