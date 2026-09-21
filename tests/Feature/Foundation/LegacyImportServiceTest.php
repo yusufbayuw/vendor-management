@@ -2,17 +2,23 @@
 
 namespace Tests\Feature\Foundation;
 
+use App\Enums\InvoiceStatus;
 use App\Enums\LegacyImportType;
 use App\Enums\OperationalProfile;
+use App\Enums\PaymentStatus;
+use App\Enums\PurchaseOrderStatus;
 use App\Enums\PurchaseRequestStatus;
 use App\Enums\SupplierManagementMode;
 use App\Enums\SupplierStatus;
 use App\Models\ApprovalRequest;
 use App\Models\DataProvenance;
+use App\Models\Invoice;
 use App\Models\LegacyImportBatch;
+use App\Models\Payment;
 use App\Models\Organization;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
@@ -111,6 +117,54 @@ class LegacyImportServiceTest extends TestCase
             ->where('sourceable_id', $request->getKey())
             ->count());
         $this->assertFalse((bool) data_get($batch->refresh()->summary, 'workflow_replayed', true));
+    }
+
+    public function test_payment_can_be_imported_without_existing_invoice_po_or_pr(): void
+    {
+        [$organization, $actor] = $this->organizationAndActor();
+        $kitchen = SppgKitchen::query()->create([
+            'organization_id' => $organization->getKey(),
+            'code' => 'SPPG-DOWNSTREAM-001',
+            'name' => 'Dapur Downstream',
+        ]);
+        Supplier::query()->create([
+            'code' => 'SUP-DOWNSTREAM-001',
+            'legal_name' => 'PT Supplier Downstream',
+            'display_name' => 'Supplier Downstream',
+            'status' => SupplierStatus::Active,
+            'management_mode' => SupplierManagementMode::AdminManaged,
+        ]);
+
+        $path = 'legacy-imports/payment-downstream.csv';
+        Storage::disk(VendorFileStorage::DISK)->put(
+            $path,
+            "number,payment_date,amount,payment_method,status,supplier_code,kitchen_code\n".
+            "PAY-LEG-001,2026-08-25,18500000,bank_transfer,verified,SUP-DOWNSTREAM-001,{$kitchen->code}\n",
+        );
+
+        $batch = $this->batch($organization, $actor, LegacyImportType::Payments, $path);
+
+        app(LegacyImportService::class)->execute($batch, $actor);
+
+        $payment = Payment::query()->where('number', 'PAY-LEG-001')->firstOrFail();
+        $invoice = Invoice::query()->where('number', 'LEGACY-INV-PAY-LEG-001')->firstOrFail();
+        $purchaseOrder = PurchaseOrder::query()->where('number', 'LEGACY-PO-PAY-LEG-001')->firstOrFail();
+        $request = PurchaseRequest::query()->where('number', 'LEGACY-PR-PAY-LEG-001')->firstOrFail();
+
+        $this->assertSame(PaymentStatus::Verified, $payment->status);
+        $this->assertSame(InvoiceStatus::Paid, $invoice->status);
+        $this->assertSame(PurchaseOrderStatus::Closed, $purchaseOrder->status);
+        $this->assertSame(PurchaseRequestStatus::PoGenerated, $request->status);
+        $this->assertSame(0, ApprovalRequest::query()->count());
+        $this->assertGreaterThanOrEqual(3, DataProvenance::query()
+            ->where('legacy_import_batch_id', $batch->getKey())
+            ->where('provenance_type', 'legacy_import_synthetic')
+            ->count());
+        $this->assertGreaterThanOrEqual(
+            3,
+            (int) data_get($batch->refresh()->summary, 'synthetic_upstream_records', 0),
+        );
+        $this->assertFalse((bool) data_get($batch->summary, 'workflow_replayed', true));
     }
 
     private function organizationAndActor(): array
