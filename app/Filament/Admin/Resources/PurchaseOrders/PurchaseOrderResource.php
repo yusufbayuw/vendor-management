@@ -4,6 +4,7 @@ namespace App\Filament\Admin\Resources\PurchaseOrders;
 
 use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
 use App\Actions\Fulfillment\ApprovePurchaseOrderExceptionCloseAction;
+use App\Actions\Fulfillment\ClosePurchaseOrderWithExceptionAction;
 use App\Actions\Fulfillment\CreateDeliveryScheduleAction;
 use App\Actions\Fulfillment\RequestPurchaseOrderExceptionCloseAction;
 use App\Actions\Procurement\AcknowledgePurchaseOrderAction;
@@ -11,6 +12,8 @@ use App\Actions\Procurement\ApprovePurchaseOrderAction;
 use App\Actions\Procurement\IssuePurchaseOrderAction;
 use App\Actions\Procurement\SubmitPurchaseOrderForApprovalAction;
 use App\Enums\DeliveryScheduleStatus;
+use App\Enums\GovernanceProcess;
+use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\PurchaseOrders\Pages\ManagePurchaseOrders;
@@ -21,6 +24,7 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Services\Access\UserAccessService;
 use App\Services\Files\VendorFileStorage;
+use App\Services\Governance\GovernancePolicyService;
 use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
@@ -322,10 +326,38 @@ class PurchaseOrderResource extends Resource
                             'Draft invoice supplier berhasil dibuat.',
                         );
                     }),
+                Action::make('closeExceptionLean')
+                    ->label('Tutup dengan Exception')
+                    ->color('danger')
+                    ->icon('heroicon-o-exclamation-triangle')
+                    ->visible(static fn (PurchaseOrder $record): bool => static::canLeanCloseException($record))
+                    ->schema([
+                        Textarea::make('reason')
+                            ->label('Alasan dan penyelesaian exception')
+                            ->required()
+                            ->rows(4)
+                            ->helperText('Catatan ini menjadi alasan operasional, resolution note, dan jejak explicit self-approval.'),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalHeading('Tutup PO dengan exception?')
+                    ->modalDescription('Tindakan ini menyelesaikan discrepancy terbuka dan mengubah PO menjadi Closed with Exception. Pastikan selisih telah ditinjau.')
+                    ->action(static function (PurchaseOrder $record, array $data): void {
+                        static::requireScopedPermission($record, SystemPermission::PurchaseOrderExceptionClose);
+                        static::runDomainAction(
+                            fn () => app(ClosePurchaseOrderWithExceptionAction::class)->execute(
+                                $record,
+                                auth()->user(),
+                                $data['reason'],
+                            ),
+                            'PO berhasil ditutup dengan exception.',
+                        );
+                    }),
                 Action::make('requestExceptionClose')
                     ->label('Ajukan Close Exception')
                     ->color('danger')
-                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::PartiallyDelivered && static::hasScopedPermission($record, SystemPermission::PurchaseOrderExceptionClose))
+                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::PartiallyDelivered
+                        && static::hasScopedPermission($record, SystemPermission::PurchaseOrderExceptionClose)
+                        && ! static::canLeanCloseException($record))
                     ->schema([
                         Textarea::make('reason')->label('Alasan penutupan dengan selisih')->required()->rows(4),
                     ])
@@ -344,6 +376,8 @@ class PurchaseOrderResource extends Resource
                         Textarea::make('resolution_notes')->label('Catatan penyelesaian discrepancy')->required()->rows(4),
                         Textarea::make('override_reason')->label('Alasan override (jika self approval)')->rows(3),
                     ])
+                    ->requiresConfirmation()
+                    ->modalDescription('Persetujuan ini menyelesaikan discrepancy terbuka dan menutup PO dengan exception.')
                     ->action(static function (PurchaseOrder $record, array $data): void {
                         static::requireScopedPermission($record, SystemPermission::PurchaseOrderExceptionClose);
                         static::runDomainAction(
@@ -401,6 +435,29 @@ class PurchaseOrderResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    private static function canLeanCloseException(PurchaseOrder $record): bool
+    {
+        if ($record->status !== PurchaseOrderStatus::PartiallyDelivered
+            || ! static::hasScopedPermission($record, SystemPermission::PurchaseOrderExceptionClose)) {
+            return false;
+        }
+
+        $record->loadMissing('kitchen.organization');
+        $organization = $record->kitchen->organization;
+
+        if ($organization->operational_profile !== OperationalProfile::Lean) {
+            return false;
+        }
+
+        $policy = app(GovernancePolicyService::class)->snapshot(
+            $organization,
+            GovernanceProcess::PurchaseOrderExceptionClosing,
+            (float) $record->total_amount,
+        );
+
+        return $policy['self_approval_allowed'] && $policy['minimum_approvers'] === 1;
     }
 
     private static function canCreateInvoice(PurchaseOrder $record): bool
