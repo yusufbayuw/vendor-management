@@ -213,11 +213,11 @@ class SupplierResource extends Resource
                     ->schema(static fn (Supplier $record): array => [
                         Toggle::make('bypass_documents')
                             ->label('Bypass dokumen legal')
-                            ->default(!app(SupplierOperationalEligibilityService::class)->documentsSatisfied($record))
+                            ->default(! app(SupplierOperationalEligibilityService::class)->documentsSatisfied($record))
                             ->helperText('Gunakan bila dokumen belum tersedia/selesai diverifikasi tetapi operasional harus berjalan.'),
                         Toggle::make('bypass_portal_identity')
                             ->label('Bypass akun/PIC supplier')
-                            ->default(!app(SupplierOperationalEligibilityService::class)->portalIdentitySatisfied($record))
+                            ->default(! app(SupplierOperationalEligibilityService::class)->portalIdentitySatisfied($record))
                             ->helperText('Gunakan untuk supplier existing/tanpa akun portal atau PIC terverifikasi.'),
                         Textarea::make('reason')
                             ->label('Alasan override')
