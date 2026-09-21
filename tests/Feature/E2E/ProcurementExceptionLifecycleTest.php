@@ -3,6 +3,7 @@
 namespace Tests\Feature\E2E;
 
 use App\Actions\Billing\ApproveInvoiceAction;
+use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
 use App\Actions\Billing\SubmitInvoiceAction;
 use App\Actions\Fulfillment\ApprovePurchaseOrderExceptionCloseAction;
@@ -32,7 +33,6 @@ use App\Enums\OperationalProfile;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
-use App\Enums\SupplierStatus;
 use App\Models\ApprovalAction;
 use App\Models\ApprovalRequest;
 use App\Models\Organization;
@@ -100,8 +100,15 @@ class ProcurementExceptionLifecycleTest extends TestCase
             'legal_name' => 'Supplier E2E Exception',
             'email' => 'supplier-e2e-exception@example.test',
             'phone' => '081234567891',
-            'status' => SupplierStatus::Active,
         ]);
+
+        $supplier = app(ActivateSupplierWithOverrideAction::class)->execute(
+            $supplier,
+            $procurement,
+            'Supplier fixture E2E dikelola internal tanpa ketergantungan akun portal.',
+            true,
+            true,
+        );
 
         $purchaseRequest = PurchaseRequest::query()->create([
             'number' => 'PR-E2E-EXC-001',
