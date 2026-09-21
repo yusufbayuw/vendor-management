@@ -4,9 +4,11 @@ namespace Tests\Feature\Procurement;
 
 use App\Actions\Procurement\ApprovePurchaseRequestAction;
 use App\Actions\Procurement\SubmitPurchaseRequestAction;
+use App\Enums\ApprovalDecisionSource;
 use App\Enums\GovernanceProcess;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseRequestStatus;
+use App\Models\ApprovalAction;
 use App\Models\GovernancePolicy;
 use App\Models\Organization;
 use App\Models\Product;
@@ -29,9 +31,13 @@ class PurchaseRequestApprovalTest extends TestCase
         [$request, $requester] = $this->makePurchaseRequest(OperationalProfile::Lean);
 
         app(SubmitPurchaseRequestAction::class)->execute($request, $requester);
-        app(ApprovePurchaseRequestAction::class)->execute($request, $requester);
 
         $this->assertSame(PurchaseRequestStatus::Approved, $request->refresh()->status);
+        $this->assertDatabaseHas('approval_actions', [
+            'actor_id' => $requester->getKey(),
+            'is_self_approval' => true,
+            'decision_source' => ApprovalDecisionSource::AutoSelfApproval->value,
+        ]);
     }
 
     public function test_strict_operation_rejects_self_approval(): void

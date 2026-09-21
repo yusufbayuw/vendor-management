@@ -5,13 +5,10 @@ namespace App\Actions\Billing;
 use App\Actions\Approval\ApproveApprovalRequestAction;
 use App\Enums\ApprovalStatus;
 use App\Enums\GovernanceProcess;
-use App\Enums\InvoiceAdjustmentStatus;
 use App\Enums\InvoiceStatus;
-use App\Enums\PurchaseOrderStatus;
 use App\Models\ApprovalRequest;
 use App\Models\Invoice;
 use App\Models\User;
-use App\Services\Billing\InvoiceCalculationService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
@@ -19,7 +16,7 @@ class ApproveInvoiceAction
 {
     public function __construct(
         private readonly ApproveApprovalRequestAction $approveApprovalRequest,
-        private readonly InvoiceCalculationService $calculator,
+        private readonly FinalizeApprovedInvoiceAction $finalizeApprovedInvoice,
     ) {}
 
     public function execute(
@@ -49,35 +46,10 @@ class ApproveInvoiceAction
             );
 
             if ($approvalRequest->status === ApprovalStatus::Approved) {
-                $adjustments = $invoice->adjustments()
-                    ->where('status', InvoiceAdjustmentStatus::Pending->value)
-                    ->lockForUpdate()
-                    ->get();
-
-                foreach ($adjustments as $adjustment) {
-                    $adjustment->forceFill([
-                        'status' => InvoiceAdjustmentStatus::Approved->value,
-                        'approved_by' => $actor->getKey(),
-                        'approved_at' => now(),
-                    ])->save();
-                }
-
-                $this->calculator->recalculate($invoice);
-
-                $invoice->forceFill([
-                    'status' => InvoiceStatus::Approved,
-                    'approved_at' => now(),
-                    'approved_by' => $actor->getKey(),
-                ])->save();
-
-                $purchaseOrder = $invoice->purchaseOrder()
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                $purchaseOrder->update(['status' => PurchaseOrderStatus::Invoiced]);
-            } else {
-                $invoice->update(['status' => InvoiceStatus::UnderReview]);
+                return $this->finalizeApprovedInvoice->execute($invoice, $actor);
             }
+
+            $invoice->update(['status' => InvoiceStatus::UnderReview]);
 
             return $invoice->refresh();
         });

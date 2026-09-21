@@ -48,6 +48,9 @@ class PaymentFlowTest extends TestCase
         );
         app(AttachPaymentProofAction::class)->execute($payment, $this->storeProof('proof.pdf'), $actor);
         app(SubmitPaymentForVerificationAction::class)->execute($payment, $actor);
+
+        $this->assertSame(PaymentStatus::Submitted, $payment->refresh()->status);
+
         app(VerifyPaymentAction::class)->execute($payment, $actor);
 
         $this->assertSame(PaymentStatus::Verified, $payment->refresh()->status);

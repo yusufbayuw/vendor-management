@@ -2,6 +2,7 @@
 
 namespace App\Actions\Billing;
 
+use App\Actions\Approval\AutoSelfApproveApprovalRequestAction;
 use App\Actions\Approval\CreateApprovalRequestAction;
 use App\Enums\GovernanceProcess;
 use App\Enums\InvoiceStatus;
@@ -12,7 +13,11 @@ use Illuminate\Support\Facades\DB;
 
 class SubmitInvoiceAction
 {
-    public function __construct(private readonly CreateApprovalRequestAction $createApprovalRequest) {}
+    public function __construct(
+        private readonly CreateApprovalRequestAction $createApprovalRequest,
+        private readonly AutoSelfApproveApprovalRequestAction $autoSelfApprove,
+        private readonly FinalizeApprovedInvoiceAction $finalizeApprovedInvoice,
+    ) {}
 
     public function execute(Invoice $invoice, User $actor): Invoice
     {
@@ -28,13 +33,19 @@ class SubmitInvoiceAction
                 'issued_at' => now(),
             ])->save();
 
-            $this->createApprovalRequest->execute(
+            $approvalRequest = $this->createApprovalRequest->execute(
                 $invoice,
                 $invoice->kitchen->organization,
                 GovernanceProcess::InvoiceApproval,
                 $actor,
                 (float) $invoice->payable_amount,
             );
+
+            $approvalRequest = $this->autoSelfApprove->execute($approvalRequest, $actor);
+
+            if ($approvalRequest->status === \App\Enums\ApprovalStatus::Approved) {
+                return $this->finalizeApprovedInvoice->execute($invoice, $actor);
+            }
 
             return $invoice->refresh();
         });

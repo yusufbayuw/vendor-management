@@ -3,6 +3,7 @@
 namespace App\Actions\Approval;
 
 use App\Enums\ApprovalActionType;
+use App\Enums\ApprovalDecisionSource;
 use App\Enums\ApprovalStatus;
 use App\Models\ApprovalAction;
 use App\Models\ApprovalRequest;
@@ -17,8 +18,9 @@ class ApproveApprovalRequestAction
         User $actor,
         ?string $comments = null,
         ?string $overrideReason = null,
+        ApprovalDecisionSource $decisionSource = ApprovalDecisionSource::Manual,
     ): ApprovalRequest {
-        return DB::transaction(function () use ($approvalRequest, $actor, $comments, $overrideReason): ApprovalRequest {
+        return DB::transaction(function () use ($approvalRequest, $actor, $comments, $overrideReason, $decisionSource): ApprovalRequest {
             $approvalRequest = ApprovalRequest::query()->lockForUpdate()->findOrFail($approvalRequest->getKey());
 
             if ($approvalRequest->status !== ApprovalStatus::Pending) {
@@ -44,6 +46,7 @@ class ApproveApprovalRequestAction
                 'actor_id' => $actor->getKey(),
                 'action' => ApprovalActionType::Approved,
                 'is_self_approval' => $isSelfApproval,
+                'decision_source' => $decisionSource,
                 'comments' => $comments,
                 'override_reason' => $overrideReason,
                 'acted_at' => now(),

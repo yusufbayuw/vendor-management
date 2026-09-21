@@ -2,6 +2,7 @@
 
 namespace App\Actions\Procurement;
 
+use App\Actions\Approval\AutoSelfApproveApprovalRequestAction;
 use App\Actions\Approval\CreateApprovalRequestAction;
 use App\Enums\GovernanceProcess;
 use App\Enums\PurchaseRequestStatus;
@@ -12,7 +13,10 @@ use Illuminate\Support\Facades\DB;
 
 class SubmitPurchaseRequestAction
 {
-    public function __construct(private readonly CreateApprovalRequestAction $createApprovalRequest) {}
+    public function __construct(
+        private readonly CreateApprovalRequestAction $createApprovalRequest,
+        private readonly AutoSelfApproveApprovalRequestAction $autoSelfApprove,
+    ) {}
 
     public function execute(PurchaseRequest $purchaseRequest, User $actor): PurchaseRequest
     {
@@ -40,13 +44,23 @@ class SubmitPurchaseRequestAction
                 'submitted_at' => now(),
             ])->save();
 
-            $this->createApprovalRequest->execute(
+            $approvalRequest = $this->createApprovalRequest->execute(
                 $purchaseRequest,
                 $purchaseRequest->kitchen->organization,
                 GovernanceProcess::PurchaseRequestApproval,
                 $actor,
                 $amount,
             );
+
+            $approvalRequest = $this->autoSelfApprove->execute($approvalRequest, $actor);
+
+            if ($approvalRequest->status === \App\Enums\ApprovalStatus::Approved) {
+                $purchaseRequest->forceFill([
+                    'status' => PurchaseRequestStatus::Approved,
+                    'approved_at' => now(),
+                    'approved_by' => $actor->getKey(),
+                ])->save();
+            }
 
             return $purchaseRequest->refresh();
         });
