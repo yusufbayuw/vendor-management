@@ -2,9 +2,11 @@
 
 namespace App\Filament\Admin\Resources\PurchaseOrders;
 
+use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
 use App\Actions\Fulfillment\ApprovePurchaseOrderExceptionCloseAction;
 use App\Actions\Fulfillment\CreateDeliveryScheduleAction;
 use App\Actions\Fulfillment\RequestPurchaseOrderExceptionCloseAction;
+use App\Actions\Procurement\AcknowledgePurchaseOrderAction;
 use App\Actions\Procurement\ApprovePurchaseOrderAction;
 use App\Actions\Procurement\IssuePurchaseOrderAction;
 use App\Actions\Procurement\SubmitPurchaseOrderForApprovalAction;
@@ -18,11 +20,14 @@ use App\Models\DeliveryScheduleItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Services\Access\UserAccessService;
+use App\Services\Files\VendorFileStorage;
 use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -120,7 +125,7 @@ class PurchaseOrderResource extends Resource
                     TextEntry::make('approver.name')->label('Disetujui oleh')->placeholder('-'),
                     TextEntry::make('approved_at')->label('Disetujui')->dateTime('d/m/Y H:i')->placeholder('-'),
                     TextEntry::make('issued_at')->label('Diterbitkan')->dateTime('d/m/Y H:i')->placeholder('-'),
-                    TextEntry::make('acknowledged_at')->label('Dikonfirmasi supplier')->dateTime('d/m/Y H:i')->placeholder('-'),
+                    TextEntry::make('acknowledged_at')->label('Dikonfirmasi')->dateTime('d/m/Y H:i')->placeholder('-'),
                     TextEntry::make('paid_at')->label('Dibayar')->dateTime('d/m/Y H:i')->placeholder('-'),
                     TextEntry::make('closed_at')->label('Ditutup')->dateTime('d/m/Y H:i')->placeholder('-'),
                 ])
@@ -195,6 +200,24 @@ class PurchaseOrderResource extends Resource
                         static::requireScopedPermission($record, SystemPermission::PurchaseOrderIssue);
                         static::runDomainAction(fn () => app(IssuePurchaseOrderAction::class)->execute($record), 'PO berhasil diterbitkan dan siap dikonfirmasi supplier.');
                     }),
+                Action::make('acknowledgeInternal')
+                    ->label('Konfirmasi atas Nama Supplier')
+                    ->color('warning')
+                    ->visible(static fn (PurchaseOrder $record): bool => $record->status === PurchaseOrderStatus::Issued && static::hasScopedPermission($record, SystemPermission::PurchaseOrderAcknowledge))
+                    ->schema([
+                        Textarea::make('notes')
+                            ->label('Catatan konfirmasi internal')
+                            ->rows(3)
+                            ->helperText('Gunakan ketika supplier tidak memiliki akun portal atau konfirmasi diterima di luar sistem.'),
+                    ])
+                    ->requiresConfirmation()
+                    ->action(static function (PurchaseOrder $record, array $data): void {
+                        static::requireScopedPermission($record, SystemPermission::PurchaseOrderAcknowledge);
+                        static::runDomainAction(
+                            fn () => app(AcknowledgePurchaseOrderAction::class)->execute($record, auth()->user(), $data['notes'] ?? 'Dikonfirmasi oleh admin atas nama supplier.'),
+                            'PO berhasil dikonfirmasi secara internal.',
+                        );
+                    }),
                 Action::make('schedule')
                     ->label('Jadwalkan Pengiriman')
                     ->color('warning')
@@ -253,6 +276,52 @@ class PurchaseOrderResource extends Resource
                             );
                         }, 'Jadwal pengiriman berhasil dibuat.');
                     }),
+                Action::make('createInvoiceInternal')
+                    ->label('Buat Invoice Supplier')
+                    ->color('success')
+                    ->visible(static fn (PurchaseOrder $record): bool => in_array($record->status, [
+                        PurchaseOrderStatus::Fulfilled,
+                        PurchaseOrderStatus::ClosedWithException,
+                    ], true) && static::canCreateInvoice($record) && ! $record->invoice()->exists())
+                    ->schema([
+                        TextInput::make('supplier_invoice_number')
+                            ->label('Nomor invoice supplier')
+                            ->maxLength(255)
+                            ->helperText('Opsional untuk supplier yang belum mengirim invoice formal.'),
+                        DatePicker::make('invoice_date')
+                            ->label('Tanggal invoice')
+                            ->native(false)
+                            ->default(today())
+                            ->required(),
+                        TextInput::make('payment_term_days')
+                            ->label('Termin pembayaran (hari)')
+                            ->numeric()
+                            ->minValue(0)
+                            ->default(0)
+                            ->required(),
+                        FileUpload::make('invoice_file')
+                            ->label('File invoice')
+                            ->disk(VendorFileStorage::DISK)
+                            ->directory('invoices')
+                            ->visibility('private')
+                            ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+                            ->maxSize(10240)
+                            ->helperText('Opsional. Invoice internal tetap dapat dibuat agar flow operasional tidak berhenti.'),
+                    ])
+                    ->action(static function (PurchaseOrder $record, array $data): void {
+                        abort_unless(static::canCreateInvoice($record), 403);
+                        static::runDomainAction(
+                            fn () => app(CreateInvoiceFromPurchaseOrderAction::class)->execute(
+                                $record,
+                                auth()->user(),
+                                $data['supplier_invoice_number'] ?? null,
+                                $data['invoice_date'],
+                                (int) ($data['payment_term_days'] ?? 0),
+                                $data['invoice_file'] ?? null,
+                            ),
+                            'Draft invoice supplier berhasil dibuat.',
+                        );
+                    }),
                 Action::make('requestExceptionClose')
                     ->label('Ajukan Close Exception')
                     ->color('danger')
@@ -310,8 +379,10 @@ class PurchaseOrderResource extends Resource
             SystemPermission::PurchaseOrderCreate,
             SystemPermission::PurchaseOrderApprove,
             SystemPermission::PurchaseOrderIssue,
+            SystemPermission::PurchaseOrderAcknowledge,
             SystemPermission::DeliverySchedule,
             SystemPermission::PurchaseOrderExceptionClose,
+            SystemPermission::InvoiceSubmit,
             SystemPermission::InvoiceReview,
             SystemPermission::InvoiceApprove,
         ])->contains(static fn (SystemPermission $permission): bool => $user->can($permission->value));
@@ -330,6 +401,15 @@ class PurchaseOrderResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    private static function canCreateInvoice(PurchaseOrder $record): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null
+            && ($user->can(SystemPermission::InvoiceSubmit->value) || $user->can(SystemPermission::InvoiceReview->value))
+            && app(UserAccessService::class)->canAccessKitchen($user, $record->sppg_kitchen_id);
     }
 
     private static function hasScopedPermission(PurchaseOrder $record, SystemPermission $permission): bool
@@ -400,7 +480,7 @@ class PurchaseOrderResource extends Resource
             PurchaseOrderStatus::PendingApproval => 'Menunggu Approval',
             PurchaseOrderStatus::Approved => 'Disetujui',
             PurchaseOrderStatus::Issued => 'Diterbitkan',
-            PurchaseOrderStatus::Acknowledged => 'Dikonfirmasi Supplier',
+            PurchaseOrderStatus::Acknowledged => 'Dikonfirmasi',
             PurchaseOrderStatus::Scheduled => 'Terjadwal',
             PurchaseOrderStatus::PartiallyDelivered => 'Terkirim Sebagian',
             PurchaseOrderStatus::Fulfilled => 'Terpenuhi',

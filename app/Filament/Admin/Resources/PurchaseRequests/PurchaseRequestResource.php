@@ -25,6 +25,7 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Services\Access\UserAccessService;
+use App\Services\Supplier\SupplierOperationalEligibilityService;
 use App\Services\Usability\WorkflowGuidanceService;
 use DomainException;
 use Filament\Actions\Action;
@@ -364,8 +365,13 @@ class PurchaseRequestResource extends Resource
                             ->label('Supplier')
                             ->options(Supplier::query()
                                 ->where('status', SupplierStatus::Active->value)
+                                ->with(['approvalAttestation', 'documents', 'users.phoneVerificationCodes'])
                                 ->orderBy('display_name')
-                                ->pluck('display_name', 'id')
+                                ->get()
+                                ->filter(static fn (Supplier $supplier): bool => app(SupplierOperationalEligibilityService::class)->isOperationallyEligible($supplier))
+                                ->mapWithKeys(static fn (Supplier $supplier): array => [
+                                    $supplier->getKey() => $supplier->display_name ?: $supplier->legal_name,
+                                ])
                                 ->all())
                             ->searchable()
                             ->required(),

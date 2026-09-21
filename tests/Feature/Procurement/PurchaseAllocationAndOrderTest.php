@@ -3,9 +3,9 @@
 namespace Tests\Feature\Procurement;
 
 use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
+use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Actions\Procurement\GeneratePurchaseOrdersAction;
 use App\Enums\PurchaseRequestStatus;
-use App\Enums\SupplierStatus;
 use App\Models\Organization;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -139,12 +139,19 @@ class PurchaseAllocationAndOrderTest extends TestCase
 
     private function supplier(string $code): Supplier
     {
-        return Supplier::query()->create([
+        $supplier = Supplier::query()->create([
             'code' => $code,
             'legal_name' => 'Supplier '.$code,
             'email' => strtolower($code).'@example.test',
             'phone' => '08123456789',
-            'status' => SupplierStatus::Active,
         ]);
+
+        return app(ActivateSupplierWithOverrideAction::class)->execute(
+            $supplier,
+            User::factory()->create(),
+            'Fixture supplier internal untuk pengujian procurement.',
+            true,
+            true,
+        );
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SupplierManagementMode;
 use App\Enums\SupplierStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,6 +18,7 @@ class Supplier extends Model
 
     protected $attributes = [
         'status' => 'draft',
+        'management_mode' => 'self_service',
     ];
 
     protected $fillable = [
@@ -24,6 +26,7 @@ class Supplier extends Model
         'legal_name',
         'display_name',
         'supplier_type',
+        'management_mode',
         'npwp',
         'nib',
         'email',
@@ -50,6 +53,7 @@ class Supplier extends Model
     {
         return [
             'status' => SupplierStatus::class,
+            'management_mode' => SupplierManagementMode::class,
             'submitted_at' => 'datetime',
             'verified_at' => 'datetime',
             'activated_at' => 'datetime',

@@ -2,17 +2,20 @@
 
 namespace Tests\Feature\Supplier;
 
+use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Actions\Supplier\ApproveSupplierAction;
 use App\Actions\Supplier\RequestSupplierRevisionAction;
 use App\Actions\Supplier\StartSupplierReviewAction;
 use App\Actions\Supplier\SubmitSupplierAction;
 use App\Actions\Supplier\SuspendSupplierAction;
 use App\Enums\SupplierDocumentStatus;
+use App\Enums\SupplierManagementMode;
 use App\Enums\SupplierStatus;
 use App\Models\PhoneVerificationCode;
 use App\Models\Supplier;
 use App\Models\SupplierDocument;
 use App\Models\User;
+use App\Services\Supplier\SupplierOperationalEligibilityService;
 use App\Services\Supplier\SupplierPortalAccessService;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -53,6 +56,70 @@ class SupplierLifecycleTest extends TestCase
         $this->assertSame($reviewer->id, $supplier->verified_by);
         $this->assertTrue($supplier->approvalAttestation()->exists());
         $this->assertTrue(app(SupplierPortalAccessService::class)->isOperationallyEligible($supplier->refresh()));
+    }
+
+    public function test_admin_can_activate_internal_supplier_without_documents_or_portal_account(): void
+    {
+        $supplier = Supplier::query()->create([
+            'code' => 'SUP-INTERNAL',
+            'legal_name' => 'Supplier Existing Internal',
+            'display_name' => 'Supplier Existing Internal',
+            'management_mode' => SupplierManagementMode::AdminManaged,
+            'email' => null,
+            'phone' => null,
+        ]);
+        $admin = User::factory()->create();
+
+        app(ActivateSupplierWithOverrideAction::class)->execute(
+            $supplier,
+            $admin,
+            'Supplier existing sudah digunakan operasional; dokumen dan akun portal akan dilengkapi kemudian.',
+            true,
+            true,
+        );
+
+        $supplier->refresh();
+
+        $this->assertSame(SupplierStatus::Active, $supplier->status);
+        $this->assertSame(SupplierManagementMode::AdminManaged, $supplier->management_mode);
+        $this->assertFalse($supplier->documents()->exists());
+        $this->assertFalse($supplier->users()->exists());
+        $this->assertTrue($supplier->approvalAttestation()->exists());
+        $this->assertTrue(app(SupplierOperationalEligibilityService::class)->isOperationallyEligible($supplier));
+        $this->assertTrue((bool) data_get($supplier->onboarding_exemptions, 'operational_override.documents.exempted'));
+        $this->assertTrue((bool) data_get($supplier->onboarding_exemptions, 'operational_override.portal_identity.exempted'));
+        $this->assertSame($admin->getKey(), data_get($supplier->onboarding_exemptions, 'operational_override.approved_by'));
+
+        $unverifiedPortalUser = User::factory()->create([
+            'phone' => '081299900001',
+            'phone_verified_at' => null,
+        ]);
+        $supplier->users()->attach($unverifiedPortalUser->getKey(), [
+            'is_owner' => true,
+            'is_active' => true,
+        ]);
+
+        $this->assertFalse(app(SupplierPortalAccessService::class)->hasActiveSupplier($unverifiedPortalUser));
+    }
+
+    public function test_override_still_requires_explicit_exemption_for_missing_requirements(): void
+    {
+        $supplier = Supplier::query()->create([
+            'code' => 'SUP-INTERNAL-GUARD',
+            'legal_name' => 'Supplier Guard Internal',
+            'management_mode' => SupplierManagementMode::AdminManaged,
+        ]);
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('dokumen');
+
+        app(ActivateSupplierWithOverrideAction::class)->execute(
+            $supplier,
+            User::factory()->create(),
+            'Operasional darurat.',
+            false,
+            true,
+        );
     }
 
     public function test_supplier_approval_is_blocked_until_owner_phone_has_otp_proof(): void

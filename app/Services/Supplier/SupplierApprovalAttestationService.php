@@ -63,6 +63,8 @@ class SupplierApprovalAttestationService
             (string) $supplier->getKey(),
             (string) $supplier->code,
             (string) $supplier->status->value,
+            (string) $supplier->management_mode->value,
+            hash('sha256', json_encode($supplier->onboarding_exemptions ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]'),
             (string) $supplier->verified_by,
             $supplier->verified_at?->toISOString() ?? '',
             $supplier->activated_at?->toISOString() ?? '',

@@ -4,11 +4,11 @@ namespace App\Actions\Procurement;
 
 use App\Enums\PurchaseAllocationStatus;
 use App\Enums\PurchaseRequestStatus;
-use App\Enums\SupplierStatus;
 use App\Models\PurchaseAllocation;
 use App\Models\PurchaseRequestItem;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Supplier\SupplierOperationalEligibilityService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
@@ -16,6 +16,7 @@ class AllocatePurchaseRequestItemAction
 {
     public function __construct(
         private readonly RefreshPurchaseRequestAllocationStatusAction $refreshStatus,
+        private readonly SupplierOperationalEligibilityService $supplierEligibility,
     ) {}
 
     public function execute(
@@ -34,8 +35,8 @@ class AllocatePurchaseRequestItemAction
             throw new DomainException('Harga satuan tidak boleh negatif.');
         }
 
-        if ($supplier->status !== SupplierStatus::Active) {
-            throw new DomainException('Hanya supplier aktif yang dapat menerima alokasi.');
+        if (! $this->supplierEligibility->isOperationallyEligible($supplier)) {
+            throw new DomainException('Supplier belum aktif secara operasional atau aktivasi supplier tidak valid.');
         }
 
         return DB::transaction(function () use ($item, $supplier, $quantity, $unitPrice, $actor, $notes): PurchaseAllocation {
