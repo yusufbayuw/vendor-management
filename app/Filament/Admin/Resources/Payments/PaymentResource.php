@@ -4,9 +4,12 @@ namespace App\Filament\Admin\Resources\Payments;
 
 use App\Actions\Payment\AttachPaymentProofAction;
 use App\Actions\Payment\RejectPaymentAction;
+use App\Actions\Payment\SubmitAndVerifyPaymentAction;
 use App\Actions\Payment\SubmitPaymentForVerificationAction;
 use App\Actions\Payment\VerifyPaymentAction;
 use App\Enums\PaymentAttachmentType;
+use App\Enums\GovernanceProcess;
+use App\Enums\OperationalProfile;
 use App\Enums\PaymentStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Payments\Pages\ManagePayments;
@@ -16,6 +19,7 @@ use App\Models\Payment;
 use App\Models\PaymentAttachment;
 use App\Services\Access\UserAccessService;
 use App\Services\Files\VendorFileStorage;
+use App\Services\Governance\GovernancePolicyService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
@@ -122,13 +126,45 @@ class PaymentResource extends Resource
                         }
                     }, 'Bukti pembayaran berhasil di-upload.');
                 }),
+            Action::make('submitAndVerifyLean')
+                ->label('Ajukan & Verifikasi Pembayaran')
+                ->color('success')
+                ->icon('heroicon-o-check-badge')
+                ->visible(fn (Payment $record) => static::canLeanVerify($record))
+                ->requiresConfirmation()
+                ->modalHeading('Konfirmasi pembayaran')
+                ->modalDescription(fn (Payment $record): string => 'Pembayaran '.number_format((float) $record->amount, 0, ',', '.').' akan dianggap terverifikasi dan memengaruhi status invoice/PO. Pastikan bukti transfer sudah benar.')
+                ->schema([
+                    Textarea::make('comments')->label('Catatan')->rows(3),
+                    Textarea::make('override_reason')
+                        ->label('Alasan override')
+                        ->rows(3)
+                        ->visible(fn (Payment $record): bool => static::leanPaymentPolicy($record)['requires_override_reason'])
+                        ->required(fn (Payment $record): bool => static::leanPaymentPolicy($record)['requires_override_reason']),
+                ])
+                ->action(function (Payment $record, array $data): void {
+                    static::guard($record, SystemPermission::PaymentCreate);
+                    static::guard($record, SystemPermission::PaymentVerify);
+                    static::run(
+                        fn () => app(SubmitAndVerifyPaymentAction::class)->execute(
+                            $record,
+                            auth()->user(),
+                            $data['comments'] ?? null,
+                            $data['override_reason'] ?? null,
+                        ),
+                        'Pembayaran berhasil diajukan dan diverifikasi.',
+                    );
+                }),
             Action::make('submit')->label('Ajukan Verifikasi')->color('warning')->requiresConfirmation()
-                ->visible(fn (Payment $record) => $record->status === PaymentStatus::Draft && static::allowed($record, SystemPermission::PaymentCreate))
+                ->visible(fn (Payment $record) => $record->status === PaymentStatus::Draft
+                    && static::allowed($record, SystemPermission::PaymentCreate)
+                    && ! static::canLeanVerify($record))
                 ->action(function (Payment $record): void {
                     static::guard($record, SystemPermission::PaymentCreate);
                     static::run(fn () => app(SubmitPaymentForVerificationAction::class)->execute($record, auth()->user()), 'Pembayaran diajukan untuk verifikasi.');
                 }),
-            Action::make('verify')->label('Verifikasi')->color('success')
+            Action::make('verify')->label('Verifikasi')->color('success')->requiresConfirmation()
+                ->modalDescription(fn (Payment $record): string => 'Pembayaran '.number_format((float) $record->amount, 0, ',', '.').' akan dianggap terverifikasi. Lanjutkan hanya setelah bukti pembayaran diperiksa.')
                 ->visible(fn (Payment $record) => in_array($record->status, [PaymentStatus::Submitted, PaymentStatus::UnderReview], true) && static::allowed($record, SystemPermission::PaymentVerify))
                 ->schema([
                     Textarea::make('comments')->label('Catatan')->rows(3),
@@ -181,6 +217,42 @@ class PaymentResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    /** @return array{self_approval_allowed: bool, minimum_approvers: int, requires_override_reason: bool} */
+    private static function leanPaymentPolicy(Payment $payment): array
+    {
+        $payment->loadMissing('invoice.kitchen.organization');
+
+        return app(GovernancePolicyService::class)->snapshot(
+            $payment->invoice->kitchen->organization,
+            GovernanceProcess::PaymentVerification,
+            (float) $payment->amount,
+        );
+    }
+
+    private static function canLeanVerify(Payment $payment): bool
+    {
+        $user = auth()->user();
+
+        if ($user === null || $payment->status !== PaymentStatus::Draft) {
+            return false;
+        }
+
+        $payment->loadMissing('invoice.kitchen.organization');
+
+        if ($payment->invoice->kitchen->organization->operational_profile !== OperationalProfile::Lean) {
+            return false;
+        }
+
+        if (! static::allowed($payment, SystemPermission::PaymentCreate)
+            || ! static::allowed($payment, SystemPermission::PaymentVerify)) {
+            return false;
+        }
+
+        $policy = static::leanPaymentPolicy($payment);
+
+        return $policy['self_approval_allowed'] && $policy['minimum_approvers'] === 1;
     }
 
     private static function allowed(Payment $payment, SystemPermission $permission): bool
