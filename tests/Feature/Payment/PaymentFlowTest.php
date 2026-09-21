@@ -4,14 +4,17 @@ namespace Tests\Feature\Payment;
 
 use App\Actions\Payment\AttachPaymentProofAction;
 use App\Actions\Payment\CreatePaymentAction;
+use App\Actions\Payment\SubmitAndVerifyPaymentAction;
 use App\Actions\Payment\SubmitPaymentForVerificationAction;
 use App\Actions\Payment\VerifyPaymentAction;
+use App\Enums\ApprovalDecisionSource;
 use App\Enums\InvoiceStatus;
 use App\Enums\OperationalProfile;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SupplierStatus;
+use App\Enums\SystemPermission;
 use App\Models\Invoice;
 use App\Models\Organization;
 use App\Models\PurchaseOrder;
@@ -23,6 +26,7 @@ use App\Services\Files\VendorFileStorage;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class PaymentFlowTest extends TestCase
@@ -57,6 +61,38 @@ class PaymentFlowTest extends TestCase
         $this->assertSame(InvoiceStatus::Paid, $invoice->refresh()->status);
         $this->assertSame(PurchaseOrderStatus::Closed, $invoice->purchaseOrder->refresh()->status);
         $this->assertNotNull($invoice->purchaseOrder->closed_at);
+    }
+
+    public function test_lean_payment_can_be_submitted_and_verified_in_one_intentional_action(): void
+    {
+        [$invoice, $actor] = $this->makeApprovedInvoice(10_000_000, OperationalProfile::Lean);
+        $actor->givePermissionTo([
+            Permission::findOrCreate(SystemPermission::PaymentCreate->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PaymentVerify->value, 'web'),
+        ]);
+
+        $payment = app(CreatePaymentAction::class)->execute(
+            $invoice,
+            10_000_000,
+            PaymentMethod::BankTransfer,
+            $actor,
+        );
+        app(AttachPaymentProofAction::class)->execute($payment, $this->storeProof('lean-explicit.pdf'), $actor);
+
+        app(SubmitAndVerifyPaymentAction::class)->execute(
+            $payment,
+            $actor,
+            'Pembayaran telah diperiksa.',
+        );
+
+        $this->assertSame(PaymentStatus::Verified, $payment->refresh()->status);
+        $this->assertSame(InvoiceStatus::Paid, $invoice->refresh()->status);
+        $this->assertSame(PurchaseOrderStatus::Closed, $invoice->purchaseOrder->refresh()->status);
+        $this->assertDatabaseHas('approval_actions', [
+            'actor_id' => $actor->getKey(),
+            'is_self_approval' => true,
+            'decision_source' => ApprovalDecisionSource::ExplicitSelfApproval->value,
+        ]);
     }
 
     public function test_partial_payment_keeps_invoice_open(): void
