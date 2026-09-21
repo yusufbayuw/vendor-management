@@ -3,6 +3,7 @@
 namespace App\Actions\Payment;
 
 use App\Actions\Approval\ApproveApprovalRequestAction;
+use App\Enums\ApprovalDecisionSource;
 use App\Enums\ApprovalStatus;
 use App\Enums\GovernanceProcess;
 use App\Enums\InvoiceStatus;
@@ -23,12 +24,13 @@ class VerifyPaymentAction
         User $actor,
         ?string $comments = null,
         ?string $overrideReason = null,
+        ApprovalDecisionSource $decisionSource = ApprovalDecisionSource::Manual,
     ): Payment {
         if (! in_array($payment->status, [PaymentStatus::Submitted, PaymentStatus::UnderReview], true)) {
             throw new DomainException('Pembayaran tidak sedang menunggu verifikasi.');
         }
 
-        return DB::transaction(function () use ($payment, $actor, $comments, $overrideReason): Payment {
+        return DB::transaction(function () use ($payment, $actor, $comments, $overrideReason, $decisionSource): Payment {
             $payment = Payment::query()->with('invoice.purchaseOrder')->lockForUpdate()->findOrFail($payment->getKey());
 
             $approvalRequest = ApprovalRequest::query()
@@ -44,6 +46,7 @@ class VerifyPaymentAction
                 $actor,
                 $comments,
                 $overrideReason,
+                $decisionSource,
             );
 
             if ($approvalRequest->status !== ApprovalStatus::Approved) {
