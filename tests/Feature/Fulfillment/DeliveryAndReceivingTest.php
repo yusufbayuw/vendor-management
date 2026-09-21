@@ -2,13 +2,18 @@
 
 namespace Tests\Feature\Fulfillment;
 
+use App\Actions\Fulfillment\ClosePurchaseOrderWithExceptionAction;
 use App\Actions\Fulfillment\ConfirmDeliveryScheduleAction;
 use App\Actions\Fulfillment\CreateDeliveryScheduleAction;
 use App\Actions\Fulfillment\InspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordGoodsReceiptAction;
+use App\Enums\ApprovalDecisionSource;
+use App\Enums\DiscrepancyStatus;
 use App\Enums\DiscrepancyType;
+use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SupplierStatus;
+use App\Enums\SystemPermission;
 use App\Models\Organization;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -23,6 +28,7 @@ use App\Models\Unit;
 use App\Models\User;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class DeliveryAndReceivingTest extends TestCase
@@ -80,6 +86,37 @@ class DeliveryAndReceivingTest extends TestCase
         $this->assertTrue($po->discrepancies()->where('type', DiscrepancyType::RejectedGoods->value)->exists());
     }
 
+    public function test_lean_exception_close_is_one_intentional_interaction_with_audit_record(): void
+    {
+        [$po, $poItem, $actor] = $this->makeAcknowledgedPo(100, OperationalProfile::Lean);
+        $actor->givePermissionTo(
+            Permission::findOrCreate(SystemPermission::PurchaseOrderExceptionClose->value, 'web'),
+        );
+
+        $poItem->forceFill([
+            'delivered_qty' => 80,
+            'accepted_qty' => 80,
+        ])->save();
+        $po->forceFill(['status' => PurchaseOrderStatus::PartiallyDelivered])->save();
+
+        app(ClosePurchaseOrderWithExceptionAction::class)->execute(
+            $po,
+            $actor,
+            'Sisa 20 unit dibatalkan berdasarkan kesepakatan operasional.',
+        );
+
+        $this->assertSame(PurchaseOrderStatus::ClosedWithException, $po->refresh()->status);
+        $this->assertSame(
+            0,
+            $po->discrepancies()->where('status', DiscrepancyStatus::Open->value)->count(),
+        );
+        $this->assertDatabaseHas('approval_actions', [
+            'actor_id' => $actor->getKey(),
+            'is_self_approval' => true,
+            'decision_source' => ApprovalDecisionSource::ExplicitSelfApproval->value,
+        ]);
+    }
+
     public function test_full_accepted_quantity_marks_po_fulfilled(): void
     {
         [$po, $poItem, $actor] = $this->makeAcknowledgedPo(100);
@@ -104,10 +141,16 @@ class DeliveryAndReceivingTest extends TestCase
     }
 
     /** @return array{PurchaseOrder, PurchaseOrderItem, User} */
-    private function makeAcknowledgedPo(float $quantity): array
-    {
+    private function makeAcknowledgedPo(
+        float $quantity,
+        OperationalProfile $profile = OperationalProfile::Standard,
+    ): array {
         $actor = User::factory()->create();
-        $organization = Organization::query()->create(['code' => fake()->unique()->bothify('ORG-###'), 'name' => 'Organisasi']);
+        $organization = Organization::query()->create([
+            'code' => fake()->unique()->bothify('ORG-###'),
+            'name' => 'Organisasi',
+            'operational_profile' => $profile,
+        ]);
         $kitchen = SppgKitchen::query()->create([
             'organization_id' => $organization->id,
             'code' => fake()->unique()->bothify('SPPG-###'),
