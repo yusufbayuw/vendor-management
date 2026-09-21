@@ -239,6 +239,8 @@ class SupplierResource extends Resource
                     ->label('Suspend')
                     ->color('danger')
                     ->visible(static fn (Supplier $record): bool => $record->status === SupplierStatus::Active && (auth()->user()?->can(SystemPermission::SupplierSuspend->value) ?? false))
+                    ->requiresConfirmation()
+                    ->modalDescription('Supplier akan dinonaktifkan dari operasional sampai statusnya dipulihkan. Pastikan alasan penangguhan sudah benar.')
                     ->schema([
                         Textarea::make('reason')->label('Alasan penangguhan')->required()->rows(4),
                     ])
