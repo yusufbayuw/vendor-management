@@ -35,11 +35,16 @@ class AllocatePurchaseRequestItemAction
             throw new DomainException('Harga satuan tidak boleh negatif.');
         }
 
-        if (! $this->supplierEligibility->isOperationallyEligible($supplier)) {
-            throw new DomainException('Supplier belum aktif secara operasional atau aktivasi supplier tidak valid.');
-        }
-
         return DB::transaction(function () use ($item, $supplier, $quantity, $unitPrice, $actor, $notes): PurchaseAllocation {
+            $lockedSupplier = Supplier::query()
+                ->with(['approvalAttestation', 'documents', 'users.phoneVerificationCodes'])
+                ->lockForUpdate()
+                ->findOrFail($supplier->getKey());
+
+            if (! $this->supplierEligibility->isOperationallyEligible($lockedSupplier)) {
+                throw new DomainException('Supplier belum aktif secara operasional atau aktivasi supplier tidak valid.');
+            }
+
             $lockedItem = PurchaseRequestItem::query()
                 ->with('purchaseRequest')
                 ->lockForUpdate()
@@ -68,7 +73,7 @@ class AllocatePurchaseRequestItemAction
 
             $allocation = PurchaseAllocation::query()->create([
                 'purchase_request_item_id' => $lockedItem->getKey(),
-                'supplier_id' => $supplier->getKey(),
+                'supplier_id' => $lockedSupplier->getKey(),
                 'allocated_qty' => $quantity,
                 'unit_price' => $unitPrice,
                 'subtotal' => round($quantity * $unitPrice, 2),
