@@ -9,6 +9,8 @@ Import data lama diperlakukan sebagai **migration**, bukan replay workflow.
 - Notifikasi workflow dinonaktifkan selama import.
 - Audit Eloquent tetap berjalan.
 - Setiap record mendapat `data_provenances` yang menunjuk batch, file, dan baris asal.
+- Import boleh dimulai dari PO, penerimaan, invoice, atau pembayaran. Jika transaksi upstream belum ada, sistem membuat placeholder relasional minimal dengan `provenance_type=legacy_import_synthetic`; workflow historis tetap tidak direplay.
+- Placeholder transaksi tidak menggantikan master data. Jika PO upstream harus dibuat otomatis, `supplier_code` dan `kitchen_code` harus menunjuk master yang benar-benar sudah ada.
 - Supplier existing dapat masuk sebagai `admin_managed` dan aktif secara operasional tanpa akun portal.
 
 ## Format file
@@ -30,26 +32,30 @@ Satu PR dapat diulang dalam beberapa baris untuk item berbeda.
 
 ### Purchase Order
 
-Kolom wajib: `number, purchase_request_number, supplier_code, kitchen_code, order_date, status`.
+Kolom wajib: `number, supplier_code, kitchen_code, order_date, status`.
+`purchase_request_number` opsional. Jika kosong atau belum ada di database, sistem membuat PR placeholder (`LEGACY-PR-*`) dan menandainya sebagai synthetic provenance.
 Kolom item opsional: `product_code, unit_code, ordered_qty, unit_price, item_subtotal, item_description, delivered_qty, accepted_qty, rejected_qty`.
 Kolom header opsional: `delivery_start, delivery_end, subtotal, tax_amount, discount_amount, total_amount, approved_at, issued_at, acknowledged_at, notes`.
 PR, supplier, produk dan unit yang direferensikan harus sudah ada.
 
 ### Penerimaan Barang
 
-Kolom wajib: `number, purchase_order_number, received_at, status`.
+Kolom wajib: `number, received_at, status`.
+`purchase_order_number` opsional. Jika PO belum ada, isi `supplier_code` dan `kitchen_code`; sistem akan membuat PO/PR placeholder untuk menjaga integritas relasi. `product_code`/`unit_code` dapat dipakai untuk membentuk item upstream minimal saat diperlukan.
 Kolom item opsional: `product_code, unit_code, planned_qty, received_qty, accepted_qty, rejected_qty, condition, rejection_reason, item_notes`.
 Kolom opsional lain: `delivery_schedule_number, supplier_representative, delivery_note_number, inspected_at, notes`.
 Jika `delivery_schedule_number` kosong, sistem membuat nomor synthetic `LEGACY-{receipt_number}`.
 
 ### Invoice
 
-Kolom wajib: `number, purchase_order_number, invoice_date, status, payable_amount`.
+Kolom wajib: `number, invoice_date, status, payable_amount`.
+`purchase_order_number` opsional. Jika PO belum ada, `supplier_code` dan `kitchen_code` wajib tersedia pada baris tersebut agar sistem dapat membuat upstream placeholder yang terhubung.
 Kolom opsional: `supplier_invoice_number, due_date, po_amount, adjustment_amount, withholding_tax_amount, total_amount, issued_at, approved_at, notes`.
 
 ### Payment
 
-Kolom wajib: `number, invoice_number, payment_date, amount, payment_method, status`.
+Kolom wajib: `number, payment_date, amount, payment_method, status`.
+`invoice_number` dan `purchase_order_number` opsional. Jika invoice/PO belum ada, baris harus membawa `supplier_code` dan `kitchen_code`; sistem membuat invoice → PO → PR placeholder seperlunya dan mencatat semuanya sebagai synthetic provenance.
 `payment_method`: `bank_transfer`, `virtual_account`, `cash`, atau `other`.
 Kolom opsional: `source_bank_name, destination_bank_name, destination_account_number, destination_account_holder, reference_number, verified_at, notes`.
 
@@ -58,3 +64,15 @@ Kolom opsional: `source_bank_name, destination_bank_name, destination_account_nu
 Untuk transaksi historis, field aktor operasional yang diwajibkan schema dapat memakai user yang menjalankan migrasi. Itu bukan klaim bahwa user tersebut adalah aktor historis; provenance menyimpan `historical_actor_may_be_unknown=true` dan `workflow_replayed=false`.
 
 Jika identitas aktor historis tersedia dan harus dipertahankan, lakukan mapping user sebelum import lanjutan.
+## Entry point migration
+
+Contoh file dapat langsung dimulai dari kondisi nyata saat cut-over:
+
+```text
+PO lama sudah berjalan       -> import PO; PR dapat dibuat placeholder
+Barang sudah diterima        -> import Goods Receipt; PO/PR dapat dibuat placeholder
+Invoice sudah datang         -> import Invoice; PO/PR dapat dibuat placeholder
+Pembayaran sudah terjadi     -> import Payment; Invoice/PO/PR dapat dibuat placeholder
+```
+
+Placeholder hanya menjaga foreign key dan relasi domain. Placeholder bukan klaim bahwa workflow tersebut pernah dijalankan di aplikasi. Metadata synthetic menyimpan `workflow_replayed=false`, `synthetic_record=true`, alasan pembuatan, file sumber, dan baris sumber. Batch import juga menyimpan jumlah `synthetic_upstream_records` pada summary.
