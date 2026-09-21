@@ -9,6 +9,7 @@ use App\Enums\ApprovalDecisionSource;
 use App\Enums\InvoiceStatus;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
+use App\Enums\SystemPermission;
 use App\Models\Organization;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -22,6 +23,7 @@ use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class LeanAutoApprovalTest extends TestCase
@@ -67,6 +69,11 @@ class LeanAutoApprovalTest extends TestCase
     private function makePurchaseOrder(PurchaseOrderStatus $status): array
     {
         $actor = User::factory()->create();
+        $actor->givePermissionTo([
+            Permission::findOrCreate(SystemPermission::PurchaseOrderApprove->value, 'web'),
+            Permission::findOrCreate(SystemPermission::InvoiceApprove->value, 'web'),
+        ]);
+
         $organization = Organization::query()->create([
             'code' => fake()->unique()->bothify('ORG-L-###'),
             'name' => 'Lean Organization',

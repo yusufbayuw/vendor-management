@@ -8,6 +8,7 @@ use App\Enums\ApprovalDecisionSource;
 use App\Enums\GovernanceProcess;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseRequestStatus;
+use App\Enums\SystemPermission;
 use App\Models\ApprovalAction;
 use App\Models\GovernancePolicy;
 use App\Models\Organization;
@@ -20,6 +21,7 @@ use App\Models\Unit;
 use App\Models\User;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class PurchaseRequestApprovalTest extends TestCase
@@ -77,6 +79,12 @@ class PurchaseRequestApprovalTest extends TestCase
     private function makePurchaseRequest(OperationalProfile $profile, bool $returnOrganization = false): array
     {
         $requester = User::factory()->create();
+
+        if ($profile === OperationalProfile::Lean) {
+            $permission = Permission::findOrCreate(SystemPermission::PurchaseRequestApprove->value, 'web');
+            $requester->givePermissionTo($permission);
+        }
+
         $organization = Organization::query()->create([
             'code' => fake()->unique()->bothify('ORG-###'),
             'name' => 'Organization',

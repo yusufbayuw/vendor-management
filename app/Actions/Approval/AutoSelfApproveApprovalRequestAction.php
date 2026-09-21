@@ -6,6 +6,7 @@ use App\Enums\ApprovalDecisionSource;
 use App\Enums\ApprovalStatus;
 use App\Enums\GovernanceProcess;
 use App\Enums\OperationalProfile;
+use App\Enums\SystemPermission;
 use App\Models\ApprovalRequest;
 use App\Models\User;
 
@@ -45,10 +46,13 @@ class AutoSelfApproveApprovalRequestAction
             return false;
         }
 
-        return in_array($approvalRequest->process, [
-            GovernanceProcess::PurchaseRequestApproval,
-            GovernanceProcess::PurchaseOrderApproval,
-            GovernanceProcess::InvoiceApproval,
-        ], true);
+        $permission = match ($approvalRequest->process) {
+            GovernanceProcess::PurchaseRequestApproval => SystemPermission::PurchaseRequestApprove,
+            GovernanceProcess::PurchaseOrderApproval => SystemPermission::PurchaseOrderApprove,
+            GovernanceProcess::InvoiceApproval => SystemPermission::InvoiceApprove,
+            default => null,
+        };
+
+        return $permission !== null && $actor->can($permission->value);
     }
 }
