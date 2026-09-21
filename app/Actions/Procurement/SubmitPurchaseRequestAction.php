@@ -4,6 +4,7 @@ namespace App\Actions\Procurement;
 
 use App\Actions\Approval\AutoSelfApproveApprovalRequestAction;
 use App\Actions\Approval\CreateApprovalRequestAction;
+use App\Enums\ApprovalStatus;
 use App\Enums\GovernanceProcess;
 use App\Enums\PurchaseRequestStatus;
 use App\Models\PurchaseRequest;
@@ -54,7 +55,7 @@ class SubmitPurchaseRequestAction
 
             $approvalRequest = $this->autoSelfApprove->execute($approvalRequest, $actor);
 
-            if ($approvalRequest->status === \App\Enums\ApprovalStatus::Approved) {
+            if ($approvalRequest->status === ApprovalStatus::Approved) {
                 $purchaseRequest->forceFill([
                     'status' => PurchaseRequestStatus::Approved,
                     'approved_at' => now(),

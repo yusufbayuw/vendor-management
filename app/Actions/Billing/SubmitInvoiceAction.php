@@ -4,6 +4,7 @@ namespace App\Actions\Billing;
 
 use App\Actions\Approval\AutoSelfApproveApprovalRequestAction;
 use App\Actions\Approval\CreateApprovalRequestAction;
+use App\Enums\ApprovalStatus;
 use App\Enums\GovernanceProcess;
 use App\Enums\InvoiceStatus;
 use App\Models\Invoice;
@@ -43,7 +44,7 @@ class SubmitInvoiceAction
 
             $approvalRequest = $this->autoSelfApprove->execute($approvalRequest, $actor);
 
-            if ($approvalRequest->status === \App\Enums\ApprovalStatus::Approved) {
+            if ($approvalRequest->status === ApprovalStatus::Approved) {
                 return $this->finalizeApprovedInvoice->execute($invoice, $actor);
             }
 

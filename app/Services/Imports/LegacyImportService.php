@@ -79,9 +79,9 @@ class LegacyImportService
                 $batch,
                 $actor,
                 $rows,
-                &$imported,
-                &$failed,
-                &$errors,
+                & $imported,
+                & $failed,
+                & $errors,
             ): void {
                 foreach ($rows as $row) {
                     try {
@@ -611,9 +611,11 @@ class LegacyImportService
             ?? throw new DomainException("Kolom {$key} wajib diisi.");
     }
 
-    /** @template T of BackedEnum
-     *  @param class-string<T> $enum
-     *  @return T
+    /**
+     * @template T of BackedEnum
+     *
+     * @param  class-string<T>  $enum
+     * @return T
      */
     private function enumValue(string $enum, mixed $value): BackedEnum
     {

@@ -63,7 +63,7 @@ class LegacyTabularReader
             throw new DomainException('Ekstensi PHP zip diperlukan untuk membaca XLSX.');
         }
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
 
         if ($zip->open($path) !== true) {
             throw new DomainException('File XLSX tidak dapat dibuka.');
@@ -211,8 +211,9 @@ class LegacyTabularReader
         );
     }
 
-    /** @param array<int, string> $headers
-     *  @param array<int, mixed> $values
+    /**
+     * @param  array<int, string>  $headers
+     * @param  array<int, mixed>  $values
      */
     private function combine(array $headers, array $values, int $rowNumber): array
     {
