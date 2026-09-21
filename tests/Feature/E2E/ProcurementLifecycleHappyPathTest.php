@@ -3,7 +3,6 @@
 namespace Tests\Feature\E2E;
 
 use App\Actions\Billing\ApproveInvoiceAction;
-use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
 use App\Actions\Billing\SubmitInvoiceAction;
 use App\Actions\Fulfillment\ConfirmDeliveryScheduleAction;
@@ -23,6 +22,7 @@ use App\Actions\Procurement\GeneratePurchaseOrdersAction;
 use App\Actions\Procurement\IssuePurchaseOrderAction;
 use App\Actions\Procurement\SubmitPurchaseOrderForApprovalAction;
 use App\Actions\Procurement\SubmitPurchaseRequestAction;
+use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Enums\ApprovalStatus;
 use App\Enums\DeliveryScheduleStatus;
 use App\Enums\GoodsReceiptStatus;

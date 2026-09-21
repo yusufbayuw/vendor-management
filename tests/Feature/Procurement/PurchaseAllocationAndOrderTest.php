@@ -3,8 +3,8 @@
 namespace Tests\Feature\Procurement;
 
 use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
-use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Actions\Procurement\GeneratePurchaseOrdersAction;
+use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Enums\PurchaseRequestStatus;
 use App\Models\Organization;
 use App\Models\Product;
