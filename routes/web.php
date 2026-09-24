@@ -1,11 +1,16 @@
 <?php
 
+use App\Http\Controllers\LicenseController;
 use App\Http\Controllers\PrivateVendorFileController;
 use App\Http\Controllers\ProcurementReportController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\PwaIconController;
 use App\Http\Controllers\TransactionDocumentController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/license/activate', [LicenseController::class, 'show'])->name('license.show');
+Route::post('/license/activate', [LicenseController::class, 'activate'])->name('license.activate');
+Route::get('/license/status', [LicenseController::class, 'status'])->name('license.status');
 
 Route::get('/', function () {
     return view('welcome');

@@ -15,6 +15,8 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    'license_key' => env('LICENSE_KEY'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment
