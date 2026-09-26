@@ -26,7 +26,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
 
-            $table->index(['purchase_order_item_id', 'goods_receipt_id']);
+            $table->index(['purchase_order_item_id', 'goods_receipt_id'], 'goods_receipt_items_po_item_receipt_idx');
             $table->index('delivery_schedule_item_id');
         });
     }
