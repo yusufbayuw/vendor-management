@@ -19,8 +19,8 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->index(['organization_id', 'process', 'is_active']);
-            $table->index(['organization_id', 'process', 'amount_threshold']);
+            $table->index(['organization_id', 'process', 'is_active'], 'gov_policy_org_process_active_idx');
+            $table->index(['organization_id', 'process', 'amount_threshold'], 'gov_policy_org_process_amount_idx');
         });
     }
 
