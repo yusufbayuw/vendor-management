@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('unit_id')->constrained('units')->restrictOnDelete();
             $table->timestamps();
 
-            $table->unique(['delivery_schedule_id', 'purchase_order_item_id']);
+            $table->unique(['delivery_schedule_id', 'purchase_order_item_id'], 'delivery_schedule_items_schedule_po_item_unique');
             $table->index('purchase_order_item_id');
         });
     }
