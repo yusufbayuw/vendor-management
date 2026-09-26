@@ -13,7 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
-            \\App\\Http\\Middleware\\EnsureLicenseIsValid::class,
+            \App\Http\Middleware\EnsureLicenseIsValid::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
