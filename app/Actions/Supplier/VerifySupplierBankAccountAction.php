@@ -6,6 +6,7 @@ use App\Enums\VerificationStatus;
 use App\Models\SupplierBankAccount;
 use App\Models\User;
 use DomainException;
+use Illuminate\Support\Facades\DB;
 
 class VerifySupplierBankAccountAction
 {
@@ -15,13 +16,26 @@ class VerifySupplierBankAccountAction
             throw new DomainException('Rekening tidak dapat diverifikasi pada status saat ini.');
         }
 
-        $account->forceFill([
-            'verification_status' => VerificationStatus::Verified,
-            'verified_at' => now(),
-            'verified_by' => $actor->getKey(),
-            'rejection_reason' => null,
-        ])->save();
+        return DB::transaction(function () use ($account, $actor): SupplierBankAccount {
+            $account = SupplierBankAccount::query()->lockForUpdate()->findOrFail($account->getKey());
 
-        return $account->refresh();
+            if ($account->is_primary) {
+                SupplierBankAccount::query()
+                    ->where('supplier_id', $account->supplier_id)
+                    ->whereKeyNot($account->getKey())
+                    ->where('verification_status', VerificationStatus::Verified->value)
+                    ->where('is_primary', true)
+                    ->update(['is_primary' => false]);
+            }
+
+            $account->forceFill([
+                'verification_status' => VerificationStatus::Verified,
+                'verified_at' => now(),
+                'verified_by' => $actor->getKey(),
+                'rejection_reason' => null,
+            ])->save();
+
+            return $account->refresh();
+        }, 3);
     }
 }

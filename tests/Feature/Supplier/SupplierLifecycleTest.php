@@ -6,13 +6,16 @@ use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Actions\Supplier\ApproveSupplierAction;
 use App\Actions\Supplier\RequestSupplierRevisionAction;
 use App\Actions\Supplier\StartSupplierReviewAction;
+use App\Actions\Supplier\VerifySupplierBankAccountAction;
 use App\Actions\Supplier\SubmitSupplierAction;
 use App\Actions\Supplier\SuspendSupplierAction;
 use App\Enums\SupplierDocumentStatus;
 use App\Enums\SupplierManagementMode;
 use App\Enums\SupplierStatus;
+use App\Enums\VerificationStatus;
 use App\Models\PhoneVerificationCode;
 use App\Models\Supplier;
+use App\Models\SupplierBankAccount;
 use App\Models\SupplierDocument;
 use App\Models\User;
 use App\Services\Supplier\SupplierOperationalEligibilityService;
@@ -252,6 +255,46 @@ class SupplierLifecycleTest extends TestCase
         app(SubmitSupplierAction::class)->execute($supplier);
 
         $this->assertSame(SupplierStatus::Submitted, $supplier->refresh()->status);
+    }
+
+    public function test_new_primary_bank_account_can_be_verified_without_disabling_old_account_early(): void
+    {
+        $supplier = Supplier::query()->create([
+            'code' => 'SUP-BANK-SAFE',
+            'legal_name' => 'PT Bank Aman',
+            'phone' => '081288800001',
+        ]);
+        $reviewer = User::factory()->create();
+
+        $old = SupplierBankAccount::query()->create([
+            'supplier_id' => $supplier->getKey(),
+            'bank_name' => 'Bank Lama',
+            'account_number' => '111111',
+            'account_holder' => 'PT Bank Aman',
+            'is_primary' => true,
+            'verification_status' => VerificationStatus::Verified,
+            'verified_at' => now()->subDay(),
+            'verified_by' => $reviewer->getKey(),
+        ]);
+
+        $replacement = SupplierBankAccount::query()->create([
+            'supplier_id' => $supplier->getKey(),
+            'bank_name' => 'Bank Baru',
+            'account_number' => '222222',
+            'account_holder' => 'PT Bank Aman',
+            'is_primary' => true,
+            'verification_status' => VerificationStatus::Pending,
+        ]);
+
+        $this->assertTrue($old->refresh()->is_primary);
+        $this->assertSame(VerificationStatus::Verified, $old->verification_status);
+
+        app(VerifySupplierBankAccountAction::class)->execute($replacement, $reviewer);
+
+        $this->assertSame(VerificationStatus::Verified, $replacement->refresh()->verification_status);
+        $this->assertTrue($replacement->is_primary);
+        $this->assertSame(VerificationStatus::Verified, $old->refresh()->verification_status);
+        $this->assertFalse($old->is_primary);
     }
 
     public function test_setting_status_active_directly_does_not_bypass_operational_eligibility(): void

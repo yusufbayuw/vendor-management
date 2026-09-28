@@ -18,6 +18,7 @@ use App\Services\Supplier\SupplierOperationalEligibilityService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -196,6 +197,33 @@ class SupplierResource extends Resource
                     ->label('Setujui Supplier')
                     ->color('success')
                     ->visible(static fn (Supplier $record): bool => in_array($record->status, [SupplierStatus::Submitted, SupplierStatus::UnderReview], true) && static::canVerify())
+                    ->schema(static fn (Supplier $record): array => [
+                        Placeholder::make('review_profile')
+                            ->label('Profil')
+                            ->content(($record->legal_name ?: '-').' · '.($record->phone ?: 'tanpa nomor HP')),
+                        Placeholder::make('review_documents')
+                            ->label('Dokumen')
+                            ->content(static fn (): string => sprintf(
+                                '%d total · %d terverifikasi',
+                                $record->documents()->count(),
+                                $record->documents()->where('status', \App\Enums\SupplierDocumentStatus::Verified->value)->count(),
+                            )),
+                        Placeholder::make('review_bank')
+                            ->label('Rekening')
+                            ->content(static fn (): string => sprintf(
+                                '%d total · %d terverifikasi',
+                                $record->bankAccounts()->count(),
+                                $record->bankAccounts()->where('verification_status', \App\Enums\VerificationStatus::Verified->value)->count(),
+                            )),
+                        Placeholder::make('review_products')
+                            ->label('Produk')
+                            ->content(static fn (): string => $record->products()->count().' produk'),
+                        Placeholder::make('review_identity')
+                            ->label('Akun/PIC')
+                            ->content(static fn (): string => app(SupplierOperationalEligibilityService::class)->portalIdentitySatisfied($record)
+                                ? 'Nomor HP terverifikasi'
+                                : 'Belum memenuhi verifikasi OTP'),
+                    ])
                     ->requiresConfirmation()
                     ->action(static function (Supplier $record): void {
                         static::requirePermission(SystemPermission::SupplierVerify);

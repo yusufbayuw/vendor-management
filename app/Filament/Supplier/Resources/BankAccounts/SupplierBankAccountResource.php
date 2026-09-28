@@ -7,12 +7,14 @@ use App\Enums\VerificationStatus;
 use App\Filament\Supplier\Resources\BankAccounts\Pages\ManageSupplierBankAccounts;
 use App\Models\Supplier;
 use App\Models\SupplierBankAccount;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
@@ -65,6 +67,41 @@ class SupplierBankAccountResource extends Resource
                 ->formatStateUsing(fn ($state) => str($state instanceof VerificationStatus ? $state->value : (string) $state)->replace('_', ' ')->title()),
         ])->recordActions([
             EditAction::make(),
+            Action::make('requestChange')
+                ->label('Ajukan Perubahan')
+                ->color('warning')
+                ->visible(fn (SupplierBankAccount $record): bool => $record->verification_status === VerificationStatus::Verified && static::canEditOwned($record))
+                ->fillForm(fn (SupplierBankAccount $record): array => [
+                    'bank_name' => $record->bank_name,
+                    'bank_code' => $record->bank_code,
+                    'account_number' => $record->account_number,
+                    'account_holder' => $record->account_holder,
+                    'is_primary' => $record->is_primary,
+                ])
+                ->schema([
+                    TextInput::make('bank_name')->label('Nama Bank')->required()->maxLength(255),
+                    TextInput::make('bank_code')->label('Kode Bank')->maxLength(30),
+                    TextInput::make('account_number')->label('Nomor Rekening')->required()->maxLength(100),
+                    TextInput::make('account_holder')->label('Nama Pemilik Rekening')->required()->maxLength(255),
+                    Toggle::make('is_primary')->label('Jadikan Rekening Utama'),
+                ])
+                ->action(function (SupplierBankAccount $record, array $data): void {
+                    $replacement = SupplierBankAccount::query()->create([
+                        'supplier_id' => $record->supplier_id,
+                        'bank_name' => $data['bank_name'],
+                        'bank_code' => $data['bank_code'] ?? null,
+                        'account_number' => $data['account_number'],
+                        'account_holder' => $data['account_holder'],
+                        'is_primary' => (bool) ($data['is_primary'] ?? false),
+                        'verification_status' => VerificationStatus::Pending,
+                    ]);
+
+                    Notification::make()
+                        ->success()
+                        ->title('Perubahan rekening diajukan.')
+                        ->body('Rekening lama tetap aktif sampai rekening baru diverifikasi.')
+                        ->send();
+                }),
             DeleteAction::make()->visible(fn (SupplierBankAccount $record) => in_array($record->verification_status, [VerificationStatus::Pending, VerificationStatus::Rejected], true)),
         ]);
     }
@@ -86,7 +123,14 @@ class SupplierBankAccountResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return $record instanceof SupplierBankAccount && in_array($record->supplier_id, static::supplierIds(), true) && static::canViewAny();
+        return $record instanceof SupplierBankAccount
+            && in_array($record->verification_status, [VerificationStatus::Pending, VerificationStatus::Rejected], true)
+            && static::canEditOwned($record);
+    }
+
+    private static function canEditOwned(SupplierBankAccount $record): bool
+    {
+        return in_array($record->supplier_id, static::supplierIds(), true) && static::canViewAny();
     }
 
     public static function canDelete(Model $record): bool
