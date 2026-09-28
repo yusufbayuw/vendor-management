@@ -49,4 +49,7 @@ jobs:
         run: php artisan route:list --except-vendor
 
       - name: Check formatting
-        run: vendor/bin/pint --test
+        run: |
+          vendor/bin/pint
+          git diff -- . ':(exclude).github/workflows/ci.yml'
+          exit 1
