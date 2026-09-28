@@ -31,6 +31,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -160,18 +161,22 @@ class DeliveryScheduleResource extends Resource
                                 TextInput::make('rejection_reason')
                                     ->label('Alasan ditolak')
                                     ->maxLength(255)
+                                    ->visible(fn (Get $get): bool => (float) ($get('rejected_qty') ?? 0) > 0)
                                     ->required(fn (Get $get): bool => (float) ($get('rejected_qty') ?? 0) > 0),
                                 TextInput::make('batch_number')
                                     ->label('Nomor batch')
                                     ->maxLength(100)
+                                    ->visible(fn (Get $get): bool => static::scheduleItemRuleRequires((int) $get('delivery_schedule_item_id'), 'requires_batch_number'))
                                     ->required(fn (Get $get): bool => static::scheduleItemRuleRequires((int) $get('delivery_schedule_item_id'), 'requires_batch_number')),
                                 DatePicker::make('expiry_date')
                                     ->label('Kedaluwarsa')
                                     ->native(false)
+                                    ->visible(fn (Get $get): bool => static::scheduleItemRuleRequires((int) $get('delivery_schedule_item_id'), 'requires_expiry_date'))
                                     ->required(fn (Get $get): bool => static::scheduleItemRuleRequires((int) $get('delivery_schedule_item_id'), 'requires_expiry_date')),
                                 TextInput::make('temperature')
                                     ->label('Suhu (°C)')
                                     ->numeric()
+                                    ->visible(fn (Get $get): bool => static::scheduleItemRuleRequires((int) $get('delivery_schedule_item_id'), 'requires_temperature'))
                                     ->required(fn (Get $get): bool => static::scheduleItemRuleRequires((int) $get('delivery_schedule_item_id'), 'requires_temperature')),
                                 Textarea::make('notes')->label('Catatan QC')->rows(2)->columnSpanFull(),
                             ])
@@ -183,6 +188,7 @@ class DeliveryScheduleResource extends Resource
                             ->columnSpanFull(),
                         FileUpload::make('goods_photos')
                             ->label('Foto barang / penerimaan')
+                            ->visible(static::scheduleRequiresRule($record, 'requires_photo'))
                             ->disk(VendorFileStorage::DISK)
                             ->directory('goods-receipts/lean')
                             ->visibility('private')
@@ -193,6 +199,7 @@ class DeliveryScheduleResource extends Resource
                             ->required(static::scheduleRequiresRule($record, 'requires_photo')),
                         FileUpload::make('weight_photos')
                             ->label('Foto hasil timbang')
+                            ->visible(static::scheduleRequiresRule($record, 'requires_weight_photo'))
                             ->disk(VendorFileStorage::DISK)
                             ->directory('goods-receipts/lean')
                             ->visibility('private')
@@ -201,8 +208,13 @@ class DeliveryScheduleResource extends Resource
                             ->maxFiles(10)
                             ->maxSize(10240)
                             ->required(static::scheduleRequiresRule($record, 'requires_weight_photo')),
-                        TextInput::make('supplier_representative')->label('Perwakilan supplier')->maxLength(255),
-                        Textarea::make('receipt_notes')->label('Catatan penerimaan')->rows(3),
+                        Section::make('Detail tambahan')
+                            ->schema([
+                                TextInput::make('supplier_representative')->label('Perwakilan supplier')->maxLength(255),
+                                Textarea::make('receipt_notes')->label('Catatan penerimaan')->rows(3),
+                            ])
+                            ->collapsible()
+                            ->collapsed(),
                     ])
                     ->action(static function (DeliverySchedule $record, array $data): void {
                         static::requirePermission(SystemPermission::GoodsReceiptCreate);

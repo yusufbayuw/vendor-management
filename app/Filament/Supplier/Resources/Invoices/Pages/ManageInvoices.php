@@ -16,6 +16,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ManageRecords;
+use Filament\Schemas\Components\Section;
 
 class ManageInvoices extends ManageRecords
 {
@@ -27,12 +28,21 @@ class ManageInvoices extends ManageRecords
             Action::make('createInvoice')->label('Buat Invoice')->color('primary')
                 ->visible(fn () => auth()->user()?->can('invoice.submit') ?? false)
                 ->schema([
-                    Select::make('purchase_order_id')->label('PO')->options(fn () => $this->poOptions())->searchable()->required(),
-                    TextInput::make('supplier_invoice_number')->label('Nomor Invoice Supplier')->required()->maxLength(255),
-                    DatePicker::make('invoice_date')->label('Tanggal Invoice')->native(false)->default(today())->required(),
-                    TextInput::make('payment_term_days')->label('Termin (hari)')->numeric()->minValue(0)->default(0)->required(),
-                    FileUpload::make('invoice_file')->label('File Invoice')->disk('local')->directory('invoices')->visibility('private')
-                        ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])->maxSize(10240)->required(),
+                    Section::make('Tagihan')
+                        ->schema([
+                            Select::make('purchase_order_id')->label('PO')->options(fn () => $this->poOptions())->searchable()->required(),
+                            TextInput::make('supplier_invoice_number')->label('Nomor Invoice Supplier')->required()->maxLength(255),
+                            DatePicker::make('invoice_date')->label('Tanggal Invoice')->native(false)->default(today())->required(),
+                            FileUpload::make('invoice_file')->label('File Invoice')->disk('local')->directory('invoices')->visibility('private')
+                                ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])->maxSize(10240)->required(),
+                        ])
+                        ->columns(2),
+                    Section::make('Detail tambahan')
+                        ->schema([
+                            TextInput::make('payment_term_days')->label('Termin (hari)')->numeric()->minValue(0)->default(0)->required(),
+                        ])
+                        ->collapsible()
+                        ->collapsed(),
                 ])->action(function (array $data): void {
                     $po = PurchaseOrder::query()->with('kitchen.organization')->whereIn('supplier_id', InvoiceResource::supplierIds())->findOrFail($data['purchase_order_id']);
                     try {

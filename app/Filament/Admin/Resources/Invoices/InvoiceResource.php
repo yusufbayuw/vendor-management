@@ -34,6 +34,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -146,26 +147,48 @@ class InvoiceResource extends Resource
                     ->color('success')
                     ->visible(static fn (Invoice $record): bool => in_array($record->status, [InvoiceStatus::Approved, InvoiceStatus::PartiallyPaid], true) && static::hasScopedPermission($record, SystemPermission::PaymentCreate))
                     ->schema(static fn (Invoice $record): array => [
-                        DatePicker::make('payment_date')->label('Tanggal pembayaran')->native(false)->default(today())->required(),
-                        TextInput::make('amount')->label('Jumlah pembayaran')->numeric()->prefix('Rp')->default(static::outstandingAmount($record))->minValue(0.01)->required(),
-                        Select::make('payment_method')->label('Metode')->options(static::paymentMethodOptions())->default(PaymentMethod::BankTransfer->value)->required(),
-                        TextInput::make('source_bank_name')->label('Bank sumber')->maxLength(255),
-                        Select::make('destination_account_id')->label('Rekening tujuan supplier')->options(static::supplierBankAccountOptions($record))->searchable(),
-                        TextInput::make('reference_number')->label('Nomor referensi')->maxLength(255),
-                        FileUpload::make('payment_proof')
-                            ->label('Bukti pembayaran')
-                            ->disk(VendorFileStorage::DISK)
-                            ->directory('payments')
-                            ->visibility('private')
-                            ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
-                            ->maxSize(10240)
-                            ->visible(static::isLeanPaymentCandidate($record))
-                            ->required(static::isLeanPaymentCandidate($record)),
-                        Textarea::make('notes')->label('Catatan')->rows(3),
-                        Textarea::make('override_reason')
-                            ->label('Alasan override')
-                            ->rows(3)
-                            ->visible(static::isLeanPaymentCandidate($record)),
+                        Section::make('Pembayaran')
+                            ->description('Nilai outstanding dan rekening terverifikasi dipilih otomatis bila tersedia.')
+                            ->schema([
+                                TextInput::make('amount')
+                                    ->label('Jumlah pembayaran')
+                                    ->numeric()
+                                    ->prefix('Rp')
+                                    ->default(static::outstandingAmount($record))
+                                    ->minValue(0.01)
+                                    ->required(),
+                                Select::make('destination_account_id')
+                                    ->label('Rekening tujuan supplier')
+                                    ->options(static::supplierBankAccountOptions($record))
+                                    ->default(static::primarySupplierBankAccountId($record))
+                                    ->searchable(),
+                                FileUpload::make('payment_proof')
+                                    ->label('Bukti pembayaran')
+                                    ->disk(VendorFileStorage::DISK)
+                                    ->directory('payments')
+                                    ->visibility('private')
+                                    ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+                                    ->maxSize(10240)
+                                    ->visible(static::isLeanPaymentCandidate($record))
+                                    ->required(static::isLeanPaymentCandidate($record)),
+                                Textarea::make('override_reason')
+                                    ->label('Alasan override')
+                                    ->rows(3)
+                                    ->visible(static::leanPaymentRequiresOverrideReason($record))
+                                    ->required(static::leanPaymentRequiresOverrideReason($record)),
+                            ])
+                            ->columns(2),
+                        Section::make('Detail tambahan')
+                            ->schema([
+                                DatePicker::make('payment_date')->label('Tanggal pembayaran')->native(false)->default(today())->required(),
+                                Select::make('payment_method')->label('Metode')->options(static::paymentMethodOptions())->default(PaymentMethod::BankTransfer->value)->required(),
+                                TextInput::make('source_bank_name')->label('Bank sumber')->maxLength(255),
+                                TextInput::make('reference_number')->label('Nomor referensi')->maxLength(255),
+                                Textarea::make('notes')->label('Catatan')->rows(3)->columnSpanFull(),
+                            ])
+                            ->columns(2)
+                            ->collapsible()
+                            ->collapsed(),
                     ])
                     ->action(static function (Invoice $record, array $data): void {
                         static::requireScopedPermission($record, SystemPermission::PaymentCreate);
@@ -320,6 +343,35 @@ class InvoiceResource extends Resource
             ->sum('amount');
 
         return max(0, (float) $invoice->payable_amount - $committed);
+    }
+
+    private static function primarySupplierBankAccountId(Invoice $invoice): ?int
+    {
+        return SupplierBankAccount::query()
+            ->where('supplier_id', $invoice->supplier_id)
+            ->where('verification_status', VerificationStatus::Verified->value)
+            ->orderByDesc('is_primary')
+            ->orderBy('id')
+            ->value('id');
+    }
+
+    private static function leanPaymentRequiresOverrideReason(Invoice $invoice): bool
+    {
+        if (! static::isLeanPaymentCandidate($invoice)) {
+            return false;
+        }
+
+        $invoice->loadMissing('kitchen.organization');
+
+        $policy = app(GovernancePolicyService::class)->snapshot(
+            $invoice->kitchen->organization,
+            GovernanceProcess::PaymentVerification,
+            static::outstandingAmount($invoice),
+        );
+
+        return $policy['self_approval_allowed']
+            && $policy['minimum_approvers'] === 1
+            && $policy['requires_override_reason'];
     }
 
     private static function supplierBankAccountOptions(Invoice $invoice): array
