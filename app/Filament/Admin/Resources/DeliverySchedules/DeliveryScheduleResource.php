@@ -42,15 +42,15 @@ class DeliveryScheduleResource extends Resource
 {
     protected static ?string $model = DeliverySchedule::class;
 
-    protected static ?string $navigationLabel = 'Jadwal Pengiriman';
+    protected static ?string $navigationLabel = '3. Delivery';
 
     protected static ?string $modelLabel = 'jadwal pengiriman';
 
     protected static ?string $pluralModelLabel = 'jadwal pengiriman';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Fulfillment';
+    protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
 
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 30;
 
     public static function table(Table $table): Table
     {

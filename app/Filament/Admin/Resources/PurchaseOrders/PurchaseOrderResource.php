@@ -52,13 +52,13 @@ class PurchaseOrderResource extends Resource
 {
     protected static ?string $model = PurchaseOrder::class;
 
-    protected static ?string $navigationLabel = 'Purchase Order';
+    protected static ?string $navigationLabel = '2. PO';
 
     protected static ?string $modelLabel = 'purchase order';
 
     protected static ?string $pluralModelLabel = 'purchase order';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Procurement';
+    protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
 
     protected static ?int $navigationSort = 20;
 
