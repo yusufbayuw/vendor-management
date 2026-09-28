@@ -5,6 +5,7 @@ namespace App\Filament\Admin\Widgets;
 use App\Enums\DeliveryScheduleStatus;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\InvoiceStatus;
+use App\Enums\OperationalProfile;
 use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\PurchaseRequestStatus;
@@ -55,6 +56,10 @@ class ActionQueue extends StatsOverviewWidget
         $access = app(UserAccessService::class);
         $stats = [];
         $can = static fn (SystemPermission $permission): bool => $user->can($permission->value);
+        $canLeanBuildOrder = $can(SystemPermission::PurchaseRequestAllocate)
+            && $can(SystemPermission::PurchaseOrderCreate)
+            && $can(SystemPermission::PurchaseOrderApprove)
+            && $can(SystemPermission::PurchaseOrderIssue);
         $purchaseRequests = static fn (): Builder => $access->applyKitchenOwnedScope(PurchaseRequest::query(), $user);
         $purchaseOrders = static fn (): Builder => $access->applyKitchenOwnedScope(PurchaseOrder::query(), $user);
         $invoices = static fn (): Builder => $access->applyKitchenOwnedScope(Invoice::query(), $user);
@@ -87,10 +92,35 @@ class ActionQueue extends StatsOverviewWidget
             PurchaseRequestResource::getUrl('index'),
         );
 
+        if ($canLeanBuildOrder) {
+            $this->pushTask(
+                $stats,
+                true,
+                $purchaseRequests()
+                    ->whereIn('status', [
+                        PurchaseRequestStatus::Approved->value,
+                        PurchaseRequestStatus::PartiallyAllocated->value,
+                        PurchaseRequestStatus::FullyAllocated->value,
+                    ])
+                    ->whereHas('kitchen.organization', fn (Builder $query): Builder => $query->where('operational_profile', OperationalProfile::Lean->value))
+                    ->count(),
+                '2. PO — Buat Pesanan',
+                'Pilih supplier; sistem memproses alokasi, approval, dan issue PO Lean',
+                'heroicon-o-bolt',
+                PurchaseRequestResource::getUrl('index'),
+            );
+        }
+
         $this->pushTask(
             $stats,
             $can(SystemPermission::PurchaseRequestAllocate),
-            $purchaseRequests()->whereIn('status', [PurchaseRequestStatus::Approved->value, PurchaseRequestStatus::PartiallyAllocated->value])->count(),
+            $purchaseRequests()
+                ->whereIn('status', [PurchaseRequestStatus::Approved->value, PurchaseRequestStatus::PartiallyAllocated->value])
+                ->when($canLeanBuildOrder, fn (Builder $query): Builder => $query->whereDoesntHave(
+                    'kitchen.organization',
+                    fn (Builder $organizationQuery): Builder => $organizationQuery->where('operational_profile', OperationalProfile::Lean->value),
+                ))
+                ->count(),
             '2. PO — Alokasi Supplier',
             'Mapping item PR ke supplier',
             'heroicon-o-arrows-right-left',
@@ -100,7 +130,13 @@ class ActionQueue extends StatsOverviewWidget
         $this->pushTask(
             $stats,
             $can(SystemPermission::PurchaseOrderCreate),
-            $purchaseRequests()->where('status', PurchaseRequestStatus::FullyAllocated->value)->count(),
+            $purchaseRequests()
+                ->where('status', PurchaseRequestStatus::FullyAllocated->value)
+                ->when($canLeanBuildOrder, fn (Builder $query): Builder => $query->whereDoesntHave(
+                    'kitchen.organization',
+                    fn (Builder $organizationQuery): Builder => $organizationQuery->where('operational_profile', OperationalProfile::Lean->value),
+                ))
+                ->count(),
             '2. PO — Siap Dibuat',
             'PR sudah siap dibuatkan Purchase Order',
             'heroicon-o-document-plus',

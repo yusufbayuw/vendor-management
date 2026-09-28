@@ -4,6 +4,7 @@ namespace App\Filament\Supplier\Widgets;
 
 use App\Enums\DeliveryScheduleStatus;
 use App\Enums\InvoiceStatus;
+use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Supplier\Resources\DeliverySchedules\DeliveryScheduleResource;
@@ -55,7 +56,10 @@ class ActionQueue extends StatsOverviewWidget
         $this->pushTask(
             $stats,
             $can(SystemPermission::PurchaseOrderAcknowledge),
-            $purchaseOrders()->where('status', PurchaseOrderStatus::Issued->value)->count(),
+            $purchaseOrders()
+                ->where('status', PurchaseOrderStatus::Issued->value)
+                ->whereHas('kitchen.organization', fn (Builder $query): Builder => $query->where('operational_profile', '!=', OperationalProfile::Lean->value))
+                ->count(),
             '2. PO — Perlu Konfirmasi',
             'Konfirmasi Purchase Order baru',
             'heroicon-o-inbox-arrow-down',
@@ -65,7 +69,19 @@ class ActionQueue extends StatsOverviewWidget
         $this->pushTask(
             $stats,
             $can(SystemPermission::DeliveryManage),
-            $purchaseOrders()->whereIn('status', [PurchaseOrderStatus::Acknowledged->value, PurchaseOrderStatus::PartiallyDelivered->value])->count(),
+            $purchaseOrders()
+                ->where(function (Builder $query): void {
+                    $query->whereIn('status', [
+                        PurchaseOrderStatus::Acknowledged->value,
+                        PurchaseOrderStatus::Scheduled->value,
+                        PurchaseOrderStatus::PartiallyDelivered->value,
+                    ])->orWhere(function (Builder $leanQuery): void {
+                        $leanQuery
+                            ->where('status', PurchaseOrderStatus::Issued->value)
+                            ->whereHas('kitchen.organization', fn (Builder $organizationQuery): Builder => $organizationQuery->where('operational_profile', OperationalProfile::Lean->value));
+                    });
+                })
+                ->count(),
             '3. Delivery — Jadwalkan',
             'Buat atau lanjutkan jadwal pengiriman',
             'heroicon-o-calendar-days',

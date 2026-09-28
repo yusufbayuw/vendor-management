@@ -7,6 +7,7 @@ use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Filament\Supplier\Resources\Invoices\InvoiceResource;
+use App\Models\Invoice;
 use App\Models\PurchaseOrder;
 use DomainException;
 use Filament\Actions\Action;
@@ -17,6 +18,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ManageRecords;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Set;
 
 class ManageInvoices extends ManageRecords
 {
@@ -30,7 +32,32 @@ class ManageInvoices extends ManageRecords
                 ->schema([
                     Section::make('Tagihan')
                         ->schema([
-                            Select::make('purchase_order_id')->label('PO')->options(fn () => $this->poOptions())->searchable()->required(),
+                            Select::make('purchase_order_id')
+                                ->label('PO')
+                                ->options(fn () => $this->poOptions())
+                                ->searchable()
+                                ->live()
+                                ->afterStateUpdated(function (Set $set, mixed $state): void {
+                                    if (blank($state)) {
+                                        return;
+                                    }
+
+                                    $po = PurchaseOrder::query()->find($state);
+                                    if ($po === null) {
+                                        return;
+                                    }
+
+                                    $lastTerm = Invoice::query()
+                                        ->where('supplier_id', $po->supplier_id)
+                                        ->whereNot('purchase_order_id', $po->getKey())
+                                        ->latest('id')
+                                        ->value('payment_term_days');
+
+                                    if ($lastTerm !== null) {
+                                        $set('payment_term_days', (int) $lastTerm);
+                                    }
+                                })
+                                ->required(),
                             TextInput::make('supplier_invoice_number')->label('Nomor Invoice Supplier')->required()->maxLength(255),
                             DatePicker::make('invoice_date')->label('Tanggal Invoice')->native(false)->default(today())->required(),
                             FileUpload::make('invoice_file')->label('File Invoice')->disk('local')->directory('invoices')->visibility('private')

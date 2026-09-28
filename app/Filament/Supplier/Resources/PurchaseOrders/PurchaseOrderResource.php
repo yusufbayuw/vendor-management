@@ -70,12 +70,21 @@ class PurchaseOrderResource extends Resource
                     || ($record->status === PurchaseOrderStatus::Issued && static::isLean($record))
                 ) && static::allowed($record, SystemPermission::DeliveryManage))
                 ->schema(fn (PurchaseOrder $record): array => [
-                    DateTimePicker::make('planned_delivery_at')->label('Jadwal')->native(false)->seconds(false)->required(),
+                    DateTimePicker::make('planned_delivery_at')
+                        ->label('Jadwal')
+                        ->native(false)
+                        ->seconds(false)
+                        ->default(static::defaultPlannedDeliveryAt($record))
+                        ->required(),
                     Repeater::make('items')->label('Item')
                         ->schema([
                             Select::make('item_id')->label('Item PO')->options(static::itemOptions($record))->searchable()->required(),
                             TextInput::make('qty')->label('Jumlah')->numeric()->minValue(0.0001)->required(),
-                        ])->columns(2)->minItems(1)->defaultItems(1)->required(),
+                        ])
+                        ->columns(2)
+                        ->default(static::scheduleDefaults($record))
+                        ->minItems(1)
+                        ->required(),
                     Textarea::make('notes')->label('Catatan')->rows(3),
                 ])->action(function (PurchaseOrder $record, array $data): void {
                     static::run(function () use ($record, $data): void {
@@ -163,6 +172,30 @@ class PurchaseOrderResource extends Resource
     private static function supplierIds(): array
     {
         return app(SupplierPortalAccessService::class)->activeSupplierIds(auth()->user());
+    }
+
+    private static function defaultPlannedDeliveryAt(PurchaseOrder $po): mixed
+    {
+        if ($po->delivery_start !== null && $po->delivery_start->isFuture()) {
+            return $po->delivery_start->copy()->setTime(8, 0);
+        }
+
+        return now()->addDay()->setTime(8, 0)->startOfMinute();
+    }
+
+    /** @return array<int, array{item_id:int, qty:float}> */
+    private static function scheduleDefaults(PurchaseOrder $po): array
+    {
+        return PurchaseOrderItem::query()
+            ->where('purchase_order_id', $po->getKey())
+            ->get()
+            ->map(static fn (PurchaseOrderItem $item): array => [
+                'item_id' => $item->getKey(),
+                'qty' => static::remaining($item),
+            ])
+            ->filter(static fn (array $row): bool => $row['qty'] > 0.0001)
+            ->values()
+            ->all();
     }
 
     private static function itemOptions(PurchaseOrder $po): array
