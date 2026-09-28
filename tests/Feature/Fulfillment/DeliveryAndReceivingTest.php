@@ -10,6 +10,7 @@ use App\Actions\Fulfillment\InspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordAndInspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordGoodsReceiptAction;
 use App\Enums\ApprovalDecisionSource;
+use App\Enums\DeliveryScheduleStatus;
 use App\Enums\DiscrepancyStatus;
 use App\Enums\DiscrepancyType;
 use App\Enums\GoodsReceiptStatus;
@@ -74,7 +75,7 @@ class DeliveryAndReceivingTest extends TestCase
             $actor,
         );
 
-        $this->assertSame(\App\Enums\DeliveryScheduleStatus::Confirmed, $schedule->refresh()->status);
+        $this->assertSame(DeliveryScheduleStatus::Confirmed, $schedule->refresh()->status);
         $this->assertNotNull($schedule->confirmed_at);
     }
 
