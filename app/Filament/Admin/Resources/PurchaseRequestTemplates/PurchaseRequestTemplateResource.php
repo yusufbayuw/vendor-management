@@ -39,9 +39,9 @@ class PurchaseRequestTemplateResource extends Resource
 
     protected static ?string $pluralModelLabel = 'template PR';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Procurement';
+    protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 70;
 
     public static function form(Schema $schema): Schema
     {
