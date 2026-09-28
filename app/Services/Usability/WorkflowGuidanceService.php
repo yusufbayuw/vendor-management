@@ -4,6 +4,7 @@ namespace App\Services\Usability;
 
 use App\Enums\DeliveryScheduleStatus;
 use App\Enums\InvoiceStatus;
+use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\PurchaseRequestStatus;
 use App\Enums\SystemPermission;
@@ -17,6 +18,14 @@ class WorkflowGuidanceService
 {
     public function purchaseRequest(PurchaseRequest $request, ?User $user): string
     {
+        $request->loadMissing('kitchen.organization');
+        $lean = $request->kitchen?->organization?->operational_profile === OperationalProfile::Lean;
+        $canBuildLeanOrder = $lean
+            && $this->can($user, SystemPermission::PurchaseRequestAllocate)
+            && $this->can($user, SystemPermission::PurchaseOrderCreate)
+            && $this->can($user, SystemPermission::PurchaseOrderApprove)
+            && $this->can($user, SystemPermission::PurchaseOrderIssue);
+
         return match ($request->status) {
             PurchaseRequestStatus::Draft => $this->can($user, SystemPermission::PurchaseRequestSubmit)
                 ? 'Lengkapi lalu ajukan PR'
@@ -24,11 +33,13 @@ class WorkflowGuidanceService
             PurchaseRequestStatus::Submitted, PurchaseRequestStatus::UnderReview => $this->can($user, SystemPermission::PurchaseRequestApprove)
                 ? 'Periksa lalu setujui atau tolak'
                 : 'Menunggu keputusan approval',
-            PurchaseRequestStatus::Approved, PurchaseRequestStatus::PartiallyAllocated => $this->can($user, SystemPermission::PurchaseRequestAllocate)
-                ? 'Alokasikan supplier'
-                : 'Menunggu alokasi supplier',
+            PurchaseRequestStatus::Approved, PurchaseRequestStatus::PartiallyAllocated => $canBuildLeanOrder
+                ? 'Buat Pesanan'
+                : ($this->can($user, SystemPermission::PurchaseRequestAllocate)
+                    ? 'Alokasikan supplier'
+                    : 'Menunggu alokasi supplier'),
             PurchaseRequestStatus::FullyAllocated => $this->can($user, SystemPermission::PurchaseOrderCreate)
-                ? 'Buat & terbitkan Purchase Order'
+                ? ($lean ? 'Buat Pesanan' : 'Buat Purchase Order')
                 : 'Menunggu pembuatan PO',
             PurchaseRequestStatus::PoGenerated => 'Pantau Purchase Order',
             PurchaseRequestStatus::Closed => 'Selesai',
@@ -73,10 +84,15 @@ class WorkflowGuidanceService
 
     public function supplierPurchaseOrder(PurchaseOrder $order, ?User $user): string
     {
+        $order->loadMissing('kitchen.organization');
+        $lean = $order->kitchen?->organization?->operational_profile === OperationalProfile::Lean;
+
         return match ($order->status) {
-            PurchaseOrderStatus::Issued => $this->can($user, SystemPermission::PurchaseOrderAcknowledge)
-                ? 'Konfirmasi Purchase Order'
-                : 'Menunggu konfirmasi supplier',
+            PurchaseOrderStatus::Issued => $lean && $this->can($user, SystemPermission::DeliveryManage)
+                ? 'Jadwalkan pengiriman — PO dikonfirmasi otomatis'
+                : ($this->can($user, SystemPermission::PurchaseOrderAcknowledge)
+                    ? 'Konfirmasi Purchase Order'
+                    : 'Menunggu konfirmasi supplier'),
             PurchaseOrderStatus::Acknowledged => $this->can($user, SystemPermission::DeliveryManage)
                 ? 'Buat jadwal pengiriman'
                 : 'Menunggu jadwal pengiriman',
