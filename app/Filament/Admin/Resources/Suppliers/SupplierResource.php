@@ -7,9 +7,11 @@ use App\Actions\Supplier\ApproveSupplierAction;
 use App\Actions\Supplier\RequestSupplierRevisionAction;
 use App\Actions\Supplier\StartSupplierReviewAction;
 use App\Actions\Supplier\SuspendSupplierAction;
+use App\Enums\SupplierDocumentStatus;
 use App\Enums\SupplierManagementMode;
 use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
+use App\Enums\VerificationStatus;
 use App\Filament\Admin\Resources\Suppliers\Pages\ManageSuppliers;
 use App\Models\Supplier;
 use App\Services\Access\UserAccessService;
@@ -206,14 +208,14 @@ class SupplierResource extends Resource
                             ->content(static fn (): string => sprintf(
                                 '%d total · %d terverifikasi',
                                 $record->documents()->count(),
-                                $record->documents()->where('status', \App\Enums\SupplierDocumentStatus::Verified->value)->count(),
+                                $record->documents()->where('status', SupplierDocumentStatus::Verified->value)->count(),
                             )),
                         Placeholder::make('review_bank')
                             ->label('Rekening')
                             ->content(static fn (): string => sprintf(
                                 '%d total · %d terverifikasi',
                                 $record->bankAccounts()->count(),
-                                $record->bankAccounts()->where('verification_status', \App\Enums\VerificationStatus::Verified->value)->count(),
+                                $record->bankAccounts()->where('verification_status', VerificationStatus::Verified->value)->count(),
                             )),
                         Placeholder::make('review_products')
                             ->label('Produk')
