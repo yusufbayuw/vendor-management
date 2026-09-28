@@ -38,11 +38,11 @@ class PaymentResource extends Resource
 {
     protected static ?string $model = Payment::class;
 
-    protected static ?string $navigationLabel = 'Pembayaran';
+    protected static ?string $navigationLabel = '6. Payment';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Finance';
+    protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
 
-    protected static ?int $navigationSort = 20;
+    protected static ?int $navigationSort = 60;
 
     public static function table(Table $table): Table
     {

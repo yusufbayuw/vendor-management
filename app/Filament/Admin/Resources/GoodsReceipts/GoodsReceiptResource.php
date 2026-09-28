@@ -37,15 +37,15 @@ class GoodsReceiptResource extends Resource
 {
     protected static ?string $model = GoodsReceipt::class;
 
-    protected static ?string $navigationLabel = 'Penerimaan Barang';
+    protected static ?string $navigationLabel = '4. Receiving';
 
     protected static ?string $modelLabel = 'penerimaan barang';
 
     protected static ?string $pluralModelLabel = 'penerimaan barang';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Fulfillment';
+    protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
 
-    protected static ?int $navigationSort = 20;
+    protected static ?int $navigationSort = 40;
 
     public static function table(Table $table): Table
     {

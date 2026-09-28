@@ -44,15 +44,15 @@ class InvoiceResource extends Resource
 {
     protected static ?string $model = Invoice::class;
 
-    protected static ?string $navigationLabel = 'Invoice';
+    protected static ?string $navigationLabel = '5. Invoice';
 
     protected static ?string $modelLabel = 'invoice';
 
     protected static ?string $pluralModelLabel = 'invoice';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Finance';
+    protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
 
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 50;
 
     public static function table(Table $table): Table
     {
