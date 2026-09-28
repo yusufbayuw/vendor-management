@@ -21,9 +21,9 @@ class RecordAndInspectGoodsReceiptAction
     ) {}
 
     /**
-     * @param array<int, array<string, mixed>> $items
-     * @param array<int, string> $goodsPhotos
-     * @param array<int, string> $weightPhotos
+     * @param  array<int, array<string, mixed>>  $items
+     * @param  array<int, string>  $goodsPhotos
+     * @param  array<int, string>  $weightPhotos
      */
     public function execute(
         DeliverySchedule $schedule,
