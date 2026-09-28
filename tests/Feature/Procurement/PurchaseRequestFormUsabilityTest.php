@@ -20,6 +20,6 @@ class PurchaseRequestFormUsabilityTest extends TestCase
         $this->actingAs($user)
             ->get('/admin/purchase-requests/create')
             ->assertOk()
-            ->assertSee('Otomatis mengikuti satuan default produk. Dapat diubah bila kebutuhan menggunakan satuan lain.');
+            ->assertSee('Terisi otomatis dari satuan default produk bila tersedia.');
     }
 }
