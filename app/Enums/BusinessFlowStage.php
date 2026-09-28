@@ -40,6 +40,18 @@ enum BusinessFlowStage: string
         return $this->order().'. '.$this->label();
     }
 
+    public function next(): ?self
+    {
+        return match ($this) {
+            self::PurchaseRequest => self::PurchaseOrder,
+            self::PurchaseOrder => self::Delivery,
+            self::Delivery => self::Receiving,
+            self::Receiving => self::Invoice,
+            self::Invoice => self::Payment,
+            self::Payment => null,
+        };
+    }
+
     public function description(): string
     {
         return match ($this) {
