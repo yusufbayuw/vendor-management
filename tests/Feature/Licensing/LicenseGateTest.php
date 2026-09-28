@@ -8,6 +8,8 @@ use Tests\TestCase;
 
 class LicenseGateTest extends TestCase
 {
+    protected bool $bypassLicenseMiddleware = false;
+
     protected function setUp(): void
     {
         parent::setUp();
