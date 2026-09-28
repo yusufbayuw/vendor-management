@@ -18,9 +18,9 @@ use UnitEnum;
  */
 class ProcurementReport extends Page
 {
-    protected static ?string $navigationLabel = 'Laporan Procurement';
+    protected static ?string $navigationLabel = 'Laporan Alur Transaksi';
 
-    protected static ?string $title = 'Laporan Procurement';
+    protected static ?string $title = 'Laporan Alur Transaksi';
 
     protected static string|UnitEnum|null $navigationGroup = 'Laporan';
 
@@ -48,7 +48,7 @@ class ProcurementReport extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Laporan mengikuti scope akses user. User SPPG hanya melihat transaksi dapur yang ditugaskan, sedangkan user global melihat seluruh SPPG.';
+        return 'Laporan mengikuti 6 tahap canonical PR → PO → Delivery → Receiving → Invoice → Payment dan tetap menghormati scope akses user.';
     }
 
     public function form(Schema $schema): Schema

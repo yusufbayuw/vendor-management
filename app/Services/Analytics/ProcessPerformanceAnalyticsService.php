@@ -26,6 +26,7 @@ class ProcessPerformanceAnalyticsService
                 'supplier',
                 'kitchen.organization',
                 'purchaseRequest',
+                'deliverySchedules',
                 'goodsReceipts',
                 'invoice.payments',
             ])

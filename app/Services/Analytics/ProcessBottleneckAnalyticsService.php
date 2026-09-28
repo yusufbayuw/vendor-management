@@ -284,6 +284,7 @@ class ProcessBottleneckAnalyticsService
         return $this->historyCache[$cacheKey] = PurchaseOrder::query()
             ->with([
                 'purchaseRequest',
+                'deliverySchedules',
                 'goodsReceipts',
                 'invoice.payments',
             ])

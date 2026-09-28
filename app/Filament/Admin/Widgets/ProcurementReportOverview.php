@@ -22,7 +22,7 @@ class ProcurementReportOverview extends StatsOverviewWidget
 
     protected function getHeading(): ?string
     {
-        return 'Ringkasan Procurement';
+        return 'Ringkasan Procure-to-Pay';
     }
 
     protected function getDescription(): ?string
