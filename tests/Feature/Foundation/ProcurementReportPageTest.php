@@ -24,7 +24,7 @@ class ProcurementReportPageTest extends TestCase
         $this->actingAs($user)
             ->get(route('filament.admin.pages.reports.procurement'))
             ->assertOk()
-            ->assertSee('Laporan Procurement')
+            ->assertSee('Laporan Alur Transaksi')
             ->assertSee('Filter Periode')
             ->assertSee('Terapkan Filter')
             ->assertSee('Export CSV');
