@@ -484,7 +484,7 @@ class PurchaseRequestResource extends Resource
                         );
                     }),
                 Action::make('generateAndIssuePoLean')
-                    ->label('Buat & Terbitkan PO')
+                    ->label('Buat Pesanan')
                     ->color('success')
                     ->icon('heroicon-o-bolt')
                     ->requiresConfirmation()
