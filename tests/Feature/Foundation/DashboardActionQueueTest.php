@@ -40,7 +40,7 @@ class DashboardActionQueueTest extends TestCase
         $this->actingAs($requester)
             ->get('/admin')
             ->assertOk()
-            ->assertSee('PR Draft Saya')
+            ->assertSee('1. PR — Draft Saya')
             ->assertSee('Lengkapi dan ajukan PR');
     }
 
@@ -75,7 +75,7 @@ class DashboardActionQueueTest extends TestCase
         $this->actingAs($supplierUser)
             ->get('/supplier')
             ->assertOk()
-            ->assertSee('PO Perlu Konfirmasi')
+            ->assertSee('2. PO — Perlu Konfirmasi')
             ->assertSee('Konfirmasi Purchase Order baru');
     }
 
@@ -86,7 +86,7 @@ class DashboardActionQueueTest extends TestCase
         $this->actingAs($auditor)
             ->get('/admin')
             ->assertOk()
-            ->assertDontSee('PR Draft Saya')
-            ->assertDontSee('Verifikasi Pembayaran');
+            ->assertDontSee('1. PR — Draft Saya')
+            ->assertDontSee('6. Payment — Verifikasi');
     }
 }
