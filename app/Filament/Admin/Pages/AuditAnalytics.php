@@ -175,7 +175,7 @@ class AuditAnalytics extends Page implements HasTable
 
                         return $stage === null
                             ? $query
-                            : $query->whereIn('auditable_type', $this->metrics()->morphTypesForStage($stage));
+                            : $this->metrics()->applyBusinessStageFilter($query, $stage);
                     }),
                 SelectFilter::make('actor_id')
                     ->label('Actor')

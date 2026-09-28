@@ -5,18 +5,27 @@ namespace App\Services\Workflow;
 use App\Enums\BusinessFlowStage;
 use App\Enums\DeliveryScheduleStatus;
 use App\Enums\GoodsReceiptStatus;
+use App\Enums\GovernanceProcess;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\PurchaseRequestStatus;
+use App\Models\ApprovalAction;
+use App\Models\ApprovalRequest;
 use App\Models\DeliverySchedule;
+use App\Models\DeliveryScheduleItem;
 use App\Models\FulfillmentDiscrepancy;
 use App\Models\GoodsReceipt;
+use App\Models\GoodsReceiptItem;
 use App\Models\Invoice;
 use App\Models\InvoiceAdjustment;
 use App\Models\Payment;
+use App\Models\PurchaseAllocation;
 use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderItem;
+use App\Models\PurchaseOrderResponse;
 use App\Models\PurchaseRequest;
+use App\Models\PurchaseRequestItem;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -83,7 +92,7 @@ class ProcureToPayLifecycleService
     {
         return match (class_basename($type)) {
             'PurchaseRequest', 'PurchaseRequestItem', 'PurchaseAllocation' => BusinessFlowStage::PurchaseRequest,
-            'PurchaseOrder', 'PurchaseOrderItem', 'PurchaseOrderResponse', 'ApprovalRequest', 'ApprovalAction' => BusinessFlowStage::PurchaseOrder,
+            'PurchaseOrder', 'PurchaseOrderItem', 'PurchaseOrderResponse' => BusinessFlowStage::PurchaseOrder,
             'DeliverySchedule', 'DeliveryScheduleItem' => BusinessFlowStage::Delivery,
             'GoodsReceipt', 'GoodsReceiptItem', 'GoodsReceiptAttachment', 'FulfillmentDiscrepancy' => BusinessFlowStage::Receiving,
             'Invoice', 'InvoiceAdjustment' => BusinessFlowStage::Invoice,
@@ -127,10 +136,15 @@ class ProcureToPayLifecycleService
             return $empty;
         }
 
-        $stage = $this->stageForType($entityType);
         $model = $this->findEntity($entityType, $entityId);
 
-        if ($stage === null || $model === null) {
+        if ($model === null) {
+            return $empty;
+        }
+
+        $stage = $this->stageForEntity($model, $entityType);
+
+        if ($stage === null) {
             return $empty;
         }
 
@@ -531,13 +545,51 @@ class ProcureToPayLifecycleService
         };
     }
 
+    private function stageForEntity(Model $model, string $entityType): ?BusinessFlowStage
+    {
+        if ($model instanceof ApprovalAction) {
+            $model->loadMissing('approvalRequest');
+
+            return $model->approvalRequest === null
+                ? null
+                : $this->stageForApprovalRequest($model->approvalRequest);
+        }
+
+        if ($model instanceof ApprovalRequest) {
+            return $this->stageForApprovalRequest($model);
+        }
+
+        return $this->stageForType($entityType);
+    }
+
+    private function stageForApprovalRequest(ApprovalRequest $approval): ?BusinessFlowStage
+    {
+        return match ($approval->process) {
+            GovernanceProcess::PurchaseRequestApproval => BusinessFlowStage::PurchaseRequest,
+            GovernanceProcess::PurchaseOrderApproval => BusinessFlowStage::PurchaseOrder,
+            GovernanceProcess::PurchaseOrderExceptionClosing => BusinessFlowStage::Receiving,
+            GovernanceProcess::InvoiceApproval => BusinessFlowStage::Invoice,
+            GovernanceProcess::PaymentVerification => BusinessFlowStage::Payment,
+            GovernanceProcess::SupplierVerification,
+            GovernanceProcess::SupplierBankAccountChange => null,
+        };
+    }
+
     private function findEntity(string $entityType, int|string $entityId): ?Model
     {
         $class = match (class_basename($entityType)) {
             'PurchaseRequest' => PurchaseRequest::class,
+            'PurchaseRequestItem' => PurchaseRequestItem::class,
+            'PurchaseAllocation' => PurchaseAllocation::class,
             'PurchaseOrder' => PurchaseOrder::class,
+            'PurchaseOrderItem' => PurchaseOrderItem::class,
+            'PurchaseOrderResponse' => PurchaseOrderResponse::class,
+            'ApprovalRequest' => ApprovalRequest::class,
+            'ApprovalAction' => ApprovalAction::class,
             'DeliverySchedule' => DeliverySchedule::class,
+            'DeliveryScheduleItem' => DeliveryScheduleItem::class,
             'GoodsReceipt' => GoodsReceipt::class,
+            'GoodsReceiptItem' => GoodsReceiptItem::class,
             'FulfillmentDiscrepancy' => FulfillmentDiscrepancy::class,
             'Invoice' => Invoice::class,
             'InvoiceAdjustment' => InvoiceAdjustment::class,
@@ -564,9 +616,72 @@ class ProcureToPayLifecycleService
             return [$order, $model];
         }
 
-        if ($model instanceof DeliverySchedule || $model instanceof GoodsReceipt || $model instanceof FulfillmentDiscrepancy) {
+        if ($model instanceof PurchaseRequestItem) {
+            $model->loadMissing('purchaseRequest');
+
+            return [null, $model->purchaseRequest];
+        }
+
+        if ($model instanceof PurchaseAllocation) {
+            $model->loadMissing([
+                'purchaseRequestItem.purchaseRequest',
+                'purchaseOrderItem.purchaseOrder.purchaseRequest',
+            ]);
+
+            $order = $model->purchaseOrderItem?->purchaseOrder;
+            $request = $order?->purchaseRequest ?? $model->purchaseRequestItem?->purchaseRequest;
+
+            return [$order, $request];
+        }
+
+        if ($model instanceof PurchaseOrderItem || $model instanceof PurchaseOrderResponse) {
             $model->loadMissing('purchaseOrder.purchaseRequest');
             $order = $model->purchaseOrder;
+
+            return [$order, $order?->purchaseRequest];
+        }
+
+        if ($model instanceof ApprovalAction) {
+            $model->loadMissing('approvalRequest.approvable');
+
+            return $model->approvalRequest === null
+                ? [null, null]
+                : $this->resolveSpine($model->approvalRequest);
+        }
+
+        if ($model instanceof ApprovalRequest) {
+            $model->loadMissing('approvable');
+            $approvable = $model->approvable;
+
+            return $approvable instanceof Model
+                ? $this->resolveSpine($approvable)
+                : [null, null];
+        }
+
+        if ($model instanceof DeliverySchedule) {
+            $model->loadMissing('purchaseOrder.purchaseRequest');
+            $order = $model->purchaseOrder;
+
+            return [$order, $order?->purchaseRequest];
+        }
+
+        if ($model instanceof DeliveryScheduleItem) {
+            $model->loadMissing('deliverySchedule.purchaseOrder.purchaseRequest');
+            $order = $model->deliverySchedule?->purchaseOrder;
+
+            return [$order, $order?->purchaseRequest];
+        }
+
+        if ($model instanceof GoodsReceipt || $model instanceof FulfillmentDiscrepancy) {
+            $model->loadMissing('purchaseOrder.purchaseRequest');
+            $order = $model->purchaseOrder;
+
+            return [$order, $order?->purchaseRequest];
+        }
+
+        if ($model instanceof GoodsReceiptItem) {
+            $model->loadMissing('goodsReceipt.purchaseOrder.purchaseRequest');
+            $order = $model->goodsReceipt?->purchaseOrder;
 
             return [$order, $order?->purchaseRequest];
         }

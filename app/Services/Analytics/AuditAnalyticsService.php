@@ -4,17 +4,22 @@ namespace App\Services\Analytics;
 
 use App\Enums\AccessScopeType;
 use App\Enums\BusinessFlowStage;
+use App\Enums\GovernanceProcess;
 use App\Models\ApprovalAction;
 use App\Models\ApprovalRequest;
 use App\Models\AuditLog;
 use App\Models\DeliverySchedule;
+use App\Models\DeliveryScheduleItem;
 use App\Models\FulfillmentDiscrepancy;
 use App\Models\GoodsReceipt;
+use App\Models\GoodsReceiptItem;
 use App\Models\GovernancePolicy;
 use App\Models\Invoice;
 use App\Models\InvoiceAdjustment;
 use App\Models\Payment;
 use App\Models\PurchaseAllocation;
+use App\Models\PurchaseOrderItem;
+use App\Models\PurchaseRequestItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\User;
@@ -188,7 +193,14 @@ class AuditAnalyticsService
 
     public function businessStage(AuditLog $log): ?BusinessFlowStage
     {
-        return $this->lifecycle->stageForType($log->auditable_type);
+        $context = $this->lifecycle->contextForEntity(
+            $log->auditable_type,
+            $log->auditable_id,
+        );
+
+        return filled($context['business_stage'])
+            ? BusinessFlowStage::tryFrom((string) $context['business_stage'])
+            : $this->lifecycle->stageForType($log->auditable_type);
     }
 
     public function businessStageLabel(AuditLog $log): string
@@ -224,18 +236,20 @@ class AuditAnalyticsService
         $classes = match ($stage) {
             BusinessFlowStage::PurchaseRequest => [
                 PurchaseRequest::class,
+                PurchaseRequestItem::class,
                 PurchaseAllocation::class,
             ],
             BusinessFlowStage::PurchaseOrder => [
                 PurchaseOrder::class,
-                ApprovalRequest::class,
-                ApprovalAction::class,
+                PurchaseOrderItem::class,
             ],
             BusinessFlowStage::Delivery => [
                 DeliverySchedule::class,
+                DeliveryScheduleItem::class,
             ],
             BusinessFlowStage::Receiving => [
                 GoodsReceipt::class,
+                GoodsReceiptItem::class,
                 FulfillmentDiscrepancy::class,
             ],
             BusinessFlowStage::Invoice => [
@@ -251,6 +265,54 @@ class AuditAnalyticsService
             static fn (string $class): string => (new $class)->getMorphClass(),
             $classes,
         );
+    }
+
+    public function applyBusinessStageFilter(Builder $query, BusinessFlowStage $stage): Builder
+    {
+        $processes = match ($stage) {
+            BusinessFlowStage::PurchaseRequest => [GovernanceProcess::PurchaseRequestApproval->value],
+            BusinessFlowStage::PurchaseOrder => [GovernanceProcess::PurchaseOrderApproval->value],
+            BusinessFlowStage::Delivery => [],
+            BusinessFlowStage::Receiving => [GovernanceProcess::PurchaseOrderExceptionClosing->value],
+            BusinessFlowStage::Invoice => [GovernanceProcess::InvoiceApproval->value],
+            BusinessFlowStage::Payment => [GovernanceProcess::PaymentVerification->value],
+        };
+
+        $approvalRequestMorph = (new ApprovalRequest)->getMorphClass();
+        $approvalActionMorph = (new ApprovalAction)->getMorphClass();
+
+        return $query->where(function (Builder $stageQuery) use (
+            $stage,
+            $processes,
+            $approvalRequestMorph,
+            $approvalActionMorph,
+        ): void {
+            $stageQuery->whereIn('auditable_type', $this->morphTypesForStage($stage));
+
+            if ($processes === []) {
+                return;
+            }
+
+            $stageQuery
+                ->orWhere(function (Builder $approvalQuery) use ($approvalRequestMorph, $processes): void {
+                    $approvalQuery
+                        ->where('auditable_type', $approvalRequestMorph)
+                        ->whereIn(
+                            'auditable_id',
+                            ApprovalRequest::query()->whereIn('process', $processes)->select('id'),
+                        );
+                })
+                ->orWhere(function (Builder $actionQuery) use ($approvalActionMorph, $processes): void {
+                    $actionQuery
+                        ->where('auditable_type', $approvalActionMorph)
+                        ->whereIn(
+                            'auditable_id',
+                            ApprovalAction::query()
+                                ->whereHas('approvalRequest', fn (Builder $query): Builder => $query->whereIn('process', $processes))
+                                ->select('id'),
+                        );
+                });
+        });
     }
 
     /** @return Collection<int, string> */
