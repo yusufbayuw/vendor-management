@@ -3,6 +3,7 @@
 namespace Tests\Feature\Payment;
 
 use App\Actions\Payment\AttachPaymentProofAction;
+use App\Actions\Payment\CreateAttachAndVerifyPaymentAction;
 use App\Actions\Payment\CreatePaymentAction;
 use App\Actions\Payment\SubmitAndVerifyPaymentAction;
 use App\Actions\Payment\SubmitPaymentForVerificationAction;
@@ -93,6 +94,30 @@ class PaymentFlowTest extends TestCase
             'is_self_approval' => true,
             'decision_source' => ApprovalDecisionSource::ExplicitSelfApproval->value,
         ]);
+    }
+
+    public function test_lean_payment_can_be_created_proved_and_verified_in_one_action(): void
+    {
+        [$invoice, $actor] = $this->makeApprovedInvoice(10_000_000, OperationalProfile::Lean);
+        $actor->givePermissionTo([
+            Permission::findOrCreate(SystemPermission::PaymentCreate->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PaymentVerify->value, 'web'),
+        ]);
+
+        $payment = app(CreateAttachAndVerifyPaymentAction::class)->execute(
+            $invoice,
+            10_000_000,
+            PaymentMethod::BankTransfer,
+            $actor,
+            $this->storeProof('lean-composite.pdf'),
+            today(),
+            null,
+            'REF-LEAN-001',
+        );
+
+        $this->assertSame(PaymentStatus::Verified, $payment->refresh()->status);
+        $this->assertSame(InvoiceStatus::Paid, $invoice->refresh()->status);
+        $this->assertSame(PurchaseOrderStatus::Closed, $invoice->purchaseOrder->refresh()->status);
     }
 
     public function test_partial_payment_keeps_invoice_open(): void

@@ -4,12 +4,15 @@ namespace Tests\Feature\Fulfillment;
 
 use App\Actions\Fulfillment\ClosePurchaseOrderWithExceptionAction;
 use App\Actions\Fulfillment\ConfirmDeliveryScheduleAction;
+use App\Actions\Fulfillment\CreateAndConfirmDeliveryScheduleAction;
 use App\Actions\Fulfillment\CreateDeliveryScheduleAction;
 use App\Actions\Fulfillment\InspectGoodsReceiptAction;
+use App\Actions\Fulfillment\RecordAndInspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordGoodsReceiptAction;
 use App\Enums\ApprovalDecisionSource;
 use App\Enums\DiscrepancyStatus;
 use App\Enums\DiscrepancyType;
+use App\Enums\GoodsReceiptStatus;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SupplierStatus;
@@ -55,6 +58,51 @@ class DeliveryAndReceivingTest extends TestCase
 
         $this->expectException(DomainException::class);
         app(CreateDeliveryScheduleAction::class)->execute($po->refresh(), [$poItem->id => 21], now()->addDays(2), $actor);
+    }
+
+    public function test_lean_delivery_schedule_is_created_and_confirmed_in_one_action(): void
+    {
+        [$po, $poItem, $actor] = $this->makeAcknowledgedPo(100, OperationalProfile::Lean);
+        $actor->givePermissionTo(
+            Permission::findOrCreate(SystemPermission::DeliveryManage->value, 'web'),
+        );
+
+        $schedule = app(CreateAndConfirmDeliveryScheduleAction::class)->execute(
+            $po,
+            [$poItem->id => 100],
+            now()->addDay(),
+            $actor,
+        );
+
+        $this->assertSame(\App\Enums\DeliveryScheduleStatus::Confirmed, $schedule->refresh()->status);
+        $this->assertNotNull($schedule->confirmed_at);
+    }
+
+    public function test_lean_receiving_and_qc_can_be_completed_in_one_action(): void
+    {
+        [$po, $poItem, $actor] = $this->makeAcknowledgedPo(100, OperationalProfile::Lean);
+        $actor->givePermissionTo([
+            Permission::findOrCreate(SystemPermission::GoodsReceiptCreate->value, 'web'),
+            Permission::findOrCreate(SystemPermission::GoodsReceiptInspect->value, 'web'),
+        ]);
+
+        $schedule = app(CreateDeliveryScheduleAction::class)->execute($po, [$poItem->id => 100], now()->addDay(), $actor);
+        app(ConfirmDeliveryScheduleAction::class)->execute($schedule, $actor);
+
+        $receipt = app(RecordAndInspectGoodsReceiptAction::class)->execute(
+            $schedule->refresh(),
+            [[
+                'delivery_schedule_item_id' => $schedule->items->first()->id,
+                'received_qty' => 100,
+                'rejected_qty' => 0,
+                'condition' => 'baik',
+            ]],
+            $actor,
+        );
+
+        $this->assertSame(GoodsReceiptStatus::Completed, $receipt->refresh()->status);
+        $this->assertSame(100.0, (float) $poItem->refresh()->accepted_qty);
+        $this->assertSame(PurchaseOrderStatus::Fulfilled, $po->refresh()->status);
     }
 
     public function test_received_goods_are_separated_from_qc_acceptance_and_rejection(): void

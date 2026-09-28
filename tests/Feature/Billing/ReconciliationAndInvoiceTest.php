@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Actions\Billing\CreateAndSubmitInvoiceAction;
 use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
 use App\Actions\Fulfillment\ApprovePurchaseOrderExceptionCloseAction;
 use App\Actions\Fulfillment\RequestPurchaseOrderExceptionCloseAction;
 use App\Enums\DiscrepancyStatus;
 use App\Enums\DiscrepancyType;
+use App\Enums\InvoiceStatus;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SupplierStatus;
@@ -48,6 +50,22 @@ class ReconciliationAndInvoiceTest extends TestCase
             ->where('type', DiscrepancyType::UnderDelivery->value)
             ->where('status', DiscrepancyStatus::Resolved->value)
             ->exists());
+    }
+
+    public function test_lean_supplier_can_create_and_submit_invoice_in_one_action(): void
+    {
+        [$po, $actor] = $this->makePo(PurchaseOrderStatus::Fulfilled, 500, 500);
+
+        $invoice = app(CreateAndSubmitInvoiceAction::class)->execute(
+            $po,
+            $actor,
+            'SUP-INV-LEAN-001',
+            today(),
+            7,
+        );
+
+        $this->assertSame(InvoiceStatus::Submitted, $invoice->refresh()->status);
+        $this->assertNotNull($invoice->issued_at);
     }
 
     public function test_invoice_total_remains_po_total_after_exception_closure(): void

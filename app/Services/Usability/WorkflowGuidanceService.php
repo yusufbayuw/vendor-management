@@ -28,7 +28,7 @@ class WorkflowGuidanceService
                 ? 'Alokasikan supplier'
                 : 'Menunggu alokasi supplier',
             PurchaseRequestStatus::FullyAllocated => $this->can($user, SystemPermission::PurchaseOrderCreate)
-                ? 'Generate Purchase Order'
+                ? 'Buat & terbitkan Purchase Order'
                 : 'Menunggu pembuatan PO',
             PurchaseRequestStatus::PoGenerated => 'Pantau Purchase Order',
             PurchaseRequestStatus::Closed => 'Selesai',

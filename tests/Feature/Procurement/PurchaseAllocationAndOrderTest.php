@@ -3,9 +3,13 @@
 namespace Tests\Feature\Procurement;
 
 use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
+use App\Actions\Procurement\CreateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\GeneratePurchaseOrdersAction;
 use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
+use App\Enums\OperationalProfile;
+use App\Enums\PurchaseOrderStatus;
 use App\Enums\PurchaseRequestStatus;
+use App\Enums\SystemPermission;
 use App\Models\Organization;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -18,6 +22,7 @@ use App\Models\User;
 use DomainException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class PurchaseAllocationAndOrderTest extends TestCase
@@ -81,6 +86,32 @@ class PurchaseAllocationAndOrderTest extends TestCase
         app(AllocatePurchaseRequestItemAction::class)->execute($item, $supplier, 21, 40_000, $actor);
     }
 
+    public function test_lean_composite_action_generates_approves_and_issues_po(): void
+    {
+        [$request, $items, $actor] = $this->makeApprovedPurchaseRequest([100], OperationalProfile::Lean);
+
+        $actor->givePermissionTo([
+            Permission::findOrCreate(SystemPermission::PurchaseOrderCreate->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PurchaseOrderApprove->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PurchaseOrderIssue->value, 'web'),
+        ]);
+
+        app(AllocatePurchaseRequestItemAction::class)->execute(
+            $items->first(),
+            $this->supplier('SUP-LEAN'),
+            100,
+            40_000,
+            $actor,
+        );
+
+        $orders = app(CreateAndIssuePurchaseOrdersAction::class)->execute($request->refresh(), $actor);
+
+        $this->assertCount(1, $orders);
+        $this->assertSame(PurchaseOrderStatus::Issued, $orders->first()->refresh()->status);
+        $this->assertNotNull($orders->first()->approved_at);
+        $this->assertNotNull($orders->first()->issued_at);
+    }
+
     public function test_po_generation_is_idempotent(): void
     {
         [$request, $items, $actor] = $this->makeApprovedPurchaseRequest([100]);
@@ -101,10 +132,10 @@ class PurchaseAllocationAndOrderTest extends TestCase
     }
 
     /** @return array{PurchaseRequest, Collection<int, PurchaseRequestItem>, User} */
-    private function makeApprovedPurchaseRequest(array $quantities): array
+    private function makeApprovedPurchaseRequest(array $quantities, OperationalProfile $profile = OperationalProfile::Standard): array
     {
         $actor = User::factory()->create();
-        $organization = Organization::query()->create(['code' => fake()->unique()->bothify('ORG-###'), 'name' => 'Organisasi']);
+        $organization = Organization::query()->create(['code' => fake()->unique()->bothify('ORG-###'), 'name' => 'Organisasi', 'operational_profile' => $profile]);
         $kitchen = SppgKitchen::query()->create([
             'organization_id' => $organization->id,
             'code' => fake()->unique()->bothify('SPPG-###'),
