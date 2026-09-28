@@ -7,6 +7,7 @@ use App\Filament\Pages\Auth\Login;
 use App\Filament\Supplier\Pages\Auth\Register;
 use App\Filament\Supplier\Widgets\SupplierOnboardingOverview;
 use App\Filament\Supplier\Widgets\SupplierOverview;
+use App\Http\Middleware\EnsureLicenseIsValid;
 use App\Http\Middleware\EnsureSupplierPhoneIsVerified;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -84,7 +85,7 @@ class SupplierPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-                \App\Http\Middleware\EnsureLicenseIsValid::class,
+                EnsureLicenseIsValid::class,
             ])
             ->authMiddleware([
                 Authenticate::class,
