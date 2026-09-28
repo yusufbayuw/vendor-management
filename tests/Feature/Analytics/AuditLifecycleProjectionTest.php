@@ -77,6 +77,6 @@ class AuditLifecycleProjectionTest extends TestCase
         $service = app(AuditAnalyticsService::class);
 
         $this->assertSame('1. PR', $service->businessStageLabel($log));
-        $this->assertSame($order->number, $service->transactionReference($log));
+        $this->assertSame($request->number, $service->transactionReference($log));
     }
 }
