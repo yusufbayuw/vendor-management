@@ -3,23 +3,15 @@
 namespace App\Filament\Supplier\Widgets;
 
 use App\Enums\BusinessFlowStage;
-use App\Enums\DeliveryScheduleStatus;
-use App\Enums\GoodsReceiptStatus;
-use App\Enums\InvoiceStatus;
-use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
 use App\Filament\Supplier\Resources\DeliverySchedules\DeliveryScheduleResource;
 use App\Filament\Supplier\Resources\Invoices\InvoiceResource;
 use App\Filament\Supplier\Resources\PurchaseOrders\PurchaseOrderResource;
-use App\Models\DeliverySchedule;
-use App\Models\GoodsReceipt;
-use App\Models\Invoice;
-use App\Models\Payment;
 use App\Models\PurchaseOrder;
 use App\Services\Supplier\SupplierPortalAccessService;
+use App\Services\Workflow\ProcureToPayLifecycleService;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
-use Illuminate\Database\Eloquent\Builder;
 
 class ProcureToPayFlow extends StatsOverviewWidget
 {
@@ -43,53 +35,41 @@ class ProcureToPayFlow extends StatsOverviewWidget
         }
 
         $supplierIds = app(SupplierPortalAccessService::class)->activeSupplierIds($user);
+        $lifecycle = app(ProcureToPayLifecycleService::class);
 
-        $po = PurchaseOrder::query()
+        $counts = collect(BusinessFlowStage::cases())
+            ->mapWithKeys(static fn (BusinessFlowStage $stage): array => [$stage->value => 0])
+            ->all();
+
+        $orders = PurchaseOrder::query()
             ->whereIn('supplier_id', $supplierIds)
-            ->whereNotIn('status', [PurchaseOrderStatus::Closed->value, PurchaseOrderStatus::Cancelled->value])
-            ->count();
+            ->whereNotIn('status', [
+                PurchaseOrderStatus::Closed->value,
+                PurchaseOrderStatus::Cancelled->value,
+            ])
+            ->with(['purchaseRequest', 'deliverySchedules', 'goodsReceipts', 'invoice.payments'])
+            ->get();
 
-        $delivery = DeliverySchedule::query()
-            ->whereHas('purchaseOrder', static fn (Builder $query): Builder => $query->whereIn('supplier_id', $supplierIds))
-            ->whereIn('status', [
-                DeliveryScheduleStatus::Draft->value,
-                DeliveryScheduleStatus::Planned->value,
-                DeliveryScheduleStatus::Confirmed->value,
-                DeliveryScheduleStatus::InTransit->value,
-                DeliveryScheduleStatus::Arrived->value,
-                DeliveryScheduleStatus::PartiallyReceived->value,
-            ])->count();
-
-        $receiving = GoodsReceipt::query()
-            ->whereIn('supplier_id', $supplierIds)
-            ->where('status', GoodsReceiptStatus::PendingInspection->value)
-            ->count();
-
-        $invoice = Invoice::query()
-            ->whereIn('supplier_id', $supplierIds)
-            ->whereNotIn('status', [InvoiceStatus::Paid->value, InvoiceStatus::Cancelled->value])
-            ->count();
-
-        $payment = Payment::query()
-            ->whereHas('invoice', static fn (Builder $query): Builder => $query->whereIn('supplier_id', $supplierIds))
-            ->whereIn('status', [PaymentStatus::Draft->value, PaymentStatus::Submitted->value, PaymentStatus::UnderReview->value])
-            ->count();
+        foreach ($orders as $order) {
+            $counts[$lifecycle->currentStage($order)->value]++;
+        }
 
         return [
             $this->context(BusinessFlowStage::PurchaseRequest, 'SPPG', 'Kebutuhan dibuat oleh SPPG', 'heroicon-o-clipboard-document-list'),
-            $this->actionable(BusinessFlowStage::PurchaseOrder, $po, PurchaseOrderResource::getUrl('index'), 'heroicon-o-document-text'),
-            $this->actionable(BusinessFlowStage::Delivery, $delivery, DeliveryScheduleResource::getUrl('index'), 'heroicon-o-truck'),
-            $this->context(BusinessFlowStage::Receiving, (string) $receiving, 'Diterima dan QC oleh SPPG', 'heroicon-o-check-circle'),
-            $this->actionable(BusinessFlowStage::Invoice, $invoice, InvoiceResource::getUrl('index'), 'heroicon-o-document-currency-dollar'),
-            $this->context(BusinessFlowStage::Payment, (string) $payment, 'Diproses dan diverifikasi pembeli', 'heroicon-o-banknotes'),
+            $this->actionable(BusinessFlowStage::PurchaseOrder, $counts['po'], PurchaseOrderResource::getUrl('index'), 'heroicon-o-document-text'),
+            $this->actionable(BusinessFlowStage::Delivery, $counts['delivery'], DeliveryScheduleResource::getUrl('index'), 'heroicon-o-truck'),
+            $this->context(BusinessFlowStage::Receiving, (string) $counts['receiving'], 'WIP · diterima dan QC oleh SPPG', 'heroicon-o-check-circle'),
+            $this->actionable(BusinessFlowStage::Invoice, $counts['invoice'], InvoiceResource::getUrl('index'), 'heroicon-o-document-text'),
+            $this->context(BusinessFlowStage::Payment, (string) $counts['payment'], 'WIP · diproses pembeli', 'heroicon-o-banknotes'),
         ];
     }
 
     private function actionable(BusinessFlowStage $stage, int $count, string $url, string $icon): Stat
     {
         return Stat::make($stage->navigationLabel(), number_format($count, 0, ',', '.'))
-            ->description($stage->description())
+            ->description('WIP · '.$stage->description())
             ->icon($icon)
+            ->color($count > 0 ? 'warning' : 'success')
             ->url($url);
     }
 
