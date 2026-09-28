@@ -159,6 +159,7 @@ class NotificationDispatchService
             type: $type,
             tag: $tag,
             urgency: in_array($severity, ['warning', 'danger'], true) ? 'high' : 'normal',
+            workflowContext: $workflowContext,
         ));
 
         return $recipients->count();

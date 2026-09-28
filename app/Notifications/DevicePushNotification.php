@@ -16,6 +16,7 @@ class DevicePushNotification extends Notification
         public readonly string $tag,
         public readonly int $ttl = 86400,
         public readonly string $urgency = 'normal',
+        public readonly array $workflowContext = [],
     ) {}
 
     /** @return array<class-string> */
@@ -38,6 +39,7 @@ class DevicePushNotification extends Notification
             ->data([
                 'url' => $this->url,
                 'type' => $this->type,
+                ...$this->workflowContext,
             ])
             ->options([
                 'TTL' => $this->ttl,
