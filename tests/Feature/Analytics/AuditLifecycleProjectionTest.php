@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Analytics;
 
+use App\Enums\BusinessFlowStage;
 use App\Enums\GovernanceProcess;
 use App\Models\ApprovalRequest;
 use App\Models\AuditLog;
@@ -41,7 +42,7 @@ class AuditLifecycleProjectionTest extends TestCase
         $this->assertSame($order->number, $service->transactionReference($log));
         $this->assertContains(
             (new PurchaseOrder)->getMorphClass(),
-            $service->morphTypesForStage(\App\Enums\BusinessFlowStage::PurchaseOrder),
+            $service->morphTypesForStage(BusinessFlowStage::PurchaseOrder),
         );
     }
 
