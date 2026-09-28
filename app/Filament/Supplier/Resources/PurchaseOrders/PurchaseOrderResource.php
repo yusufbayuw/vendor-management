@@ -2,9 +2,11 @@
 
 namespace App\Filament\Supplier\Resources\PurchaseOrders;
 
+use App\Actions\Fulfillment\CreateAndConfirmDeliveryScheduleAction;
 use App\Actions\Fulfillment\CreateDeliveryScheduleAction;
 use App\Actions\Procurement\AcknowledgePurchaseOrderAction;
 use App\Enums\DeliveryScheduleStatus;
+use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Supplier\Resources\PurchaseOrders\Pages\ManagePurchaseOrders;
@@ -82,8 +84,26 @@ class PurchaseOrderResource extends Resource
                             }
                             $items[$id] = (float) ($row['qty'] ?? 0);
                         }
-                        app(CreateDeliveryScheduleAction::class)->execute($record, $items, $data['planned_delivery_at'], auth()->user(), $data['notes'] ?? null);
-                    }, 'Jadwal pengiriman berhasil dibuat.');
+                        if (static::isLean($record)) {
+                            app(CreateAndConfirmDeliveryScheduleAction::class)->execute(
+                                $record,
+                                $items,
+                                $data['planned_delivery_at'],
+                                auth()->user(),
+                                $data['notes'] ?? null,
+                            );
+
+                            return;
+                        }
+
+                        app(CreateDeliveryScheduleAction::class)->execute(
+                            $record,
+                            $items,
+                            $data['planned_delivery_at'],
+                            auth()->user(),
+                            $data['notes'] ?? null,
+                        );
+                    }, 'Jadwal pengiriman berhasil diproses.');
                 }),
         ]);
     }
@@ -122,6 +142,13 @@ class PurchaseOrderResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    private static function isLean(PurchaseOrder $po): bool
+    {
+        $po->loadMissing('kitchen.organization');
+
+        return $po->kitchen?->organization?->operational_profile === OperationalProfile::Lean;
     }
 
     private static function allowed(PurchaseOrder $po, SystemPermission $permission): bool

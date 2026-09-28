@@ -2,7 +2,9 @@
 
 namespace App\Filament\Supplier\Resources\Invoices\Pages;
 
+use App\Actions\Billing\CreateAndSubmitInvoiceAction;
 use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
+use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Filament\Supplier\Resources\Invoices\InvoiceResource;
 use App\Models\PurchaseOrder;
@@ -32,17 +34,34 @@ class ManageInvoices extends ManageRecords
                     FileUpload::make('invoice_file')->label('File Invoice')->disk('local')->directory('invoices')->visibility('private')
                         ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])->maxSize(10240)->required(),
                 ])->action(function (array $data): void {
-                    $po = PurchaseOrder::query()->whereIn('supplier_id', InvoiceResource::supplierIds())->findOrFail($data['purchase_order_id']);
+                    $po = PurchaseOrder::query()->with('kitchen.organization')->whereIn('supplier_id', InvoiceResource::supplierIds())->findOrFail($data['purchase_order_id']);
                     try {
-                        app(CreateInvoiceFromPurchaseOrderAction::class)->execute(
-                            $po,
-                            auth()->user(),
-                            $data['supplier_invoice_number'],
-                            $data['invoice_date'],
-                            (int) $data['payment_term_days'],
-                            $data['invoice_file'],
-                        );
-                        Notification::make()->success()->title('Invoice draft berhasil dibuat.')->send();
+                        $isLean = $po->kitchen?->organization?->operational_profile === OperationalProfile::Lean;
+
+                        if ($isLean) {
+                            app(CreateAndSubmitInvoiceAction::class)->execute(
+                                $po,
+                                auth()->user(),
+                                $data['supplier_invoice_number'],
+                                $data['invoice_date'],
+                                (int) $data['payment_term_days'],
+                                $data['invoice_file'],
+                            );
+                        } else {
+                            app(CreateInvoiceFromPurchaseOrderAction::class)->execute(
+                                $po,
+                                auth()->user(),
+                                $data['supplier_invoice_number'],
+                                $data['invoice_date'],
+                                (int) $data['payment_term_days'],
+                                $data['invoice_file'],
+                            );
+                        }
+
+                        Notification::make()
+                            ->success()
+                            ->title($isLean ? 'Invoice berhasil dibuat dan diajukan.' : 'Invoice draft berhasil dibuat.')
+                            ->send();
                     } catch (DomainException $e) {
                         Notification::make()->danger()->title($e->getMessage())->send();
                     }

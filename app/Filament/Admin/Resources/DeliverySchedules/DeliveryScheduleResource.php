@@ -4,9 +4,11 @@ namespace App\Filament\Admin\Resources\DeliverySchedules;
 
 use App\Actions\Fulfillment\ConfirmDeliveryScheduleAction;
 use App\Actions\Fulfillment\MarkDeliveryInTransitAction;
+use App\Actions\Fulfillment\RecordAndInspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordGoodsReceiptAction;
 use App\Enums\DeliveryScheduleStatus;
 use App\Enums\GoodsReceiptStatus;
+use App\Enums\OperationalProfile;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\DeliverySchedules\Pages\ManageDeliverySchedules;
 use App\Filament\Support\ReferencePreviewModal;
@@ -18,13 +20,17 @@ use App\Services\Access\UserAccessService;
 use App\Services\Files\VendorFileStorage;
 use DomainException;
 use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -125,6 +131,96 @@ class DeliveryScheduleResource extends Resource
                             'Pengiriman ditandai sedang dalam perjalanan.',
                         );
                     }),
+                Action::make('receiveAndInspectLean')
+                    ->label('Terima & Periksa')
+                    ->color('success')
+                    ->icon('heroicon-o-check-badge')
+                    ->visible(static fn (DeliverySchedule $record): bool => static::canLeanReceiveAndInspect($record))
+                    ->schema(static fn (DeliverySchedule $record): array => [
+                        Repeater::make('items')
+                            ->label('Barang diterima & hasil QC')
+                            ->schema([
+                                Hidden::make('delivery_schedule_item_id'),
+                                Placeholder::make('item_label')
+                                    ->label('Item')
+                                    ->content(static fn ($state): string => (string) $state),
+                                TextInput::make('received_qty')
+                                    ->label('Jumlah diterima')
+                                    ->numeric()
+                                    ->minValue(0.0001)
+                                    ->required(),
+                                TextInput::make('rejected_qty')
+                                    ->label('Jumlah ditolak')
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->default(0)
+                                    ->live()
+                                    ->required(),
+                                TextInput::make('condition')->label('Kondisi')->maxLength(100),
+                                TextInput::make('rejection_reason')
+                                    ->label('Alasan ditolak')
+                                    ->maxLength(255)
+                                    ->required(fn (Get $get): bool => (float) ($get('rejected_qty') ?? 0) > 0),
+                                TextInput::make('batch_number')
+                                    ->label('Nomor batch')
+                                    ->maxLength(100)
+                                    ->required(fn (Get $get): bool => static::scheduleItemRuleRequires((int) $get('delivery_schedule_item_id'), 'requires_batch_number')),
+                                DatePicker::make('expiry_date')
+                                    ->label('Kedaluwarsa')
+                                    ->native(false)
+                                    ->required(fn (Get $get): bool => static::scheduleItemRuleRequires((int) $get('delivery_schedule_item_id'), 'requires_expiry_date')),
+                                TextInput::make('temperature')
+                                    ->label('Suhu (°C)')
+                                    ->numeric()
+                                    ->required(fn (Get $get): bool => static::scheduleItemRuleRequires((int) $get('delivery_schedule_item_id'), 'requires_temperature')),
+                                Textarea::make('notes')->label('Catatan QC')->rows(2)->columnSpanFull(),
+                            ])
+                            ->columns(2)
+                            ->default(static::leanReceiptDefaults($record))
+                            ->addable(false)
+                            ->deletable(false)
+                            ->reorderable(false)
+                            ->columnSpanFull(),
+                        FileUpload::make('goods_photos')
+                            ->label('Foto barang / penerimaan')
+                            ->disk(VendorFileStorage::DISK)
+                            ->directory('goods-receipts/lean')
+                            ->visibility('private')
+                            ->multiple()
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                            ->maxFiles(10)
+                            ->maxSize(10240)
+                            ->required(static::scheduleRequiresRule($record, 'requires_photo')),
+                        FileUpload::make('weight_photos')
+                            ->label('Foto hasil timbang')
+                            ->disk(VendorFileStorage::DISK)
+                            ->directory('goods-receipts/lean')
+                            ->visibility('private')
+                            ->multiple()
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                            ->maxFiles(10)
+                            ->maxSize(10240)
+                            ->required(static::scheduleRequiresRule($record, 'requires_weight_photo')),
+                        TextInput::make('supplier_representative')->label('Perwakilan supplier')->maxLength(255),
+                        Textarea::make('receipt_notes')->label('Catatan penerimaan')->rows(3),
+                    ])
+                    ->action(static function (DeliverySchedule $record, array $data): void {
+                        static::requirePermission(SystemPermission::GoodsReceiptCreate);
+                        static::requirePermission(SystemPermission::GoodsReceiptInspect);
+
+                        static::runDomainAction(
+                            fn () => app(RecordAndInspectGoodsReceiptAction::class)->execute(
+                                $record,
+                                $data['items'] ?? [],
+                                auth()->user(),
+                                $data['supplier_representative'] ?? null,
+                                $data['receipt_notes'] ?? null,
+                                (array) ($data['goods_photos'] ?? []),
+                                (array) ($data['weight_photos'] ?? []),
+                            ),
+                            'Barang berhasil diterima dan QC diselesaikan.',
+                        );
+                    }),
                 Action::make('receive')
                     ->label('Terima Barang')
                     ->color('warning')
@@ -133,7 +229,7 @@ class DeliveryScheduleResource extends Resource
                         DeliveryScheduleStatus::InTransit,
                         DeliveryScheduleStatus::Arrived,
                         DeliveryScheduleStatus::PartiallyReceived,
-                    ], true) && static::hasScopedPermission($record, SystemPermission::GoodsReceiptCreate))
+                    ], true) && static::hasScopedPermission($record, SystemPermission::GoodsReceiptCreate) && ! static::canLeanReceiveAndInspect($record))
                     ->schema(static fn (DeliverySchedule $record): array => [
                         Repeater::make('items')
                             ->label('Barang diterima')
@@ -238,6 +334,82 @@ class DeliveryScheduleResource extends Resource
         return $user !== null
             && $user->can($permission->value)
             && app(UserAccessService::class)->canAccessKitchen($user, $record->purchaseOrder->sppg_kitchen_id);
+    }
+
+    private static function canLeanReceiveAndInspect(DeliverySchedule $record): bool
+    {
+        $user = auth()->user();
+
+        if ($user === null || ! in_array($record->status, [
+            DeliveryScheduleStatus::Confirmed,
+            DeliveryScheduleStatus::InTransit,
+            DeliveryScheduleStatus::Arrived,
+            DeliveryScheduleStatus::PartiallyReceived,
+        ], true)) {
+            return false;
+        }
+
+        $record->loadMissing('purchaseOrder.kitchen.organization');
+
+        return $record->purchaseOrder?->kitchen?->organization?->operational_profile === OperationalProfile::Lean
+            && $user->can(SystemPermission::GoodsReceiptCreate->value)
+            && $user->can(SystemPermission::GoodsReceiptInspect->value)
+            && app(UserAccessService::class)->canAccessKitchen($user, $record->purchaseOrder->sppg_kitchen_id);
+    }
+
+    private static function leanReceiptDefaults(DeliverySchedule $record): array
+    {
+        return DeliveryScheduleItem::query()
+            ->where('delivery_schedule_id', $record->getKey())
+            ->with(['purchaseOrderItem.product.procurementRule', 'unit'])
+            ->get()
+            ->filter(static fn (DeliveryScheduleItem $item): bool => static::remainingReceivableQty($item) > 0.0001)
+            ->map(static function (DeliveryScheduleItem $item): array {
+                $remaining = static::remainingReceivableQty($item);
+                $name = $item->purchaseOrderItem?->product_name_snapshot ?? 'Item';
+                $unit = $item->purchaseOrderItem?->unit_name_snapshot ?: $item->unit?->symbol ?: $item->unit?->name;
+
+                return [
+                    'delivery_schedule_item_id' => $item->getKey(),
+                    'item_label' => sprintf('%s — %s %s', $name, static::formatQty($remaining), $unit),
+                    'received_qty' => $remaining,
+                    'rejected_qty' => 0,
+                    'condition' => 'baik',
+                    'rejection_reason' => null,
+                    'batch_number' => null,
+                    'expiry_date' => null,
+                    'temperature' => null,
+                    'notes' => null,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private static function scheduleItemRuleRequires(int $scheduleItemId, string $attribute): bool
+    {
+        if ($scheduleItemId <= 0) {
+            return false;
+        }
+
+        $item = DeliveryScheduleItem::query()
+            ->with('purchaseOrderItem.product.procurementRule')
+            ->find($scheduleItemId);
+
+        return (bool) data_get($item?->purchaseOrderItem?->product?->procurementRule, $attribute, false);
+    }
+
+    private static function scheduleRequiresRule(DeliverySchedule $record, string $attribute): bool
+    {
+        return DeliveryScheduleItem::query()
+            ->where('delivery_schedule_id', $record->getKey())
+            ->with('purchaseOrderItem.product.procurementRule')
+            ->get()
+            ->contains(static fn (DeliveryScheduleItem $item): bool => (bool) data_get(
+                $item->purchaseOrderItem?->product?->procurementRule,
+                $attribute,
+                false,
+            ));
     }
 
     private static function receivableItemOptions(DeliverySchedule $record): array

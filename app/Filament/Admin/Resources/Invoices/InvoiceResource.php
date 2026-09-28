@@ -5,10 +5,14 @@ namespace App\Filament\Admin\Resources\Invoices;
 use App\Actions\Billing\AddInvoiceAdjustmentAction;
 use App\Actions\Billing\ApproveInvoiceAction;
 use App\Actions\Billing\SubmitInvoiceAction;
+use App\Actions\Payment\AttachPaymentProofAction;
+use App\Actions\Payment\CreateAttachAndVerifyPaymentAction;
 use App\Actions\Payment\CreatePaymentAction;
 use App\Enums\InvoiceAdjustmentDirection;
 use App\Enums\InvoiceAdjustmentType;
+use App\Enums\GovernanceProcess;
 use App\Enums\InvoiceStatus;
+use App\Enums\OperationalProfile;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\SystemPermission;
@@ -19,9 +23,12 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\SupplierBankAccount;
 use App\Services\Access\UserAccessService;
+use App\Services\Files\VendorFileStorage;
+use App\Services\Governance\GovernancePolicyService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -133,7 +140,9 @@ class InvoiceResource extends Resource
                         ), 'Keputusan approval invoice berhasil disimpan.');
                     }),
                 Action::make('createPayment')
-                    ->label('Buat Pembayaran')
+                    ->label(static fn (Invoice $record): string => static::canLeanPayAndVerify($record, static::outstandingAmount($record))
+                        ? 'Bayar & Verifikasi'
+                        : 'Buat Pembayaran')
                     ->color('success')
                     ->visible(static fn (Invoice $record): bool => in_array($record->status, [InvoiceStatus::Approved, InvoiceStatus::PartiallyPaid], true) && static::hasScopedPermission($record, SystemPermission::PaymentCreate))
                     ->schema(static fn (Invoice $record): array => [
@@ -143,18 +152,58 @@ class InvoiceResource extends Resource
                         TextInput::make('source_bank_name')->label('Bank sumber')->maxLength(255),
                         Select::make('destination_account_id')->label('Rekening tujuan supplier')->options(static::supplierBankAccountOptions($record))->searchable(),
                         TextInput::make('reference_number')->label('Nomor referensi')->maxLength(255),
+                        FileUpload::make('payment_proof')
+                            ->label('Bukti pembayaran')
+                            ->disk(VendorFileStorage::DISK)
+                            ->directory('payments')
+                            ->visibility('private')
+                            ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+                            ->maxSize(10240)
+                            ->visible(static::isLeanPaymentCandidate($record))
+                            ->required(static::isLeanPaymentCandidate($record)),
                         Textarea::make('notes')->label('Catatan')->rows(3),
+                        Textarea::make('override_reason')
+                            ->label('Alasan override')
+                            ->rows(3)
+                            ->visible(static::isLeanPaymentCandidate($record)),
                     ])
                     ->action(static function (Invoice $record, array $data): void {
                         static::requireScopedPermission($record, SystemPermission::PaymentCreate);
+
                         static::runDomainAction(function () use ($record, $data): void {
                             $destinationAccount = filled($data['destination_account_id'] ?? null)
                                 ? SupplierBankAccount::query()->where('supplier_id', $record->supplier_id)->findOrFail($data['destination_account_id'])
                                 : null;
 
-                            app(CreatePaymentAction::class)->execute(
+                            $amount = (float) $data['amount'];
+                            $proof = filled($data['payment_proof'] ?? null) ? (string) $data['payment_proof'] : null;
+
+                            if (static::canLeanPayAndVerify($record, $amount)) {
+                                if ($proof === null) {
+                                    throw new DomainException('Bukti pembayaran wajib diunggah untuk aksi Bayar & Verifikasi.');
+                                }
+
+                                app(CreateAttachAndVerifyPaymentAction::class)->execute(
+                                    $record,
+                                    $amount,
+                                    PaymentMethod::from($data['payment_method']),
+                                    auth()->user(),
+                                    $proof,
+                                    $data['payment_date'],
+                                    $data['source_bank_name'] ?? null,
+                                    $data['reference_number'] ?? null,
+                                    $destinationAccount,
+                                    $data['notes'] ?? null,
+                                    $data['notes'] ?? null,
+                                    $data['override_reason'] ?? null,
+                                );
+
+                                return;
+                            }
+
+                            $payment = app(CreatePaymentAction::class)->execute(
                                 $record,
-                                (float) $data['amount'],
+                                $amount,
                                 PaymentMethod::from($data['payment_method']),
                                 auth()->user(),
                                 $data['payment_date'],
@@ -163,7 +212,13 @@ class InvoiceResource extends Resource
                                 $destinationAccount,
                                 $data['notes'] ?? null,
                             );
-                        }, 'Draft pembayaran berhasil dibuat.');
+
+                            if ($proof !== null) {
+                                app(AttachPaymentProofAction::class)->execute($payment, $proof, auth()->user());
+                            }
+                        }, static::canLeanPayAndVerify($record, (float) $data['amount'])
+                            ? 'Pembayaran berhasil dibuat dan diverifikasi.'
+                            : 'Draft pembayaran berhasil dibuat.');
                     }),
             ]);
     }
@@ -225,6 +280,36 @@ class InvoiceResource extends Resource
         $user = auth()->user();
 
         return $user !== null && $user->can($permission->value) && app(UserAccessService::class)->canAccessKitchen($user, $record->sppg_kitchen_id);
+    }
+
+    private static function isLeanPaymentCandidate(Invoice $invoice): bool
+    {
+        $user = auth()->user();
+
+        if ($user === null || ! static::hasScopedPermission($invoice, SystemPermission::PaymentCreate)) {
+            return false;
+        }
+
+        $invoice->loadMissing('kitchen.organization');
+
+        return $invoice->kitchen?->organization?->operational_profile === OperationalProfile::Lean
+            && $user->can(SystemPermission::PaymentVerify->value);
+    }
+
+    private static function canLeanPayAndVerify(Invoice $invoice, float $amount): bool
+    {
+        if (! static::isLeanPaymentCandidate($invoice)) {
+            return false;
+        }
+
+        $invoice->loadMissing('kitchen.organization');
+        $policy = app(GovernancePolicyService::class)->snapshot(
+            $invoice->kitchen->organization,
+            GovernanceProcess::PaymentVerification,
+            $amount,
+        );
+
+        return $policy['self_approval_allowed'] && $policy['minimum_approvers'] === 1;
     }
 
     private static function outstandingAmount(Invoice $invoice): float

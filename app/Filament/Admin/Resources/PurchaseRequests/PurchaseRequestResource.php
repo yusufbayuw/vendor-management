@@ -4,11 +4,13 @@ namespace App\Filament\Admin\Resources\PurchaseRequests;
 
 use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
 use App\Actions\Procurement\ApprovePurchaseRequestAction;
+use App\Actions\Procurement\CreateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\CreatePurchaseRequestTemplateFromRequestAction;
 use App\Actions\Procurement\DuplicatePurchaseRequestAction;
 use App\Actions\Procurement\GeneratePurchaseOrdersAction;
 use App\Actions\Procurement\RejectPurchaseRequestAction;
 use App\Actions\Procurement\SubmitPurchaseRequestAction;
+use App\Enums\OperationalProfile;
 use App\Enums\PurchaseRequestStatus;
 use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
@@ -399,11 +401,25 @@ class PurchaseRequestResource extends Resource
                             'Alokasi supplier berhasil disimpan.',
                         );
                     }),
+                Action::make('generateAndIssuePoLean')
+                    ->label('Buat & Terbitkan PO')
+                    ->color('success')
+                    ->icon('heroicon-o-bolt')
+                    ->requiresConfirmation()
+                    ->modalDescription('Sistem akan membuat PO per supplier, menjalankan approval Lean, lalu langsung menerbitkan PO yang memenuhi kebijakan self-approval. PO yang tetap memerlukan approval terpisah akan dibiarkan pada status menunggu approval.')
+                    ->visible(static fn (PurchaseRequest $record): bool => $record->status === PurchaseRequestStatus::FullyAllocated && static::canLeanGenerateAndIssuePo($record))
+                    ->action(static function (PurchaseRequest $record): void {
+                        static::requireScopedPermission($record, SystemPermission::PurchaseOrderCreate);
+                        static::runDomainAction(
+                            fn () => app(CreateAndIssuePurchaseOrdersAction::class)->execute($record, auth()->user()),
+                            'PO berhasil dibuat dan diproses sesuai kebijakan Lean.',
+                        );
+                    }),
                 Action::make('generatePo')
                     ->label('Generate PO')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->visible(static fn (PurchaseRequest $record): bool => $record->status === PurchaseRequestStatus::FullyAllocated && static::canGeneratePo($record))
+                    ->visible(static fn (PurchaseRequest $record): bool => $record->status === PurchaseRequestStatus::FullyAllocated && static::canGeneratePo($record) && ! static::canLeanGenerateAndIssuePo($record))
                     ->action(static function (PurchaseRequest $record): void {
                         static::requireScopedPermission($record, SystemPermission::PurchaseOrderCreate);
                         static::runDomainAction(fn () => app(GeneratePurchaseOrdersAction::class)->execute($record, auth()->user()), 'Purchase order berhasil dibuat per supplier.');
@@ -479,6 +495,22 @@ class PurchaseRequestResource extends Resource
     private static function canAllocate(PurchaseRequest $record): bool
     {
         return static::hasScopedPermission($record, SystemPermission::PurchaseRequestAllocate);
+    }
+
+    private static function canLeanGenerateAndIssuePo(PurchaseRequest $record): bool
+    {
+        $user = auth()->user();
+
+        if ($user === null || ! app(UserAccessService::class)->canAccessKitchen($user, $record->sppg_kitchen_id)) {
+            return false;
+        }
+
+        $record->loadMissing('kitchen.organization');
+
+        return $record->kitchen?->organization?->operational_profile === OperationalProfile::Lean
+            && $user->can(SystemPermission::PurchaseOrderCreate->value)
+            && $user->can(SystemPermission::PurchaseOrderApprove->value)
+            && $user->can(SystemPermission::PurchaseOrderIssue->value);
     }
 
     private static function canGeneratePo(PurchaseRequest $record): bool
