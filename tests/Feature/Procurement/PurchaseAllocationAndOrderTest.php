@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Procurement;
 
+use App\Actions\Procurement\AllocateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
 use App\Actions\Procurement\CreateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\GeneratePurchaseOrdersAction;
@@ -110,6 +111,42 @@ class PurchaseAllocationAndOrderTest extends TestCase
         $this->assertSame(PurchaseOrderStatus::Issued, $orders->first()->refresh()->status);
         $this->assertNotNull($orders->first()->approved_at);
         $this->assertNotNull($orders->first()->issued_at);
+    }
+
+
+
+    public function test_lean_operator_can_allocate_and_issue_purchase_orders_in_one_action(): void
+    {
+        [$request, $items, $actor] = $this->makeApprovedPurchaseRequest([100], OperationalProfile::Lean);
+
+        $actor->givePermissionTo([
+            Permission::findOrCreate(SystemPermission::PurchaseRequestAllocate->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PurchaseOrderCreate->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PurchaseOrderApprove->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PurchaseOrderIssue->value, 'web'),
+        ]);
+
+        $supplier = $this->supplier('SUP-LEAN-ONE');
+
+        $orders = app(AllocateAndIssuePurchaseOrdersAction::class)->execute(
+            $request,
+            [[
+                'purchase_request_item_id' => $items->first()->getKey(),
+                'supplier_id' => $supplier->getKey(),
+                'quantity' => 100,
+                'unit_price' => 12_500,
+                'notes' => null,
+            ]],
+            $actor,
+        );
+
+        $this->assertCount(1, $orders);
+        $this->assertSame(PurchaseOrderStatus::Issued, $orders->first()->refresh()->status);
+        $this->assertSame(PurchaseRequestStatus::PoGenerated, $request->refresh()->status);
+        $this->assertDatabaseHas('purchase_allocations', [
+            'purchase_request_item_id' => $items->first()->getKey(),
+            'supplier_id' => $supplier->getKey(),
+        ]);
     }
 
     public function test_po_generation_is_idempotent(): void

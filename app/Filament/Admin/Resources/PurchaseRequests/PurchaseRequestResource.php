@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\PurchaseRequests;
 
+use App\Actions\Procurement\AllocateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
 use App\Actions\Procurement\ApprovePurchaseRequestAction;
 use App\Actions\Procurement\CreateAndIssuePurchaseOrdersAction;
@@ -68,127 +69,155 @@ class PurchaseRequestResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('template_id')
-                ->label('Gunakan template PR')
-                ->helperText('Opsional. Memuat dapur, item, jumlah, spesifikasi, dan estimasi harga. Tanggal tetap diisi untuk PR baru.')
-                ->options(static function (): array {
-                    $user = auth()->user();
-
-                    if (! $user) {
-                        return [];
-                    }
-
-                    return app(UserAccessService::class)
-                        ->applyKitchenOwnedScope(
-                            PurchaseRequestTemplate::query()
-                                ->where('is_active', true)
-                                ->with('kitchen')
-                                ->orderBy('name'),
-                            $user,
-                        )
-                        ->get()
-                        ->mapWithKeys(static fn (PurchaseRequestTemplate $template): array => [
-                            $template->getKey() => $template->name.' — '.($template->kitchen?->name ?? 'SPPG'),
-                        ])
-                        ->all();
-                })
-                ->searchable()
-                ->preload()
-                ->dehydrated(false)
-                ->visible(static fn (string $operation): bool => $operation === 'create')
-                ->live()
-                ->afterStateUpdated(static function (Set $set, mixed $state): void {
-                    if (blank($state)) {
-                        return;
-                    }
-
-                    $user = auth()->user();
-                    $template = PurchaseRequestTemplate::query()
-                        ->with('items')
-                        ->find($state);
-
-                    if (! $user || ! $template || ! app(UserAccessService::class)->canAccessKitchen($user, $template->sppg_kitchen_id)) {
-                        return;
-                    }
-
-                    $set('sppg_kitchen_id', $template->sppg_kitchen_id);
-                    $set('description', $template->description);
-                    $set('notes', $template->notes);
-                    $set('items', $template->items->map(static fn ($item): array => [
-                        'product_id' => $item->product_id,
-                        'unit_id' => $item->unit_id,
-                        'requested_qty' => $item->requested_qty,
-                        'estimated_unit_price' => $item->estimated_unit_price,
-                        'description' => $item->description,
-                        'quality_specification' => $item->quality_specification,
-                        'notes' => $item->notes,
-                        'preferred_delivery_date' => null,
-                    ])->values()->all());
-                }),
-            Select::make('sppg_kitchen_id')
-                ->label('Dapur SPPG')
-                ->options(static function (): array {
-                    $user = auth()->user();
-
-                    if (! $user) {
-                        return [];
-                    }
-
-                    return app(UserAccessService::class)
-                        ->applyKitchenScope(SppgKitchen::query()->where('is_active', true)->orderBy('name'), $user)
-                        ->pluck('name', 'id')
-                        ->all();
-                })
-                ->searchable()
-                ->required(),
-            DatePicker::make('period_start')->label('Periode mulai')->native(false),
-            DatePicker::make('period_end')->label('Periode selesai')->native(false)->afterOrEqual('period_start'),
-            DatePicker::make('needed_from')->label('Kebutuhan mulai')->native(false),
-            DatePicker::make('needed_until')->label('Kebutuhan sampai')->native(false)->afterOrEqual('needed_from'),
-            Textarea::make('description')->label('Deskripsi kebutuhan')->rows(3)->columnSpanFull(),
-            Textarea::make('notes')->label('Catatan')->rows(3)->columnSpanFull(),
-            Repeater::make('items')
-                ->label('Item Kebutuhan')
-                ->relationship()
+            Section::make('Kebutuhan')
+                ->description('Isi data utama yang diperlukan untuk mengajukan kebutuhan.')
                 ->schema([
-                    MasterDataOptionFactory::product(
-                        Select::make('product_id')
-                            ->label('Produk')
-                            ->options(static fn (): array => Product::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
-                            ->searchable()
-                            ->preload(),
-                    )
+                    Select::make('template_id')
+                        ->label('Gunakan template PR')
+                        ->helperText('Opsional. Memuat dapur, item, jumlah, spesifikasi, dan estimasi harga. Tanggal tetap diisi untuk PR baru.')
+                        ->options(static function (): array {
+                            $user = auth()->user();
+
+                            if (! $user) {
+                                return [];
+                            }
+
+                            return app(UserAccessService::class)
+                                ->applyKitchenOwnedScope(
+                                    PurchaseRequestTemplate::query()
+                                        ->where('is_active', true)
+                                        ->with('kitchen')
+                                        ->orderBy('name'),
+                                    $user,
+                                )
+                                ->get()
+                                ->mapWithKeys(static fn (PurchaseRequestTemplate $template): array => [
+                                    $template->getKey() => $template->name.' — '.($template->kitchen?->name ?? 'SPPG'),
+                                ])
+                                ->all();
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->dehydrated(false)
+                        ->visible(static fn (string $operation): bool => $operation === 'create')
                         ->live()
                         ->afterStateUpdated(static function (Set $set, mixed $state): void {
-                            $unitId = filled($state)
-                                ? Product::query()->whereKey($state)->value('default_unit_id')
-                                : null;
+                            if (blank($state)) {
+                                return;
+                            }
 
-                            $set('unit_id', $unitId);
+                            $user = auth()->user();
+                            $template = PurchaseRequestTemplate::query()
+                                ->with('items')
+                                ->find($state);
+
+                            if (! $user || ! $template || ! app(UserAccessService::class)->canAccessKitchen($user, $template->sppg_kitchen_id)) {
+                                return;
+                            }
+
+                            $set('sppg_kitchen_id', $template->sppg_kitchen_id);
+                            $set('description', $template->description);
+                            $set('notes', $template->notes);
+                            $set('items', $template->items->map(static fn ($item): array => [
+                                'product_id' => $item->product_id,
+                                'unit_id' => $item->unit_id,
+                                'requested_qty' => $item->requested_qty,
+                                'estimated_unit_price' => $item->estimated_unit_price,
+                                'description' => $item->description,
+                                'quality_specification' => $item->quality_specification,
+                                'notes' => $item->notes,
+                                'preferred_delivery_date' => null,
+                            ])->values()->all());
+                        }),
+                    Select::make('sppg_kitchen_id')
+                        ->label('Dapur SPPG')
+                        ->options(static function (): array {
+                            $user = auth()->user();
+
+                            if (! $user) {
+                                return [];
+                            }
+
+                            return app(UserAccessService::class)
+                                ->applyKitchenScope(SppgKitchen::query()->where('is_active', true)->orderBy('name'), $user)
+                                ->pluck('name', 'id')
+                                ->all();
                         })
+                        ->searchable()
                         ->required(),
-                    MasterDataOptionFactory::unit(
-                        Select::make('unit_id')
-                            ->label('Satuan')
-                            ->helperText('Otomatis mengikuti satuan default produk. Dapat diubah bila kebutuhan menggunakan satuan lain.')
-                            ->options(static fn (): array => Unit::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
-                            ->searchable()
-                            ->preload()
-                            ->required(),
-                    ),
-                    TextInput::make('requested_qty')->label('Jumlah')->numeric()->minValue(0.0001)->required(),
-                    TextInput::make('estimated_unit_price')->label('Estimasi harga satuan')->numeric()->prefix('Rp')->minValue(0),
-                    DatePicker::make('preferred_delivery_date')->label('Tanggal pengiriman pilihan')->native(false),
-                    TextInput::make('description')->label('Deskripsi item')->maxLength(255),
-                    Textarea::make('quality_specification')->label('Spesifikasi kualitas')->rows(2)->columnSpanFull(),
-                    Textarea::make('notes')->label('Catatan item')->rows(2)->columnSpanFull(),
+                    DatePicker::make('needed_from')->label('Kebutuhan mulai')->native(false),
+                    DatePicker::make('needed_until')->label('Kebutuhan sampai')->native(false)->afterOrEqual('needed_from'),
+                ])
+                ->columns(2),
+            Section::make('Item kebutuhan')
+                ->description('Untuk kebutuhan normal, cukup pilih produk, satuan, dan jumlah.')
+                ->schema([
+                    Repeater::make('items')
+                        ->hiddenLabel()
+                        ->relationship()
+                        ->schema([
+                            MasterDataOptionFactory::product(
+                                Select::make('product_id')
+                                    ->label('Produk')
+                                    ->options(static fn (): array => Product::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+                                    ->searchable()
+                                    ->preload(),
+                            )
+                                ->live()
+                                ->afterStateUpdated(static function (Set $set, mixed $state): void {
+                                    $unitId = filled($state)
+                                        ? Product::query()->whereKey($state)->value('default_unit_id')
+                                        : null;
+
+                                    $set('unit_id', $unitId);
+                                })
+                                ->required(),
+                            MasterDataOptionFactory::unit(
+                                Select::make('unit_id')
+                                    ->label('Satuan')
+                                    ->helperText('Terisi otomatis dari satuan default produk bila tersedia.')
+                                    ->options(static fn (): array => Unit::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+                                    ->searchable()
+                                    ->preload()
+                                    ->required(),
+                            ),
+                            TextInput::make('requested_qty')
+                                ->label('Jumlah')
+                                ->numeric()
+                                ->minValue(0.0001)
+                                ->required(),
+                            Section::make('Detail item tambahan')
+                                ->description('Isi hanya bila kebutuhan memiliki ketentuan khusus.')
+                                ->schema([
+                                    TextInput::make('estimated_unit_price')->label('Estimasi harga satuan')->numeric()->prefix('Rp')->minValue(0),
+                                    DatePicker::make('preferred_delivery_date')->label('Tanggal pengiriman pilihan')->native(false),
+                                    TextInput::make('description')->label('Deskripsi item')->maxLength(255),
+                                    Textarea::make('quality_specification')->label('Spesifikasi kualitas')->rows(2)->columnSpanFull(),
+                                    Textarea::make('notes')->label('Catatan item')->rows(2)->columnSpanFull(),
+                                ])
+                                ->columns(2)
+                                ->collapsible()
+                                ->collapsed()
+                                ->columnSpanFull(),
+                        ])
+                        ->columns(3)
+                        ->minItems(1)
+                        ->defaultItems(1)
+                        ->reorderable()
+                        ->columnSpanFull(),
+                ]),
+            Section::make('Detail tambahan')
+                ->description('Opsional. Gunakan untuk periode administrasi dan catatan tambahan.')
+                ->schema([
+                    DatePicker::make('period_start')->label('Periode mulai')->native(false),
+                    DatePicker::make('period_end')->label('Periode selesai')->native(false)->afterOrEqual('period_start'),
+                    Textarea::make('description')->label('Deskripsi kebutuhan')->rows(3)->columnSpanFull(),
+                    Textarea::make('notes')->label('Catatan')->rows(3)->columnSpanFull(),
                 ])
                 ->columns(2)
-                ->minItems(1)
-                ->defaultItems(1)
-                ->reorderable()
-                ->columnSpanFull(),
-        ])->columns(2);
+                ->collapsible()
+                ->collapsed(),
+        ]);
     }
 
     public static function infolist(Schema $schema): Schema
@@ -353,10 +382,62 @@ class PurchaseRequestResource extends Resource
                         static::requireScopedPermission($record, SystemPermission::PurchaseRequestApprove);
                         static::runDomainAction(fn () => app(RejectPurchaseRequestAction::class)->execute($record, auth()->user(), $data['reason']), 'Purchase request ditolak.');
                     }),
+                Action::make('buildLeanOrder')
+                    ->label('Buat Pesanan')
+                    ->color('success')
+                    ->icon('heroicon-o-bolt')
+                    ->visible(static fn (PurchaseRequest $record): bool => in_array($record->status, [
+                        PurchaseRequestStatus::Approved,
+                        PurchaseRequestStatus::PartiallyAllocated,
+                    ], true) && static::canLeanBuildOrder($record))
+                    ->schema(static fn (PurchaseRequest $record): array => [
+                        Repeater::make('allocations')
+                            ->label('Supplier per item')
+                            ->helperText('Jumlah otomatis diisi dengan sisa kebutuhan. Duplikasi baris bila satu item perlu dibagi ke beberapa supplier.')
+                            ->schema([
+                                Select::make('purchase_request_item_id')
+                                    ->label('Item PR')
+                                    ->options(static::allocatableItemOptions($record))
+                                    ->searchable()
+                                    ->required(),
+                                Select::make('supplier_id')
+                                    ->label('Supplier')
+                                    ->options(static::operationalSupplierOptions())
+                                    ->searchable()
+                                    ->required(),
+                                TextInput::make('quantity')
+                                    ->label('Jumlah')
+                                    ->numeric()
+                                    ->minValue(0.0001)
+                                    ->required(),
+                                TextInput::make('unit_price')
+                                    ->label('Harga satuan')
+                                    ->numeric()
+                                    ->prefix('Rp')
+                                    ->minValue(0)
+                                    ->required(),
+                                Textarea::make('notes')->label('Catatan')->rows(2)->columnSpanFull(),
+                            ])
+                            ->columns(2)
+                            ->default(static::leanOrderDefaults($record))
+                            ->minItems(1)
+                            ->required(),
+                    ])
+                    ->action(static function (PurchaseRequest $record, array $data): void {
+                        static::requireScopedPermission($record, SystemPermission::PurchaseRequestAllocate);
+                        static::runDomainAction(
+                            fn () => app(AllocateAndIssuePurchaseOrdersAction::class)->execute(
+                                $record,
+                                $data['allocations'] ?? [],
+                                auth()->user(),
+                            ),
+                            'Pesanan berhasil dibuat dan diproses sesuai kebijakan Lean.',
+                        );
+                    }),
                 Action::make('allocate')
                     ->label('Alokasikan Supplier')
                     ->color('warning')
-                    ->visible(static fn (PurchaseRequest $record): bool => in_array($record->status, [PurchaseRequestStatus::Approved, PurchaseRequestStatus::PartiallyAllocated], true) && static::canAllocate($record))
+                    ->visible(static fn (PurchaseRequest $record): bool => in_array($record->status, [PurchaseRequestStatus::Approved, PurchaseRequestStatus::PartiallyAllocated], true) && static::canAllocate($record) && ! static::canLeanBuildOrder($record))
                     ->schema(static fn (PurchaseRequest $record): array => [
                         Select::make('item_id')
                             ->label('Item PR')
@@ -495,6 +576,64 @@ class PurchaseRequestResource extends Resource
     private static function canAllocate(PurchaseRequest $record): bool
     {
         return static::hasScopedPermission($record, SystemPermission::PurchaseRequestAllocate);
+    }
+
+    private static function canLeanBuildOrder(PurchaseRequest $record): bool
+    {
+        $user = auth()->user();
+
+        if ($user === null || ! app(UserAccessService::class)->canAccessKitchen($user, $record->sppg_kitchen_id)) {
+            return false;
+        }
+
+        $record->loadMissing('kitchen.organization');
+
+        return $record->kitchen?->organization?->operational_profile === OperationalProfile::Lean
+            && $user->can(SystemPermission::PurchaseRequestAllocate->value)
+            && $user->can(SystemPermission::PurchaseOrderCreate->value)
+            && $user->can(SystemPermission::PurchaseOrderApprove->value)
+            && $user->can(SystemPermission::PurchaseOrderIssue->value);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private static function leanOrderDefaults(PurchaseRequest $record): array
+    {
+        return PurchaseRequestItem::query()
+            ->where('purchase_request_id', $record->getKey())
+            ->withSum('allocations as allocated_qty_sum', 'allocated_qty')
+            ->get()
+            ->map(static function (PurchaseRequestItem $item): ?array {
+                $remaining = max(0, (float) $item->requested_qty - (float) ($item->allocated_qty_sum ?? 0));
+
+                if ($remaining <= 0.0001) {
+                    return null;
+                }
+
+                return [
+                    'purchase_request_item_id' => $item->getKey(),
+                    'supplier_id' => null,
+                    'quantity' => $remaining,
+                    'unit_price' => (float) ($item->estimated_unit_price ?? 0),
+                    'notes' => null,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private static function operationalSupplierOptions(): array
+    {
+        return Supplier::query()
+            ->where('status', SupplierStatus::Active->value)
+            ->with(['approvalAttestation', 'documents', 'users.phoneVerificationCodes'])
+            ->orderBy('display_name')
+            ->get()
+            ->filter(static fn (Supplier $supplier): bool => app(SupplierOperationalEligibilityService::class)->isOperationallyEligible($supplier))
+            ->mapWithKeys(static fn (Supplier $supplier): array => [
+                $supplier->getKey() => $supplier->display_name ?: $supplier->legal_name,
+            ])
+            ->all();
     }
 
     private static function canLeanGenerateAndIssuePo(PurchaseRequest $record): bool
