@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Pages;
 
+use App\Enums\BusinessFlowStage;
 use App\Enums\SystemPermission;
 use App\Filament\Exports\AuditAnalyticsExporter;
 use App\Models\AuditLog;
@@ -12,6 +13,7 @@ use BackedEnum;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -60,7 +62,7 @@ class AuditAnalytics extends Page implements HasTable
         return $table
             ->query($this->metrics()->query($user))
             ->heading('Audit Trail')
-            ->description('Gunakan filter actor, event, dan tipe objek untuk investigasi. IP dan user-agent disembunyikan secara default karena lebih sensitif.')
+            ->description('Audit diproyeksikan ke 6 tahap bisnis agar perubahan entity teknis dapat ditelusuri dalam konteks transaksi end-to-end. IP dan user-agent tetap disembunyikan secara default.')
             ->headerActions([
                 ExportAction::make('export')
                     ->label('Export CSV / XLSX')
@@ -91,6 +93,16 @@ class AuditAnalytics extends Page implements HasTable
                     ->label('Tipe Objek')
                     ->formatStateUsing(fn (string $state): string => $this->metrics()->modelLabel($state))
                     ->badge(),
+                TextColumn::make('business_stage')
+                    ->label('Tahap Bisnis')
+                    ->state(fn (AuditLog $record): string => $this->metrics()->businessStageLabel($record))
+                    ->badge()
+                    ->color(fn (AuditLog $record): string => $this->metrics()->businessStage($record) === null ? 'gray' : 'info'),
+                TextColumn::make('transaction_reference')
+                    ->label('Transaksi')
+                    ->state(fn (AuditLog $record): string => $this->metrics()->transactionReference($record))
+                    ->placeholder('-')
+                    ->searchable(false),
                 TextColumn::make('object_label')
                     ->label('Objek')
                     ->state(fn (AuditLog $record): string => $this->metrics()->objectLabel($record))
@@ -151,6 +163,20 @@ class AuditAnalytics extends Page implements HasTable
                     ->options(fn (): array => $this->typeOptions())
                     ->searchable()
                     ->preload(),
+                Filter::make('business_stage')
+                    ->label('Tahap Bisnis')
+                    ->schema([
+                        Select::make('stage')
+                            ->label('Tahap')
+                            ->options(fn (): array => $this->metrics()->businessStageOptions()),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $stage = BusinessFlowStage::tryFrom((string) ($data['stage'] ?? ''));
+
+                        return $stage === null
+                            ? $query
+                            : $query->whereIn('auditable_type', $this->metrics()->morphTypesForStage($stage));
+                    }),
                 SelectFilter::make('actor_id')
                     ->label('Actor')
                     ->options(fn (): array => $this->actorOptions())

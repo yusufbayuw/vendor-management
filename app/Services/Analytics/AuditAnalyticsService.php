@@ -3,6 +3,7 @@
 namespace App\Services\Analytics;
 
 use App\Enums\AccessScopeType;
+use App\Enums\BusinessFlowStage;
 use App\Models\ApprovalAction;
 use App\Models\ApprovalRequest;
 use App\Models\AuditLog;
@@ -18,6 +19,7 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\User;
 use App\Services\Access\UserAccessService;
+use App\Services\Workflow\ProcureToPayLifecycleService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -26,6 +28,7 @@ class AuditAnalyticsService
     public function __construct(
         private readonly UserAccessService $access,
         private readonly GovernanceAnalyticsService $governanceAnalytics,
+        private readonly ProcureToPayLifecycleService $lifecycle,
     ) {}
 
     public function query(User $user): Builder
@@ -181,6 +184,73 @@ class AuditAnalyticsService
             ?? $log->auditable_id;
 
         return $this->modelLabel($log->auditable_type).' · '.$identifier;
+    }
+
+    public function businessStage(AuditLog $log): ?BusinessFlowStage
+    {
+        return $this->lifecycle->stageForType($log->auditable_type);
+    }
+
+    public function businessStageLabel(AuditLog $log): string
+    {
+        return $this->businessStage($log)?->navigationLabel() ?? 'Pendukung';
+    }
+
+    public function transactionReference(AuditLog $log): string
+    {
+        $context = $this->lifecycle->contextForEntity(
+            $log->auditable_type,
+            $log->auditable_id,
+        );
+
+        return $context['transaction_po_number']
+            ?? $context['purchase_request_number']
+            ?? '-';
+    }
+
+    /** @return array<string, string> */
+    public function businessStageOptions(): array
+    {
+        return collect(BusinessFlowStage::cases())
+            ->mapWithKeys(fn (BusinessFlowStage $stage): array => [
+                $stage->value => $stage->navigationLabel(),
+            ])
+            ->all();
+    }
+
+    /** @return array<int, string> */
+    public function morphTypesForStage(BusinessFlowStage $stage): array
+    {
+        $classes = match ($stage) {
+            BusinessFlowStage::PurchaseRequest => [
+                PurchaseRequest::class,
+                PurchaseAllocation::class,
+            ],
+            BusinessFlowStage::PurchaseOrder => [
+                PurchaseOrder::class,
+                ApprovalRequest::class,
+                ApprovalAction::class,
+            ],
+            BusinessFlowStage::Delivery => [
+                DeliverySchedule::class,
+            ],
+            BusinessFlowStage::Receiving => [
+                GoodsReceipt::class,
+                FulfillmentDiscrepancy::class,
+            ],
+            BusinessFlowStage::Invoice => [
+                Invoice::class,
+                InvoiceAdjustment::class,
+            ],
+            BusinessFlowStage::Payment => [
+                Payment::class,
+            ],
+        };
+
+        return array_map(
+            static fn (string $class): string => (new $class)->getMorphClass(),
+            $classes,
+        );
     }
 
     /** @return Collection<int, string> */

@@ -26,6 +26,12 @@ class AuditAnalyticsExporter extends Exporter
             ExportColumn::make('object_label')
                 ->label('Objek')
                 ->state(fn (AuditLog $record): string => self::metrics()->objectLabel($record)),
+            ExportColumn::make('business_stage')
+                ->label('Tahap Bisnis')
+                ->state(fn (AuditLog $record): string => self::metrics()->businessStageLabel($record)),
+            ExportColumn::make('transaction_reference')
+                ->label('Transaksi PO/PR')
+                ->state(fn (AuditLog $record): string => self::metrics()->transactionReference($record)),
             ExportColumn::make('changed_fields')
                 ->label('Field Berubah')
                 ->state(fn (AuditLog $record): string => self::metrics()->changedFieldsLabel($record)),
