@@ -21,6 +21,7 @@ use App\Filament\Admin\Resources\PurchaseRequests\Pages\ListPurchaseRequests;
 use App\Filament\Admin\Resources\PurchaseRequests\Pages\ViewPurchaseRequest;
 use App\Filament\Admin\Support\MasterDataOptionFactory;
 use App\Models\Product;
+use App\Models\PurchaseOrderItem;
 use App\Models\PurchaseRequest;
 use App\Models\PurchaseRequestItem;
 use App\Models\PurchaseRequestTemplate;
@@ -600,6 +601,7 @@ class PurchaseRequestResource extends Resource
     {
         return PurchaseRequestItem::query()
             ->where('purchase_request_id', $record->getKey())
+            ->with('purchaseRequest')
             ->withSum('allocations as allocated_qty_sum', 'allocated_qty')
             ->get()
             ->map(static function (PurchaseRequestItem $item): ?array {
@@ -613,13 +615,34 @@ class PurchaseRequestResource extends Resource
                     'purchase_request_item_id' => $item->getKey(),
                     'supplier_id' => null,
                     'quantity' => $remaining,
-                    'unit_price' => (float) ($item->estimated_unit_price ?? 0),
+                    'unit_price' => static::suggestedUnitPrice($item),
                     'notes' => null,
                 ];
             })
             ->filter()
             ->values()
             ->all();
+    }
+
+    private static function suggestedUnitPrice(PurchaseRequestItem $item): float
+    {
+        $estimated = (float) ($item->estimated_unit_price ?? 0);
+
+        if ($estimated > 0) {
+            return $estimated;
+        }
+
+        $kitchenId = $item->purchaseRequest?->sppg_kitchen_id;
+
+        if ($kitchenId === null) {
+            return 0;
+        }
+
+        return (float) (PurchaseOrderItem::query()
+            ->where('product_id', $item->product_id)
+            ->whereHas('purchaseOrder', fn (Builder $query): Builder => $query->where('sppg_kitchen_id', $kitchenId))
+            ->latest('id')
+            ->value('unit_price') ?? 0);
     }
 
     private static function operationalSupplierOptions(): array

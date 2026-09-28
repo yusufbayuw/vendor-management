@@ -75,9 +75,9 @@ class DeliveryScheduleResource extends Resource
             Action::make('depart')->label('Berangkat')->color('primary')
                 ->visible(fn (DeliverySchedule $record) => $record->status === DeliveryScheduleStatus::Confirmed && static::allowed($record))
                 ->schema([
-                    TextInput::make('driver_name')->label('Nama pengemudi')->required(),
-                    TextInput::make('driver_phone')->label('No. HP')->tel(),
-                    TextInput::make('vehicle_number')->label('Nomor kendaraan')->required(),
+                    TextInput::make('driver_name')->label('Nama pengemudi')->default(fn (DeliverySchedule $record): ?string => static::lastDispatchValue($record, 'driver_name'))->required(),
+                    TextInput::make('driver_phone')->label('No. HP')->tel()->default(fn (DeliverySchedule $record): ?string => static::lastDispatchValue($record, 'driver_phone')),
+                    TextInput::make('vehicle_number')->label('Nomor kendaraan')->default(fn (DeliverySchedule $record): ?string => static::lastDispatchValue($record, 'vehicle_number'))->required(),
                     DateTimePicker::make('estimated_arrival_at')->label('Estimasi tiba')->native(false)->seconds(false),
                     TextInput::make('delivery_note_number')->label('Nomor surat jalan'),
                     FileUpload::make('delivery_note_file')
@@ -124,6 +124,27 @@ class DeliveryScheduleResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
+    }
+
+    private static function lastDispatchValue(DeliverySchedule $schedule, string $field): ?string
+    {
+        $schedule->loadMissing('purchaseOrder');
+
+        $supplierId = $schedule->purchaseOrder?->supplier_id;
+
+        if ($supplierId === null || ! in_array($field, ['driver_name', 'driver_phone', 'vehicle_number'], true)) {
+            return null;
+        }
+
+        $value = DeliverySchedule::query()
+            ->whereKeyNot($schedule->getKey())
+            ->whereHas('purchaseOrder', fn (Builder $query): Builder => $query->where('supplier_id', $supplierId))
+            ->whereNotNull($field)
+            ->latest('departed_at')
+            ->latest('id')
+            ->value($field);
+
+        return filled($value) ? (string) $value : null;
     }
 
     private static function allowed(DeliverySchedule $schedule): bool
