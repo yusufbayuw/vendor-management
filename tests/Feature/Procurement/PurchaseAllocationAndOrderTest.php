@@ -113,8 +113,6 @@ class PurchaseAllocationAndOrderTest extends TestCase
         $this->assertNotNull($orders->first()->issued_at);
     }
 
-
-
     public function test_lean_operator_can_allocate_and_issue_purchase_orders_in_one_action(): void
     {
         [$request, $items, $actor] = $this->makeApprovedPurchaseRequest([100], OperationalProfile::Lean);
