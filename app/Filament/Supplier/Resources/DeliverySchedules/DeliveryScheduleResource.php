@@ -29,11 +29,11 @@ class DeliveryScheduleResource extends Resource
 {
     protected static ?string $model = DeliverySchedule::class;
 
-    protected static ?string $navigationLabel = 'Pengiriman';
+    protected static ?string $navigationLabel = '3. Delivery';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Transaksi';
+    protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
 
-    protected static ?int $navigationSort = 20;
+    protected static ?int $navigationSort = 30;
 
     public static function table(Table $table): Table
     {
