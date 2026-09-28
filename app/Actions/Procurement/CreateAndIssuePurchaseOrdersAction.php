@@ -5,6 +5,7 @@ namespace App\Actions\Procurement;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SystemPermission;
+use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\User;
 use DomainException;
@@ -19,7 +20,7 @@ class CreateAndIssuePurchaseOrdersAction
         private readonly IssuePurchaseOrderAction $issuePurchaseOrder,
     ) {}
 
-    /** @return Collection<int, \App\Models\PurchaseOrder> */
+    /** @return Collection<int, PurchaseOrder> */
     public function execute(PurchaseRequest $purchaseRequest, User $actor): Collection
     {
         $purchaseRequest->loadMissing('kitchen.organization');
