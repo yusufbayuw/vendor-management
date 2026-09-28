@@ -98,4 +98,3 @@ class TransactionNotificationArchitectureTest extends TestCase
         );
     }
 }
-
