@@ -2,6 +2,7 @@
 
 namespace App\Filament\Exports;
 
+use App\Enums\BusinessFlowStage;
 use App\Enums\PurchaseOrderStatus;
 use App\Models\PurchaseOrder;
 use App\Services\Analytics\ProcessPerformanceAnalyticsService;
@@ -15,7 +16,7 @@ class ProcessPerformanceAnalyticsExporter extends Exporter
 
     public static function getColumns(): array
     {
-        return [
+        $columns = [
             ExportColumn::make('order_date')->label('Tanggal PO'),
             ExportColumn::make('number')->label('Nomor PO'),
             ExportColumn::make('purchaseRequest.number')->label('Nomor PR'),
@@ -26,6 +27,12 @@ class ProcessPerformanceAnalyticsExporter extends Exporter
             ExportColumn::make('status')
                 ->label('Status')
                 ->formatStateUsing(fn ($state): string => self::statusLabel($state)),
+            ExportColumn::make('flow_progress')
+                ->label('Flow Progress (%)')
+                ->state(fn (PurchaseOrder $record): int => self::metrics()->canonicalProgress($record)),
+            ExportColumn::make('current_stage')
+                ->label('Current Stage')
+                ->state(fn (PurchaseOrder $record): string => self::metrics()->canonicalCurrentStage($record)->navigationLabel()),
             ExportColumn::make('pr_approval_hours')
                 ->label('PR Approval (jam)')
                 ->state(fn (PurchaseOrder $record): ?float => self::metrics()->prApprovalHours($record)),
@@ -62,6 +69,22 @@ class ProcessPerformanceAnalyticsExporter extends Exporter
             ExportColumn::make('longest_stage')
                 ->label('Tahap Terlama')
                 ->state(fn (PurchaseOrder $record): string => self::metrics()->longestCompletedStage($record)),
+        ];
+
+        $canonical = [];
+        foreach (BusinessFlowStage::cases() as $stage) {
+            $canonical[] = ExportColumn::make('canonical_'.$stage->value.'_hours')
+                ->label($stage->navigationLabel().' (jam)')
+                ->state(fn (PurchaseOrder $record): ?float => self::metrics()->canonicalStageHours($record, $stage));
+            $canonical[] = ExportColumn::make('canonical_'.$stage->value.'_status')
+                ->label($stage->navigationLabel().' Status')
+                ->state(fn (PurchaseOrder $record): string => self::metrics()->canonicalStageStatus($record, $stage));
+        }
+
+        return [
+            ...array_slice($columns, 0, 8),
+            ...$canonical,
+            ...array_slice($columns, 8),
         ];
     }
 

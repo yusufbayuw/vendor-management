@@ -118,9 +118,12 @@ class ProcessBottleneckAnalyticsTest extends TestCase
         $order = $service->query($user)->firstOrFail();
         $analyses = $service->stageAnalyses($order);
 
-        $this->assertArrayHasKey('pr_approval', $analyses->all());
-        $this->assertArrayHasKey('po_approval', $analyses->all());
-        $this->assertArrayHasKey('acknowledgement', $analyses->all());
+        $this->assertArrayHasKey('pr', $analyses->all());
+        $this->assertArrayHasKey('po', $analyses->all());
+        $this->assertArrayHasKey('delivery', $analyses->all());
+        $this->assertArrayHasKey('receiving', $analyses->all());
+        $this->assertArrayHasKey('invoice', $analyses->all());
+        $this->assertArrayHasKey('payment', $analyses->all());
         $this->assertContains($service->overallStatus($order), [
             'bottleneck',
             'unusually_fast',

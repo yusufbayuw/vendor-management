@@ -53,7 +53,7 @@ class ProcessBottleneckAnalytics extends Page implements HasTable
 
     public function getSubheading(): ?string
     {
-        return 'Deteksi cycle-time yang tidak biasa per tahap menggunakan histori 365 hari pada SPPG yang sama. Slow anomaly adalah kandidat bottleneck; fast anomaly tetap ditampilkan sebagai sinyal improvement atau kualitas timestamp.';
+        return 'Deteksi bottleneck pada 6 tahap canonical PR → PO → Delivery → Receiving → Invoice → Payment. Micro-metric tetap tersedia di Process Performance sebagai detail diagnostik.';
     }
 
     public function table(Table $table): Table
@@ -64,7 +64,7 @@ class ProcessBottleneckAnalytics extends Page implements HasTable
         return $table
             ->query($this->metrics()->query($user))
             ->heading('Cycle-Time Bottleneck Detection')
-            ->description('Setiap stage dibandingkan dengan baseline historis stage yang sama memakai median + MAD, minimum 5 observasi, robust z-score 3,5. Durasi negatif diperlakukan sebagai data-quality issue, bukan outlier statistik.')
+            ->description('Enam tahap canonical dibandingkan dengan baseline historis tahap yang sama memakai median + MAD, minimum 5 observasi, robust z-score 3,5.')
             ->headerActions([
                 ExportAction::make('export')
                     ->label('Export CSV / XLSX')

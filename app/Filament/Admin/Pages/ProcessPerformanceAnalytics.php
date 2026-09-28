@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Pages;
 
+use App\Enums\BusinessFlowStage;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Exports\ProcessPerformanceAnalyticsExporter;
@@ -102,6 +103,23 @@ class ProcessPerformanceAnalytics extends Page implements HasTable
                     ->badge()
                     ->formatStateUsing(fn ($state): string => self::statusLabel($state))
                     ->color(fn ($state): string => self::statusColor($state)),
+                TextColumn::make('flow_progress')
+                    ->label('Flow')
+                    ->state(fn (PurchaseOrder $record): int => $this->metrics()->canonicalProgress($record))
+                    ->formatStateUsing(fn (int $state): string => $state.'%')
+                    ->alignEnd(),
+                TextColumn::make('current_stage')
+                    ->label('Current Stage')
+                    ->state(fn (PurchaseOrder $record): string => $this->metrics()->canonicalCurrentStage($record)->navigationLabel())
+                    ->badge(),
+                ...collect(BusinessFlowStage::cases())
+                    ->map(fn (BusinessFlowStage $stage): TextColumn => TextColumn::make('stage_'.$stage->value)
+                        ->label($stage->navigationLabel())
+                        ->state(fn (PurchaseOrder $record): ?float => $this->metrics()->canonicalStageHours($record, $stage))
+                        ->formatStateUsing(fn (?float $state): string => $this->metrics()->formatHours($state))
+                        ->tooltip(fn (PurchaseOrder $record): string => $this->metrics()->canonicalStageStatus($record, $stage))
+                        ->alignEnd())
+                    ->all(),
                 TextColumn::make('pr_approval_hours')
                     ->label('PR Approval')
                     ->state(fn (PurchaseOrder $record): ?float => $this->metrics()->prApprovalHours($record))

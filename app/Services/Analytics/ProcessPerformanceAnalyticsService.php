@@ -2,17 +2,22 @@
 
 namespace App\Services\Analytics;
 
+use App\Enums\BusinessFlowStage;
 use App\Enums\PurchaseOrderStatus;
 use App\Models\GoodsReceipt;
 use App\Models\PurchaseOrder;
 use App\Models\User;
 use App\Services\Access\UserAccessService;
+use App\Services\Workflow\ProcureToPayLifecycleService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 
 class ProcessPerformanceAnalyticsService
 {
-    public function __construct(private readonly UserAccessService $access) {}
+    public function __construct(
+        private readonly UserAccessService $access,
+        private readonly ProcureToPayLifecycleService $lifecycle,
+    ) {}
 
     public function query(User $user): Builder
     {
@@ -26,6 +31,26 @@ class ProcessPerformanceAnalyticsService
             ])
             ->whereIn('sppg_kitchen_id', $this->access->accessibleKitchenIds($user))
             ->where('status', '!=', PurchaseOrderStatus::Cancelled->value);
+    }
+
+    public function canonicalStageHours(PurchaseOrder $order, BusinessFlowStage $stage): ?float
+    {
+        return $this->lifecycle->stage($order, $stage)['duration_hours'];
+    }
+
+    public function canonicalStageStatus(PurchaseOrder $order, BusinessFlowStage $stage): string
+    {
+        return (string) $this->lifecycle->stage($order, $stage)['status'];
+    }
+
+    public function canonicalCurrentStage(PurchaseOrder $order): BusinessFlowStage
+    {
+        return $this->lifecycle->currentStage($order);
+    }
+
+    public function canonicalProgress(PurchaseOrder $order): int
+    {
+        return $this->lifecycle->progress($order);
     }
 
     public function prApprovalHours(PurchaseOrder $order): ?float
@@ -124,17 +149,11 @@ class ProcessPerformanceAnalyticsService
 
     public function longestCompletedStage(PurchaseOrder $order): string
     {
-        $stages = collect([
-            'PR Approval' => $this->prApprovalHours($order),
-            'PR → PO' => $this->poGenerationHours($order),
-            'PO Approval' => $this->poApprovalHours($order),
-            'Approval → Issue' => $this->issueHours($order),
-            'Supplier Ack' => $this->acknowledgementHours($order),
-            'Ack → First Receipt' => $this->firstReceiptHours($order),
-            'Delivery/QC Cycle' => $this->deliveryQcCycleHours($order),
-            'Invoice Approval' => $this->invoiceApprovalHours($order),
-            'Payment Cycle' => $this->paymentCycleHours($order),
-        ])->filter(fn (?float $hours): bool => $hours !== null && $hours >= 0);
+        $stages = collect(BusinessFlowStage::cases())
+            ->mapWithKeys(fn (BusinessFlowStage $stage): array => [
+                $stage->navigationLabel() => $this->canonicalStageHours($order, $stage),
+            ])
+            ->filter(fn (?float $hours): bool => $hours !== null && $hours >= 0);
 
         if ($stages->isEmpty()) {
             return '-';

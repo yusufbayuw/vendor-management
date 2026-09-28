@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics;
 
+use App\Enums\BusinessFlowStage;
 use App\Enums\PurchaseOrderStatus;
 use App\Models\PurchaseOrder;
 use App\Models\User;
@@ -245,35 +246,20 @@ class ProcessBottleneckAnalyticsService
     /** @return array<string, array{label: string}> */
     public function stageDefinitions(): array
     {
-        return [
-            'pr_approval' => ['label' => 'PR Approval'],
-            'po_generation' => ['label' => 'PR → PO'],
-            'po_approval' => ['label' => 'PO Approval'],
-            'issue' => ['label' => 'Approval → Issue'],
-            'acknowledgement' => ['label' => 'Supplier Ack'],
-            'first_receipt' => ['label' => 'Ack → First Receipt'],
-            'average_qc' => ['label' => 'Average QC'],
-            'delivery_qc_cycle' => ['label' => 'Delivery/QC Cycle'],
-            'invoice_approval' => ['label' => 'Invoice Approval'],
-            'payment_cycle' => ['label' => 'Payment Cycle'],
-        ];
+        return collect(BusinessFlowStage::cases())
+            ->mapWithKeys(fn (BusinessFlowStage $stage): array => [
+                $stage->value => ['label' => $stage->navigationLabel()],
+            ])
+            ->all();
     }
 
     public function stageHours(PurchaseOrder $order, string $stage): ?float
     {
-        return match ($stage) {
-            'pr_approval' => $this->performance->prApprovalHours($order),
-            'po_generation' => $this->performance->poGenerationHours($order),
-            'po_approval' => $this->performance->poApprovalHours($order),
-            'issue' => $this->performance->issueHours($order),
-            'acknowledgement' => $this->performance->acknowledgementHours($order),
-            'first_receipt' => $this->performance->firstReceiptHours($order),
-            'average_qc' => $this->performance->averageQcHours($order),
-            'delivery_qc_cycle' => $this->performance->deliveryQcCycleHours($order),
-            'invoice_approval' => $this->performance->invoiceApprovalHours($order),
-            'payment_cycle' => $this->performance->paymentCycleHours($order),
-            default => null,
-        };
+        $businessStage = BusinessFlowStage::tryFrom($stage);
+
+        return $businessStage === null
+            ? null
+            : $this->performance->canonicalStageHours($order, $businessStage);
     }
 
     /** @return Collection<int, PurchaseOrder> */
