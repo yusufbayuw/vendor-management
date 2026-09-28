@@ -12,6 +12,9 @@ use App\Actions\Procurement\ApprovePurchaseOrderAction;
 use App\Actions\Procurement\IssuePurchaseOrderAction;
 use App\Actions\Procurement\SubmitPurchaseOrderForApprovalAction;
 use App\Enums\DeliveryScheduleStatus;
+use App\Enums\GoodsReceiptStatus;
+use App\Enums\InvoiceStatus;
+use App\Enums\PaymentStatus;
 use App\Enums\GovernanceProcess;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
@@ -65,6 +68,41 @@ class PurchaseOrderResource extends Resource
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
+            Section::make('Alur Transaksi')
+                ->description('Satu transaksi mengikuti enam tahap yang sama. Approval dan pemisahan role tetap berjalan di dalam tahap terkait.')
+                ->schema([
+                    TextEntry::make('flow_pr')
+                        ->label('1. PR')
+                        ->state(fn (PurchaseOrder $record): string => static::flowPrStatus($record))
+                        ->badge()
+                        ->color(fn (string $state): string => static::flowStatusColor($state)),
+                    TextEntry::make('flow_po')
+                        ->label('2. PO')
+                        ->state(fn (PurchaseOrder $record): string => static::flowPoStatus($record))
+                        ->badge()
+                        ->color(fn (string $state): string => static::flowStatusColor($state)),
+                    TextEntry::make('flow_delivery')
+                        ->label('3. Delivery')
+                        ->state(fn (PurchaseOrder $record): string => static::flowDeliveryStatus($record))
+                        ->badge()
+                        ->color(fn (string $state): string => static::flowStatusColor($state)),
+                    TextEntry::make('flow_receiving')
+                        ->label('4. Receiving')
+                        ->state(fn (PurchaseOrder $record): string => static::flowReceivingStatus($record))
+                        ->badge()
+                        ->color(fn (string $state): string => static::flowStatusColor($state)),
+                    TextEntry::make('flow_invoice')
+                        ->label('5. Invoice')
+                        ->state(fn (PurchaseOrder $record): string => static::flowInvoiceStatus($record))
+                        ->badge()
+                        ->color(fn (string $state): string => static::flowStatusColor($state)),
+                    TextEntry::make('flow_payment')
+                        ->label('6. Payment')
+                        ->state(fn (PurchaseOrder $record): string => static::flowPaymentStatus($record))
+                        ->badge()
+                        ->color(fn (string $state): string => static::flowStatusColor($state)),
+                ])
+                ->columns(6),
             Section::make('Ringkasan')
                 ->schema([
                     TextEntry::make('number')->label('Nomor PO'),
@@ -526,6 +564,124 @@ class PurchaseOrderResource extends Resource
         } catch (DomainException $exception) {
             Notification::make()->danger()->title($exception->getMessage())->send();
         }
+    }
+
+    private static function flowPrStatus(PurchaseOrder $record): string
+    {
+        $record->loadMissing('purchaseRequest');
+        $status = $record->purchaseRequest?->status;
+
+        if ($status === null) {
+            return 'Tidak tersedia';
+        }
+
+        return in_array($status, [\App\Enums\PurchaseRequestStatus::PoGenerated, \App\Enums\PurchaseRequestStatus::Closed], true)
+            ? 'Selesai'
+            : str($status->value)->replace('_', ' ')->title()->toString();
+    }
+
+    private static function flowPoStatus(PurchaseOrder $record): string
+    {
+        return match ($record->status) {
+            PurchaseOrderStatus::Draft => 'Draft',
+            PurchaseOrderStatus::PendingApproval => 'Menunggu approval',
+            PurchaseOrderStatus::Approved => 'Disetujui',
+            PurchaseOrderStatus::Issued => 'Diterbitkan',
+            PurchaseOrderStatus::Acknowledged => 'Dikonfirmasi supplier',
+            default => 'Selesai',
+        };
+    }
+
+    private static function flowDeliveryStatus(PurchaseOrder $record): string
+    {
+        $record->loadMissing('deliverySchedules');
+
+        if ($record->deliverySchedules->isEmpty()) {
+            return 'Belum dimulai';
+        }
+
+        if ($record->deliverySchedules->every(
+            static fn ($schedule): bool => $schedule->status === DeliveryScheduleStatus::Received,
+        )) {
+            return 'Selesai';
+        }
+
+        $latest = $record->deliverySchedules->sortByDesc('id')->first()?->status;
+
+        return $latest instanceof DeliveryScheduleStatus
+            ? str($latest->value)->replace('_', ' ')->title()->toString()
+            : 'Sedang berjalan';
+    }
+
+    private static function flowReceivingStatus(PurchaseOrder $record): string
+    {
+        $record->loadMissing('goodsReceipts');
+
+        if ($record->goodsReceipts->isEmpty()) {
+            return 'Belum dimulai';
+        }
+
+        if ($record->goodsReceipts->contains(
+            static fn ($receipt): bool => $receipt->status === GoodsReceiptStatus::PendingInspection,
+        )) {
+            return 'Menunggu QC';
+        }
+
+        return $record->goodsReceipts->every(
+            static fn ($receipt): bool => $receipt->status === GoodsReceiptStatus::Completed,
+        ) ? 'Selesai' : 'Sedang berjalan';
+    }
+
+    private static function flowInvoiceStatus(PurchaseOrder $record): string
+    {
+        $record->loadMissing('invoice');
+
+        if ($record->invoice === null) {
+            return 'Belum dimulai';
+        }
+
+        return match ($record->invoice->status) {
+            InvoiceStatus::Paid => 'Selesai',
+            InvoiceStatus::Approved => 'Disetujui',
+            InvoiceStatus::Submitted, InvoiceStatus::UnderReview => 'Dalam review',
+            InvoiceStatus::PartiallyPaid => 'Dibayar sebagian',
+            InvoiceStatus::Rejected => 'Ditolak',
+            InvoiceStatus::Cancelled => 'Dibatalkan',
+            default => 'Draft',
+        };
+    }
+
+    private static function flowPaymentStatus(PurchaseOrder $record): string
+    {
+        $record->loadMissing('invoice.payments');
+
+        if ($record->invoice === null || $record->invoice->payments->isEmpty()) {
+            return 'Belum dimulai';
+        }
+
+        if ($record->invoice->status === InvoiceStatus::Paid) {
+            return 'Selesai';
+        }
+
+        $latest = $record->invoice->payments->sortByDesc('id')->first()?->status;
+
+        return match ($latest) {
+            PaymentStatus::Verified => 'Terverifikasi',
+            PaymentStatus::Submitted, PaymentStatus::UnderReview => 'Menunggu verifikasi',
+            PaymentStatus::Rejected => 'Ditolak',
+            PaymentStatus::Cancelled => 'Dibatalkan',
+            default => 'Draft',
+        };
+    }
+
+    private static function flowStatusColor(string $state): string
+    {
+        return match ($state) {
+            'Selesai', 'Terverifikasi', 'Disetujui', 'Diterbitkan', 'Dikonfirmasi supplier' => 'success',
+            'Ditolak', 'Dibatalkan' => 'danger',
+            'Belum dimulai', 'Tidak tersedia' => 'gray',
+            default => 'warning',
+        };
     }
 
     private static function statusLabel($state): string
