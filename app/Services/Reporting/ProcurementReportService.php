@@ -2,6 +2,7 @@
 
 namespace App\Services\Reporting;
 
+use App\Enums\BusinessFlowStage;
 use App\Enums\DiscrepancyStatus;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
@@ -11,15 +12,19 @@ use App\Models\PurchaseOrder;
 use App\Models\SppgKitchen;
 use App\Models\User;
 use App\Services\Access\UserAccessService;
+use App\Services\Workflow\ProcureToPayLifecycleService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class ProcurementReportService
 {
-    public function __construct(private readonly UserAccessService $access) {}
+    public function __construct(
+        private readonly UserAccessService $access,
+        private readonly ProcureToPayLifecycleService $lifecycle,
+    ) {}
 
-    /** @return array<string, int|float> */
+    /** @return array<string, mixed> */
     public function summary(User $user, Carbon|string|null $from = null, Carbon|string|null $to = null): array
     {
         [$start, $end] = $this->period($from, $to);
@@ -56,6 +61,7 @@ class ProcurementReportService
                     ->whereBetween('order_date', [$start->toDateString(), $end->toDateString()]))
                 ->where('status', DiscrepancyStatus::Open->value)
                 ->count(),
+            'flow_stage_summary' => $this->flowSummary($user, $start, $end),
         ];
     }
 
@@ -65,12 +71,54 @@ class ProcurementReportService
         [$start, $end] = $this->period($from, $to);
 
         return PurchaseOrder::query()
-            ->with(['supplier', 'kitchen'])
+            ->with(['supplier', 'kitchen', 'purchaseRequest', 'deliverySchedules', 'goodsReceipts', 'invoice.payments'])
             ->whereIn('sppg_kitchen_id', $this->kitchenIds($user))
             ->whereBetween('order_date', [$start->toDateString(), $end->toDateString()])
             ->orderBy('order_date')
             ->orderBy('number')
             ->get();
+    }
+
+    /**
+     * @return array<string, array{
+     *   order: int,
+     *   label: string,
+     *   wip: int,
+     *   completed: int,
+     *   not_started: int,
+     *   avg_cycle_hours: float|null
+     * }>
+     */
+    public function flowSummary(User $user, Carbon|string|null $from = null, Carbon|string|null $to = null): array
+    {
+        $orders = $this->purchaseOrders($user, $from, $to);
+
+        $snapshots = $orders->mapWithKeys(
+            fn (PurchaseOrder $order): array => [$order->getKey() => $this->lifecycle->snapshot($order)],
+        );
+
+        return collect(BusinessFlowStage::cases())
+            ->mapWithKeys(function (BusinessFlowStage $stage) use ($snapshots): array {
+                $rows = $snapshots->map(fn (array $snapshot): array => $snapshot[$stage->value]);
+                $durations = $rows
+                    ->where('is_complete', true)
+                    ->pluck('duration_hours')
+                    ->filter(static fn ($hours): bool => $hours !== null);
+
+                return [
+                    $stage->value => [
+                        'order' => $stage->order(),
+                        'label' => $stage->label(),
+                        'wip' => $rows->where('is_current', true)->where('is_complete', false)->count(),
+                        'completed' => $rows->where('is_complete', true)->count(),
+                        'not_started' => $rows->where('state', 'not_started')->count(),
+                        'avg_cycle_hours' => $durations->isEmpty()
+                            ? null
+                            : round((float) $durations->average(), 1),
+                    ],
+                ];
+            })
+            ->all();
     }
 
     /** @return Collection<int, int> */

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Widgets;
 
+use App\Enums\BusinessFlowStage;
 use App\Services\Reporting\ProcurementReportService;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -51,7 +52,7 @@ class ProcurementReportOverview extends StatsOverviewWidget
             $toDate,
         );
 
-        return [
+        $stats = [
             Stat::make('Jumlah PO', number_format($summary['po_count'], 0, ',', '.'))
                 ->description('Purchase order pada periode terpilih')
                 ->descriptionIcon('heroicon-m-document-text')
@@ -85,6 +86,41 @@ class ProcurementReportOverview extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-m-clock')
                 ->color($summary['outstanding_value'] > 0 ? 'warning' : 'success'),
         ];
+
+        foreach (BusinessFlowStage::cases() as $stage) {
+            $flow = $summary['flow_stage_summary'][$stage->value] ?? null;
+
+            if (! is_array($flow)) {
+                continue;
+            }
+
+            $duration = $flow['avg_cycle_hours'] === null
+                ? '-'
+                : ($flow['avg_cycle_hours'] < 24
+                    ? number_format($flow['avg_cycle_hours'], 1, ',', '.').' jam'
+                    : number_format($flow['avg_cycle_hours'] / 24, 1, ',', '.').' hari');
+
+            $stats[] = Stat::make(
+                $stage->navigationLabel(),
+                number_format((int) $flow['wip'], 0, ',', '.').' WIP',
+            )
+                ->description(sprintf(
+                    '%d selesai · avg %s',
+                    (int) $flow['completed'],
+                    $duration,
+                ))
+                ->icon(match ($stage) {
+                    BusinessFlowStage::PurchaseRequest => 'heroicon-o-clipboard-document-list',
+                    BusinessFlowStage::PurchaseOrder => 'heroicon-o-document-text',
+                    BusinessFlowStage::Delivery => 'heroicon-o-truck',
+                    BusinessFlowStage::Receiving => 'heroicon-o-check-circle',
+                    BusinessFlowStage::Invoice => 'heroicon-o-document-text',
+                    BusinessFlowStage::Payment => 'heroicon-o-banknotes',
+                })
+                ->color((int) $flow['wip'] > 0 ? 'warning' : 'success');
+        }
+
+        return $stats;
     }
 
     /** @return array{string, string} */

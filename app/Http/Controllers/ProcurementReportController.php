@@ -2,14 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\BusinessFlowStage;
 use App\Enums\SystemPermission;
 use App\Services\Reporting\ProcurementReportService;
+use App\Services\Workflow\ProcureToPayLifecycleService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProcurementReportController extends Controller
 {
-    public function csv(Request $request, ProcurementReportService $reports): StreamedResponse
+    public function csv(Request $request, ProcurementReportService $reports, ProcureToPayLifecycleService $lifecycle): StreamedResponse
     {
         $user = $request->user();
         abort_unless($user !== null && $user->can(SystemPermission::ReportsView->value), 403);
@@ -22,10 +24,10 @@ class ProcurementReportController extends Controller
 
         $filename = 'procurement-'.$request->query('from', today()->subDays(29)->toDateString()).'-'.$request->query('to', today()->toDateString()).'.csv';
 
-        return response()->streamDownload(function () use ($orders): void {
+        return response()->streamDownload(function () use ($orders, $lifecycle): void {
             $stream = fopen('php://output', 'wb');
 
-            fputcsv($stream, [
+            $headers = [
                 'Nomor PO',
                 'Tanggal',
                 'SPPG',
@@ -35,10 +37,23 @@ class ProcurementReportController extends Controller
                 'Pajak',
                 'Diskon',
                 'Total',
-            ]);
+                'Progress Flow (%)',
+                'Current Stage',
+            ];
+
+            foreach (BusinessFlowStage::cases() as $stage) {
+                $headers[] = $stage->navigationLabel().' Status';
+                $headers[] = $stage->navigationLabel().' Mulai';
+                $headers[] = $stage->navigationLabel().' Selesai';
+                $headers[] = $stage->navigationLabel().' Durasi Jam';
+            }
+
+            fputcsv($stream, $headers);
 
             foreach ($orders as $order) {
-                fputcsv($stream, [
+                $snapshot = $lifecycle->snapshot($order);
+                $current = $lifecycle->currentStage($order);
+                $row = [
                     $order->number,
                     $order->order_date?->format('d/m/Y'),
                     $order->kitchen?->name,
@@ -48,7 +63,19 @@ class ProcurementReportController extends Controller
                     $order->tax_amount,
                     $order->discount_amount,
                     $order->total_amount,
-                ]);
+                    $lifecycle->progress($order),
+                    $current->navigationLabel(),
+                ];
+
+                foreach (BusinessFlowStage::cases() as $stage) {
+                    $flow = $snapshot[$stage->value];
+                    $row[] = $flow['status'];
+                    $row[] = $flow['started_at']?->format('d/m/Y H:i');
+                    $row[] = $flow['completed_at']?->format('d/m/Y H:i');
+                    $row[] = $flow['duration_hours'];
+                }
+
+                fputcsv($stream, $row);
             }
 
             fclose($stream);
