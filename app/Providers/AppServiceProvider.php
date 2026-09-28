@@ -188,6 +188,7 @@ class AppServiceProvider extends ServiceProvider
             Supplier::class,
             PurchaseRequest::class,
             PurchaseOrder::class,
+            DeliverySchedule::class,
             GoodsReceipt::class,
             Invoice::class,
             Payment::class,

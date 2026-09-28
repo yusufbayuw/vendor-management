@@ -17,6 +17,7 @@ class SystemNotification extends Notification implements ShouldQueue
         public readonly int|string|null $entityId = null,
         public readonly string $severity = 'info',
         public readonly ?string $url = null,
+        public readonly array $workflowContext = [],
     ) {}
 
     public function via(object $notifiable): array
@@ -33,6 +34,7 @@ class SystemNotification extends Notification implements ShouldQueue
             'entity_id' => $this->entityId,
             'severity' => $this->severity,
             'url' => $this->url,
+            ...$this->workflowContext,
         ];
     }
 }

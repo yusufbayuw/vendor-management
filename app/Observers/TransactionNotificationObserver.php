@@ -3,12 +3,14 @@
 namespace App\Observers;
 
 use App\Enums\GoodsReceiptStatus;
+use App\Events\DeliveryScheduleStatusChanged;
 use App\Events\GoodsReceiptStatusChanged;
 use App\Events\InvoiceStatusChanged;
 use App\Events\PaymentStatusChanged;
 use App\Events\PurchaseOrderStatusChanged;
 use App\Events\PurchaseRequestStatusChanged;
 use App\Events\SupplierStatusChanged;
+use App\Models\DeliverySchedule;
 use App\Models\GoodsReceipt;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -57,6 +59,10 @@ class TransactionNotificationObserver
                 $this->statusValue($model->status),
             ),
             $model instanceof PurchaseOrder => new PurchaseOrderStatusChanged(
+                $model->getKey(),
+                $this->statusValue($model->status),
+            ),
+            $model instanceof DeliverySchedule => new DeliveryScheduleStatusChanged(
                 $model->getKey(),
                 $this->statusValue($model->status),
             ),

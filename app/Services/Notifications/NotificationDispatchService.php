@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Notifications\DevicePushNotification;
 use App\Notifications\SystemNotification;
 use App\Services\Access\UserAccessService;
+use App\Services\Workflow\ProcureToPayLifecycleService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Permission;
@@ -18,6 +19,7 @@ class NotificationDispatchService
     public function __construct(
         private readonly UserAccessService $access,
         private readonly DevicePushSender $push,
+        private readonly ProcureToPayLifecycleService $lifecycle,
     ) {}
 
     public function toKitchenPermission(
@@ -132,6 +134,8 @@ class NotificationDispatchService
             return 0;
         }
 
+        $workflowContext = $this->lifecycle->contextForEntity($entityType, $entityId);
+
         Notification::sendNow($recipients, new SystemNotification(
             $title,
             $body,
@@ -139,6 +143,7 @@ class NotificationDispatchService
             $entityId,
             $severity,
             $url,
+            $workflowContext,
         ));
 
         $type = $entityType ?: 'system';
