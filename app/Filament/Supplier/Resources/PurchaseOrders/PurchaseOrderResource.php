@@ -59,13 +59,16 @@ class PurchaseOrderResource extends Resource
                 ->wrap(),
         ])->recordActions([
             Action::make('acknowledge')->label('Konfirmasi PO')->color('success')->requiresConfirmation()
-                ->visible(fn (PurchaseOrder $record) => $record->status === PurchaseOrderStatus::Issued && static::allowed($record, SystemPermission::PurchaseOrderAcknowledge))
+                ->visible(fn (PurchaseOrder $record) => $record->status === PurchaseOrderStatus::Issued && ! static::isLean($record) && static::allowed($record, SystemPermission::PurchaseOrderAcknowledge))
                 ->schema([Textarea::make('notes')->label('Catatan')->rows(3)])
                 ->action(function (PurchaseOrder $record, array $data): void {
                     static::run(fn () => app(AcknowledgePurchaseOrderAction::class)->execute($record, auth()->user(), $data['notes'] ?? null), 'PO berhasil dikonfirmasi.');
                 }),
-            Action::make('schedule')->label('Buat Jadwal Kirim')->color('warning')
-                ->visible(fn (PurchaseOrder $record) => in_array($record->status, [PurchaseOrderStatus::Acknowledged, PurchaseOrderStatus::Scheduled, PurchaseOrderStatus::PartiallyDelivered], true) && static::allowed($record, SystemPermission::DeliveryManage))
+            Action::make('schedule')->label('Jadwalkan Kirim')->color('warning')
+                ->visible(fn (PurchaseOrder $record) => (
+                    in_array($record->status, [PurchaseOrderStatus::Acknowledged, PurchaseOrderStatus::Scheduled, PurchaseOrderStatus::PartiallyDelivered], true)
+                    || ($record->status === PurchaseOrderStatus::Issued && static::isLean($record))
+                ) && static::allowed($record, SystemPermission::DeliveryManage))
                 ->schema(fn (PurchaseOrder $record): array => [
                     DateTimePicker::make('planned_delivery_at')->label('Jadwal')->native(false)->seconds(false)->required(),
                     Repeater::make('items')->label('Item')

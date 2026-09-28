@@ -2,7 +2,9 @@
 
 namespace App\Actions\Fulfillment;
 
+use App\Actions\Procurement\AcknowledgePurchaseOrderAction;
 use App\Enums\OperationalProfile;
+use App\Enums\PurchaseOrderStatus;
 use App\Enums\SystemPermission;
 use App\Models\DeliverySchedule;
 use App\Models\PurchaseOrder;
@@ -16,6 +18,7 @@ class CreateAndConfirmDeliveryScheduleAction
     public function __construct(
         private readonly CreateDeliveryScheduleAction $createDeliverySchedule,
         private readonly ConfirmDeliveryScheduleAction $confirmDeliverySchedule,
+        private readonly AcknowledgePurchaseOrderAction $acknowledgePurchaseOrder,
     ) {}
 
     /** @param array<int, float|int|string> $items */
@@ -37,6 +40,14 @@ class CreateAndConfirmDeliveryScheduleAction
         }
 
         return DB::transaction(function () use ($purchaseOrder, $items, $plannedDeliveryAt, $actor, $supplierNotes): DeliverySchedule {
+            if ($purchaseOrder->status === PurchaseOrderStatus::Issued) {
+                $purchaseOrder = $this->acknowledgePurchaseOrder->execute(
+                    $purchaseOrder,
+                    $actor,
+                    'PO diterima melalui pembuatan jadwal pengiriman.',
+                );
+            }
+
             $schedule = $this->createDeliverySchedule->execute(
                 $purchaseOrder,
                 $items,

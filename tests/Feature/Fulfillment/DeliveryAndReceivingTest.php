@@ -79,6 +79,34 @@ class DeliveryAndReceivingTest extends TestCase
         $this->assertNotNull($schedule->confirmed_at);
     }
 
+    public function test_lean_schedule_creation_implicitly_acknowledges_issued_po(): void
+    {
+        [$po, $poItem, $actor] = $this->makeAcknowledgedPo(100, OperationalProfile::Lean);
+        $po->forceFill([
+            'status' => PurchaseOrderStatus::Issued,
+            'acknowledged_at' => null,
+        ])->save();
+
+        $actor->givePermissionTo(
+            Permission::findOrCreate(SystemPermission::DeliveryManage->value, 'web'),
+        );
+
+        $schedule = app(CreateAndConfirmDeliveryScheduleAction::class)->execute(
+            $po->refresh(),
+            [$poItem->id => 100],
+            now()->addDay(),
+            $actor,
+        );
+
+        $this->assertSame(DeliveryScheduleStatus::Confirmed, $schedule->refresh()->status);
+        $this->assertSame(PurchaseOrderStatus::Scheduled, $po->refresh()->status);
+        $this->assertNotNull($po->acknowledged_at);
+        $this->assertDatabaseHas('purchase_order_responses', [
+            'purchase_order_id' => $po->getKey(),
+            'responded_by' => $actor->getKey(),
+        ]);
+    }
+
     public function test_lean_receiving_and_qc_can_be_completed_in_one_action(): void
     {
         [$po, $poItem, $actor] = $this->makeAcknowledgedPo(100, OperationalProfile::Lean);
