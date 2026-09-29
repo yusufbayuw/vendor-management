@@ -26,21 +26,17 @@
                 @else
                     <div class="space-y-3">
                         <p class="text-sm text-gray-600 dark:text-gray-400">
-                            Kirim pesan WhatsApp yang sudah dipersonalisasi ke admin. Admin akan mencocokkan nomor pengirim,
-                            nomor terdaftar, dan kode referensi sebelum menyetujui verifikasi.
+                            Permintaan verifikasi WhatsApp sudah dibuat. Admin akan menghubungi nomor WhatsApp yang terdaftar
+                            untuk memastikan nomor tersebut benar digunakan oleh PIC supplier.
                         </p>
                         <p class="text-sm">Kode referensi: <strong>{{ $manualReference }}</strong></p>
-                        <x-filament::button
-                            tag="a"
-                            :href="$whatsappUrl"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            icon="heroicon-o-chat-bubble-left-right"
-                        >
-                            Verifikasi melalui WhatsApp
-                        </x-filament::button>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            Saat admin menghubungi Anda, pastikan kode referensi pada pesan sama dengan kode di atas lalu
+                            balas konfirmasi melalui WhatsApp.
+                        </p>
                         <p class="text-xs text-gray-500 dark:text-gray-400">
-                            Membuka WhatsApp tidak otomatis memverifikasi akun. Status berubah setelah admin menyetujui permintaan.
+                            Status akun berubah setelah admin menyelesaikan verifikasi di Vendor Management.
+                            Jika nomor HP diubah, permintaan verifikasi lama tidak lagi berlaku.
                         </p>
                     </div>
                 @endif
