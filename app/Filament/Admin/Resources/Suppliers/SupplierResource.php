@@ -226,7 +226,7 @@ class SupplierResource extends Resource
                             ->label('Kode referensi')
                             ->content(static fn (): string => static::pendingPhoneVerification($record)?->reference ?? '-'),
                         Checkbox::make('confirmed')
-                            ->label('Saya telah memastikan pesan WhatsApp diterima dari nomor yang sama dengan nomor akun.')
+                            ->label('Saya telah menghubungi nomor WhatsApp terdaftar dan menerima konfirmasi dari PIC supplier.')
                             ->accepted()
                             ->required(),
                     ])
@@ -241,7 +241,7 @@ class SupplierResource extends Resource
                             }
 
                             if (! (bool) ($data['confirmed'] ?? false)) {
-                                throw new DomainException('Konfirmasi kecocokan nomor WhatsApp wajib diberikan.');
+                                throw new DomainException('Konfirmasi bahwa PIC telah merespons melalui nomor WhatsApp terdaftar wajib diberikan.');
                             }
 
                             app(ManualPhoneVerificationService::class)->verify($request, auth()->user());
