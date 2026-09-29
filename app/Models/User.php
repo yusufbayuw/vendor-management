@@ -3,14 +3,18 @@
 namespace App\Models;
 
 use App\Enums\SystemRole;
+use App\Notifications\VerifySupplierEmail;
 use App\Support\Auth\LoginIdentifier;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
+use Illuminate\Auth\MustVerifyEmail as MustVerifyEmailTrait;
+use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -18,13 +22,14 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 use Spatie\Permission\Traits\HasRoles;
+use Throwable;
 
 #[Fillable(['name', 'username', 'email', 'phone', 'password', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable implements FilamentUser, MustVerifyEmailContract
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasPushSubscriptions, HasRoles, Notifiable;
+    use HasFactory, HasPushSubscriptions, HasRoles, MustVerifyEmailTrait, Notifiable;
 
     protected $attributes = [
         'is_active' => true,
@@ -35,6 +40,24 @@ class User extends Authenticatable implements FilamentUser
         static::updating(function (User $user): void {
             if ($user->isDirty('phone')) {
                 $user->phone_verified_at = null;
+                $user->phone_verification_method = null;
+                $user->phone_verified_by = null;
+            }
+
+            if ($user->isDirty('email')) {
+                $user->email_verified_at = null;
+            }
+        });
+
+        static::updated(function (User $user): void {
+            if (! $user->wasChanged('email') || blank($user->email) || $user->hasVerifiedEmail()) {
+                return;
+            }
+
+            try {
+                $user->sendEmailVerificationNotification();
+            } catch (Throwable $exception) {
+                report($exception);
             }
         });
     }
@@ -47,6 +70,16 @@ class User extends Authenticatable implements FilamentUser
     public function phoneVerificationCodes(): HasMany
     {
         return $this->hasMany(PhoneVerificationCode::class);
+    }
+
+    public function phoneVerificationRequests(): HasMany
+    {
+        return $this->hasMany(PhoneVerificationRequest::class);
+    }
+
+    public function phoneVerifier(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'phone_verified_by');
     }
 
     public function suppliers(): BelongsToMany
@@ -71,6 +104,11 @@ class User extends Authenticatable implements FilamentUser
             ->where('phone', $this->phone)
             ->whereNotNull('verified_at')
             ->exists();
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new VerifySupplierEmail);
     }
 
     public function canAccessPanel(Panel $panel): bool

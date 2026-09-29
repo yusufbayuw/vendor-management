@@ -52,7 +52,7 @@ class SupplierOperationalEligibilityService
 
     public function portalIdentitySatisfied(Supplier $supplier): bool
     {
-        $supplier->loadMissing('users.phoneVerificationCodes');
+        $supplier->loadMissing('users');
 
         $activeUsers = $supplier->users->filter(
             static fn (User $user): bool => (bool) $user->pivot?->is_active,
@@ -63,7 +63,7 @@ class SupplierOperationalEligibilityService
         $candidates = $owners->isNotEmpty() ? $owners : $activeUsers;
 
         return $candidates->contains(
-            static fn (User $user): bool => $user->hasOtpVerifiedPhone(),
+            static fn (User $user): bool => $user->hasVerifiedPhone(),
         );
     }
 

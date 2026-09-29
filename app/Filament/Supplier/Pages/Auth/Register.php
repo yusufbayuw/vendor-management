@@ -304,6 +304,14 @@ class Register extends BaseRegister
             }
         }
 
+        if (filled($user->email) && ! $user->hasVerifiedEmail()) {
+            try {
+                $user->sendEmailVerificationNotification();
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+        }
+
         return $user;
     }
 

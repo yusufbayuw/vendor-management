@@ -54,12 +54,16 @@ class AppServiceProvider extends ServiceProvider
             $mode = (string) config('phone-verification.mode', 'otp');
             $driver = (string) config('phone-verification.driver', 'log');
 
-            if (! in_array($mode, ['otp', 'disabled'], true)) {
-                throw new InvalidArgumentException('PHONE_VERIFICATION_MODE hanya mendukung otp atau disabled.');
+            if (! in_array($mode, ['otp', 'manual', 'disabled'], true)) {
+                throw new InvalidArgumentException('PHONE_VERIFICATION_MODE hanya mendukung otp, manual, atau disabled.');
             }
 
-            if ($app->environment('production') && $mode !== 'otp') {
-                throw new InvalidArgumentException('PHONE_VERIFICATION_MODE wajib otp di production.');
+            if ($app->environment('production') && $mode === 'disabled') {
+                throw new InvalidArgumentException('PHONE_VERIFICATION_MODE=disabled tidak boleh digunakan di production.');
+            }
+
+            if ($mode !== 'otp') {
+                throw new InvalidArgumentException('OtpChannel hanya tersedia ketika PHONE_VERIFICATION_MODE=otp.');
             }
 
             if ($app->environment('production') && $driver === 'log') {

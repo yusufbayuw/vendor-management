@@ -16,11 +16,11 @@ class EnsureSupplierPhoneIsVerified
             return $next($request);
         }
 
-        abort_unless($mode === 'otp', 503, 'Konfigurasi verifikasi nomor HP supplier tidak aman.');
+        abort_unless(in_array($mode, ['otp', 'manual'], true), 503, 'Konfigurasi verifikasi nomor HP supplier tidak aman.');
 
         $user = $request->user();
 
-        if (! $user || $user->hasOtpVerifiedPhone()) {
+        if (! $user || $user->hasVerifiedPhone()) {
             return $next($request);
         }
 

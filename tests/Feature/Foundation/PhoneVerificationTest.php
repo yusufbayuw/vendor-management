@@ -19,6 +19,7 @@ class PhoneVerificationTest extends TestCase
     public function test_otp_is_hashed_and_can_verify_phone(): void
     {
         config([
+            'phone-verification.mode' => 'otp',
             'phone-verification.resend_cooldown_seconds' => 0,
             'phone-verification.expires_in_seconds' => 300,
         ]);
@@ -132,7 +133,7 @@ class PhoneVerificationTest extends TestCase
         }
     }
 
-    public function test_manual_mode_is_rejected(): void
+    public function test_manual_mode_does_not_expose_otp_channel(): void
     {
         config([
             'phone-verification.mode' => 'manual',
@@ -141,7 +142,7 @@ class PhoneVerificationTest extends TestCase
         $this->app->forgetInstance(OtpChannel::class);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('PHONE_VERIFICATION_MODE hanya mendukung otp atau disabled');
+        $this->expectExceptionMessage('OtpChannel hanya tersedia ketika PHONE_VERIFICATION_MODE=otp');
 
         $this->app->make(OtpChannel::class);
     }
@@ -161,7 +162,7 @@ class PhoneVerificationTest extends TestCase
             $this->app->make(OtpChannel::class);
             $this->fail('Production tidak boleh menonaktifkan verifikasi OTP supplier.');
         } catch (InvalidArgumentException $exception) {
-            $this->assertStringContainsString('PHONE_VERIFICATION_MODE wajib otp di production', $exception->getMessage());
+            $this->assertStringContainsString('PHONE_VERIFICATION_MODE=disabled tidak boleh digunakan di production', $exception->getMessage());
         } finally {
             $this->app['env'] = $originalEnvironment;
             $this->app->forgetInstance(OtpChannel::class);

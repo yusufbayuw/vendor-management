@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\LicenseController;
 use App\Http\Controllers\PrivateVendorFileController;
 use App\Http\Controllers\ProcurementReportController;
@@ -7,6 +8,10 @@ use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\PwaIconController;
 use App\Http\Controllers\TransactionDocumentController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/email/verify/{id}/{hash}', EmailVerificationController::class)
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('verification.verify');
 
 Route::get('/license/activate', [LicenseController::class, 'show'])->name('license.show');
 Route::post('/license/activate', [LicenseController::class, 'activate'])->name('license.activate');

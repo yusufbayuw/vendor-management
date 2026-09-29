@@ -13,13 +13,16 @@ use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
 use App\Enums\VerificationStatus;
 use App\Filament\Admin\Resources\Suppliers\Pages\ManageSuppliers;
+use App\Models\PhoneVerificationRequest;
 use App\Models\Supplier;
 use App\Services\Access\UserAccessService;
+use App\Services\Auth\ManualPhoneVerificationService;
 use App\Services\Regions\IndonesiaRegionService;
 use App\Services\Supplier\SupplierOperationalEligibilityService;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -195,6 +198,69 @@ class SupplierResource extends Resource
                         static::requirePermission(SystemPermission::SupplierVerify);
                         static::runDomainAction(fn () => app(RequestSupplierRevisionAction::class)->execute($record, $data['reason']), 'Permintaan perbaikan dikirim.');
                     }),
+                Action::make('verifyWhatsApp')
+                    ->label('Verifikasi WhatsApp PIC')
+                    ->color('success')
+                    ->visible(static fn (Supplier $record): bool => static::canVerify() && static::pendingPhoneVerification($record) !== null)
+                    ->schema(static fn (Supplier $record): array => [
+                        Placeholder::make('wa_pic')
+                            ->label('PIC')
+                            ->content(static fn (): string => static::pendingPhoneVerification($record)?->user?->name ?? '-'),
+                        Placeholder::make('wa_phone')
+                            ->label('Nomor terdaftar')
+                            ->content(static fn (): string => '+'.(static::pendingPhoneVerification($record)?->phone ?? '-')),
+                        Placeholder::make('wa_reference')
+                            ->label('Kode referensi')
+                            ->content(static fn (): string => static::pendingPhoneVerification($record)?->reference ?? '-'),
+                        Checkbox::make('confirmed')
+                            ->label('Saya telah memastikan pesan WhatsApp diterima dari nomor yang sama dengan nomor akun.')
+                            ->accepted()
+                            ->required(),
+                    ])
+                    ->requiresConfirmation()
+                    ->action(static function (Supplier $record, array $data): void {
+                        static::requirePermission(SystemPermission::SupplierVerify);
+                        static::runDomainAction(function () use ($record, $data): void {
+                            $request = static::pendingPhoneVerification($record);
+
+                            if (! $request) {
+                                throw new DomainException('Permintaan verifikasi WhatsApp sudah tidak tersedia.');
+                            }
+
+                            if (! (bool) ($data['confirmed'] ?? false)) {
+                                throw new DomainException('Konfirmasi kecocokan nomor WhatsApp wajib diberikan.');
+                            }
+
+                            app(ManualPhoneVerificationService::class)->verify($request, auth()->user());
+                        }, 'Nomor WhatsApp PIC berhasil diverifikasi.');
+                    }),
+                Action::make('rejectWhatsApp')
+                    ->label('Tolak Verifikasi WA')
+                    ->color('danger')
+                    ->visible(static fn (Supplier $record): bool => static::canVerify() && static::pendingPhoneVerification($record) !== null)
+                    ->schema([
+                        Textarea::make('reason')
+                            ->label('Alasan penolakan')
+                            ->required()
+                            ->rows(3),
+                    ])
+                    ->requiresConfirmation()
+                    ->action(static function (Supplier $record, array $data): void {
+                        static::requirePermission(SystemPermission::SupplierVerify);
+                        static::runDomainAction(function () use ($record, $data): void {
+                            $request = static::pendingPhoneVerification($record);
+
+                            if (! $request) {
+                                throw new DomainException('Permintaan verifikasi WhatsApp sudah tidak tersedia.');
+                            }
+
+                            app(ManualPhoneVerificationService::class)->reject(
+                                $request,
+                                auth()->user(),
+                                (string) $data['reason'],
+                            );
+                        }, 'Permintaan verifikasi WhatsApp ditolak.');
+                    }),
                 Action::make('approve')
                     ->label('Setujui Supplier')
                     ->color('success')
@@ -224,7 +290,7 @@ class SupplierResource extends Resource
                             ->label('Akun/PIC')
                             ->content(static fn (): string => app(SupplierOperationalEligibilityService::class)->portalIdentitySatisfied($record)
                                 ? 'Nomor HP terverifikasi'
-                                : 'Belum memenuhi verifikasi OTP'),
+                                : 'Belum ada nomor HP terverifikasi'),
                     ])
                     ->requiresConfirmation()
                     ->action(static function (Supplier $record): void {
@@ -284,7 +350,7 @@ class SupplierResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-            ->with(['approvalAttestation', 'documents', 'users.phoneVerificationCodes'])
+            ->with(['approvalAttestation', 'documents', 'users.phoneVerificationCodes', 'users.phoneVerificationRequests'])
             ->withCount(['documents', 'products']);
         $user = auth()->user();
 
@@ -317,6 +383,34 @@ class SupplierResource extends Resource
     public static function getPages(): array
     {
         return ['index' => ManageSuppliers::route('/')];
+    }
+
+    private static function pendingPhoneVerification(Supplier $record): ?PhoneVerificationRequest
+    {
+        $record->loadMissing('users.phoneVerificationRequests');
+
+        $activeUsers = $record->users->filter(
+            static fn ($user): bool => (bool) $user->pivot?->is_active,
+        );
+        $owners = $activeUsers->filter(
+            static fn ($user): bool => (bool) $user->pivot?->is_owner,
+        );
+        $candidates = $owners->isNotEmpty() ? $owners : $activeUsers;
+
+        foreach ($candidates as $user) {
+            $pending = $user->phoneVerificationRequests
+                ->where('status', PhoneVerificationRequest::STATUS_PENDING)
+                ->where('method', PhoneVerificationRequest::METHOD_WHATSAPP_MANUAL)
+                ->where('phone', $user->phone)
+                ->sortByDesc('requested_at')
+                ->first();
+
+            if ($pending) {
+                return $pending;
+            }
+        }
+
+        return null;
     }
 
     private static function canVerify(): bool
