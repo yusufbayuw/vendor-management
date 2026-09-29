@@ -8,9 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PhoneVerificationRequest extends Model
 {
     public const METHOD_WHATSAPP_MANUAL = 'whatsapp_manual';
+
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_VERIFIED = 'verified';
+
     public const STATUS_REJECTED = 'rejected';
+
     public const STATUS_EXPIRED = 'expired';
 
     protected $fillable = [
