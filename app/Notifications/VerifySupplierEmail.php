@@ -7,7 +7,7 @@ use Illuminate\Notifications\Messages\MailMessage;
 
 class VerifySupplierEmail extends VerifyEmail
 {
-    public function toMail(object $notifiable): MailMessage
+    public function toMail($notifiable): MailMessage
     {
         $verificationUrl = $this->verificationUrl($notifiable);
         $minutes = (int) config('auth.verification.expire', 60);
