@@ -51,8 +51,8 @@ class ApproveSupplierAction
         if (! $candidates->contains(static fn (User $user): bool => $user->hasVerifiedPhone())) {
             throw new DomainException(
                 $owners->isNotEmpty()
-                    ? 'Nomor HP PIC/owner supplier harus sudah terverifikasi sebelum supplier dapat disetujui.'
-                    : 'Minimal satu pengguna aktif supplier harus memiliki nomor HP terverifikasi sebelum supplier dapat disetujui.',
+                    ? 'Nomor HP PIC/owner supplier harus diverifikasi sebelum supplier dapat disetujui.'
+                    : 'Minimal satu pengguna aktif supplier harus memiliki nomor HP yang diverifikasi sebelum supplier dapat disetujui.',
             );
         }
 
