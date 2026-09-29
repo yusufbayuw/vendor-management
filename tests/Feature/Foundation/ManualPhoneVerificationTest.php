@@ -33,7 +33,7 @@ class ManualPhoneVerificationTest extends TestCase
 
         $this->assertStringStartsWith('https://wa.me/6281234567890?text=', $url);
         $this->assertStringContainsString('Halo Bapak/Ibu Budi Supplier', $url);
-        $this->assertStringContainsString('Nomor terdaftar: +081234567890', $url);
+        $this->assertStringContainsString('Nomor terdaftar: +6281234567890', $url);
         $this->assertStringContainsString($request->reference, $url);
         $this->assertSame(PhoneVerificationRequest::STATUS_PENDING, $request->status);
 
