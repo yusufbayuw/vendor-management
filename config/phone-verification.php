@@ -5,6 +5,9 @@ return [
 
     'driver' => env('OTP_CHANNEL', 'log'),
 
+    'whatsapp_admin' => env('PHONE_VERIFICATION_WHATSAPP_ADMIN'),
+    'manual_request_ttl_hours' => (int) env('PHONE_VERIFICATION_MANUAL_TTL_HOURS', 168),
+
     'expires_in_seconds' => (int) env('OTP_EXPIRES_IN_SECONDS', 300),
     'resend_cooldown_seconds' => (int) env('OTP_RESEND_COOLDOWN_SECONDS', 60),
     'max_attempts' => (int) env('OTP_MAX_ATTEMPTS', 5),
