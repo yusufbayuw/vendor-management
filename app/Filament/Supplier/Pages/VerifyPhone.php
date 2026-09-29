@@ -18,13 +18,19 @@ class VerifyPhone extends Page implements HasForms
     use InteractsWithForms;
 
     protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $slug = 'verify-phone';
+
     protected static ?string $title = 'Verifikasi Nomor HP';
+
     protected string $view = 'filament.supplier.pages.verify-phone';
 
     public ?array $data = [];
+
     public ?string $whatsappUrl = null;
+
     public ?string $manualReference = null;
+
     public ?string $manualError = null;
 
     public function mount(): void
