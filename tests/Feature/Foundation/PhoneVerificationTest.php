@@ -19,6 +19,7 @@ class PhoneVerificationTest extends TestCase
     public function test_otp_is_hashed_and_can_verify_phone(): void
     {
         config([
+            'phone-verification.mode' => 'otp',
             'phone-verification.resend_cooldown_seconds' => 0,
             'phone-verification.expires_in_seconds' => 300,
         ]);
