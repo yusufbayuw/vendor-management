@@ -120,8 +120,13 @@ class VerifyPhone extends Page implements HasForms
     public function maskedPhone(): string
     {
         $phone = (string) auth()->user()?->phone;
-        if ($phone === '') return 'Belum diisi';
-        if (strlen($phone) <= 7) return '+'.$phone;
+        if ($phone === '') {
+            return 'Belum diisi';
+        }
+
+        if (strlen($phone) <= 7) {
+            return '+'.$phone;
+        }
 
         return '+'.substr($phone, 0, 4).' **** '.substr($phone, -4);
     }
