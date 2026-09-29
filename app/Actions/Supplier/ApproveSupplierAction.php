@@ -42,18 +42,17 @@ class ApproveSupplierAction
 
         $activeUsers = $supplier->users()
             ->wherePivot('is_active', true)
-            ->with('phoneVerificationCodes')
             ->get();
         $owners = $activeUsers->filter(
             static fn (User $user): bool => (bool) $user->pivot?->is_owner,
         );
         $candidates = $owners->isNotEmpty() ? $owners : $activeUsers;
 
-        if (! $candidates->contains(static fn (User $user): bool => $user->hasOtpVerifiedPhone())) {
+        if (! $candidates->contains(static fn (User $user): bool => $user->hasVerifiedPhone())) {
             throw new DomainException(
                 $owners->isNotEmpty()
-                    ? 'Nomor HP PIC/owner supplier harus diverifikasi melalui OTP sebelum supplier dapat disetujui.'
-                    : 'Minimal satu pengguna aktif supplier harus memiliki nomor HP yang diverifikasi melalui OTP sebelum supplier dapat disetujui.',
+                    ? 'Nomor HP PIC/owner supplier harus sudah terverifikasi sebelum supplier dapat disetujui.'
+                    : 'Minimal satu pengguna aktif supplier harus memiliki nomor HP terverifikasi sebelum supplier dapat disetujui.',
             );
         }
 
