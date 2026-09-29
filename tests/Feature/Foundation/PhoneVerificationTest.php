@@ -161,7 +161,7 @@ class PhoneVerificationTest extends TestCase
             $this->app->make(OtpChannel::class);
             $this->fail('Production tidak boleh menonaktifkan verifikasi OTP supplier.');
         } catch (InvalidArgumentException $exception) {
-            $this->assertStringContainsString('PHONE_VERIFICATION_MODE wajib otp di production', $exception->getMessage());
+            $this->assertStringContainsString('PHONE_VERIFICATION_MODE=disabled tidak boleh digunakan di production', $exception->getMessage());
         } finally {
             $this->app['env'] = $originalEnvironment;
             $this->app->forgetInstance(OtpChannel::class);
