@@ -198,6 +198,19 @@ class SupplierResource extends Resource
                         static::requirePermission(SystemPermission::SupplierVerify);
                         static::runDomainAction(fn () => app(RequestSupplierRevisionAction::class)->execute($record, $data['reason']), 'Permintaan perbaikan dikirim.');
                     }),
+                Action::make('contactWhatsApp')
+                    ->label('Hubungi PIC via WhatsApp')
+                    ->icon('heroicon-o-chat-bubble-left-right')
+                    ->color('info')
+                    ->visible(static fn (Supplier $record): bool => static::canVerify() && static::pendingPhoneVerification($record) !== null)
+                    ->url(static function (Supplier $record): ?string {
+                        $request = static::pendingPhoneVerification($record);
+
+                        return $request
+                            ? app(ManualPhoneVerificationService::class)->whatsappUrlForAdmin($request)
+                            : null;
+                    })
+                    ->openUrlInNewTab(),
                 Action::make('verifyWhatsApp')
                     ->label('Verifikasi WhatsApp PIC')
                     ->color('success')
@@ -213,7 +226,7 @@ class SupplierResource extends Resource
                             ->label('Kode referensi')
                             ->content(static fn (): string => static::pendingPhoneVerification($record)?->reference ?? '-'),
                         Checkbox::make('confirmed')
-                            ->label('Saya telah memastikan pesan WhatsApp diterima dari nomor yang sama dengan nomor akun.')
+                            ->label('Saya telah menghubungi nomor WhatsApp terdaftar dan menerima konfirmasi dari PIC supplier.')
                             ->accepted()
                             ->required(),
                     ])
@@ -228,7 +241,7 @@ class SupplierResource extends Resource
                             }
 
                             if (! (bool) ($data['confirmed'] ?? false)) {
-                                throw new DomainException('Konfirmasi kecocokan nomor WhatsApp wajib diberikan.');
+                                throw new DomainException('Konfirmasi bahwa PIC telah merespons melalui nomor WhatsApp terdaftar wajib diberikan.');
                             }
 
                             app(ManualPhoneVerificationService::class)->verify($request, auth()->user());

@@ -65,16 +65,28 @@ class ManualPhoneVerificationService
         });
     }
 
-    public function whatsappUrl(User $user, PhoneVerificationRequest $request): string
+    public function whatsappUrlForAdmin(PhoneVerificationRequest $request): string
     {
-        $target = LoginIdentifier::normalizePhone((string) config('phone-verification.whatsapp_admin'));
+        $request->loadMissing('user');
 
-        if (blank($target)) {
-            throw new DomainException('Nomor WhatsApp admin belum dikonfigurasi.');
+        $user = $request->user;
+
+        if (! $user) {
+            throw new DomainException('Akun PIC pada permintaan verifikasi tidak ditemukan.');
         }
 
-        if ($request->user_id !== $user->getKey() || $request->phone !== $user->phone) {
-            throw new DomainException('Permintaan verifikasi tidak cocok dengan nomor HP akun saat ini.');
+        if ($request->status !== PhoneVerificationRequest::STATUS_PENDING) {
+            throw new DomainException('Permintaan verifikasi WhatsApp sudah diproses.');
+        }
+
+        if (blank($user->phone) || $request->phone !== $user->phone) {
+            throw new DomainException('Nomor HP akun sudah berubah. Buat permintaan verifikasi baru.');
+        }
+
+        $target = LoginIdentifier::normalizePhone((string) $request->phone);
+
+        if (blank($target)) {
+            throw new DomainException('Nomor WhatsApp PIC tidak valid.');
         }
 
         $supplier = $user->suppliers()
@@ -86,15 +98,19 @@ class ManualPhoneVerificationService
         $supplierName = $supplier?->display_name ?: $supplier?->legal_name ?: '-';
 
         $message = implode("\n", [
-            'Halo Admin SPPG, saya ingin memverifikasi nomor WhatsApp untuk akun supplier.',
+            'Halo Bapak/Ibu '.$user->name.',',
+            '',
+            'Kami dari Vendor Management SPPG sedang melakukan verifikasi nomor WhatsApp untuk akun supplier berikut:',
             '',
             'Supplier: '.$supplierName,
             'PIC: '.$user->name,
             'Username: '.($user->username ?: '-'),
-            'Nomor terdaftar: +'.$user->phone,
+            'Nomor terdaftar: +'.$request->phone,
             'Kode verifikasi: '.$request->reference,
             '',
-            'Mohon verifikasi nomor ini pada Vendor Management.',
+            'Mohon konfirmasi bahwa nomor WhatsApp ini benar digunakan oleh PIC supplier tersebut.',
+            '',
+            'Terima kasih.',
         ]);
 
         return 'https://wa.me/'.$target.'?text='.rawurlencode($message);

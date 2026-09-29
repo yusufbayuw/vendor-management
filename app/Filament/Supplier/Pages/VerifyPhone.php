@@ -27,8 +27,6 @@ class VerifyPhone extends Page implements HasForms
 
     public ?array $data = [];
 
-    public ?string $whatsappUrl = null;
-
     public ?string $manualReference = null;
 
     public ?string $manualError = null;
@@ -55,7 +53,6 @@ class VerifyPhone extends Page implements HasForms
             try {
                 $request = app(ManualPhoneVerificationService::class)->currentOrCreate($user);
                 $this->manualReference = $request->reference;
-                $this->whatsappUrl = app(ManualPhoneVerificationService::class)->whatsappUrl($user, $request);
             } catch (DomainException $exception) {
                 $this->manualError = $exception->getMessage();
             }
