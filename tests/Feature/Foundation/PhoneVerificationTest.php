@@ -133,7 +133,7 @@ class PhoneVerificationTest extends TestCase
         }
     }
 
-    public function test_manual_mode_is_rejected(): void
+    public function test_manual_mode_does_not_expose_otp_channel(): void
     {
         config([
             'phone-verification.mode' => 'manual',
@@ -142,7 +142,7 @@ class PhoneVerificationTest extends TestCase
         $this->app->forgetInstance(OtpChannel::class);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('PHONE_VERIFICATION_MODE hanya mendukung otp atau disabled');
+        $this->expectExceptionMessage('OtpChannel hanya tersedia ketika PHONE_VERIFICATION_MODE=otp');
 
         $this->app->make(OtpChannel::class);
     }
