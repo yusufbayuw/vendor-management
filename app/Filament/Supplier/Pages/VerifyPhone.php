@@ -2,6 +2,7 @@
 
 namespace App\Filament\Supplier\Pages;
 
+use App\Services\Auth\ManualPhoneVerificationService;
 use App\Services\Auth\PhoneVerificationService;
 use DomainException;
 use Filament\Forms\Components\TextInput;
@@ -17,113 +18,99 @@ class VerifyPhone extends Page implements HasForms
     use InteractsWithForms;
 
     protected static bool $shouldRegisterNavigation = false;
-
     protected static ?string $slug = 'verify-phone';
-
     protected static ?string $title = 'Verifikasi Nomor HP';
-
     protected string $view = 'filament.supplier.pages.verify-phone';
 
     public ?array $data = [];
+    public ?string $whatsappUrl = null;
+    public ?string $manualReference = null;
+    public ?string $manualError = null;
 
     public function mount(): void
     {
         $user = auth()->user();
-
         abort_unless($user !== null, 403);
 
-        if (config('phone-verification.mode', 'otp') !== 'otp' || $user->hasOtpVerifiedPhone()) {
+        if ($user->hasVerifiedPhone()) {
             $this->redirect('/supplier');
-
             return;
         }
 
-        $this->form->fill();
+        if ($this->usesOtp()) {
+            $this->form->fill();
+            return;
+        }
+
+        if ($this->usesManualVerification()) {
+            try {
+                $request = app(ManualPhoneVerificationService::class)->currentOrCreate($user);
+                $this->manualReference = $request->reference;
+                $this->whatsappUrl = app(ManualPhoneVerificationService::class)->whatsappUrl($user, $request);
+            } catch (DomainException $exception) {
+                $this->manualError = $exception->getMessage();
+            }
+            return;
+        }
+
+        $this->redirect('/supplier');
     }
 
     public function form(Schema $schema): Schema
     {
-        return $schema
-            ->statePath('data')
-            ->components([
-                TextInput::make('code')
-                    ->label('Kode OTP')
-                    ->helperText('Masukkan 6 digit kode yang dikirim ke nomor HP Anda.')
-                    ->required()
-                    ->numeric()
-                    ->length(6)
-                    ->autocomplete('one-time-code')
-                    ->extraInputAttributes(['inputmode' => 'numeric']),
-            ]);
+        return $schema->statePath('data')->components($this->usesOtp() ? [
+            TextInput::make('code')
+                ->label('Kode OTP')
+                ->helperText('Masukkan 6 digit kode yang dikirim ke nomor HP Anda.')
+                ->required()->numeric()->length(6)
+                ->autocomplete('one-time-code')
+                ->extraInputAttributes(['inputmode' => 'numeric']),
+        ] : []);
     }
 
     public function sendCode(): void
     {
-        if (config('phone-verification.mode', 'manual') !== 'otp') {
-            Notification::make()
-                ->danger()
-                ->title('Verifikasi OTP tidak tersedia pada konfigurasi ini.')
+        if (! $this->usesOtp()) {
+            Notification::make()->warning()
+                ->title('Verifikasi nomor HP dilakukan melalui WhatsApp dan persetujuan admin.')
                 ->send();
-
             return;
         }
 
         $user = auth()->user();
-
         if (! $user || blank($user->phone)) {
-            Notification::make()
-                ->danger()
-                ->title('Nomor HP belum tersedia.')
-                ->body('Tambahkan nomor HP melalui Profil terlebih dahulu.')
-                ->send();
-
+            Notification::make()->danger()->title('Nomor HP belum tersedia.')
+                ->body('Tambahkan nomor HP melalui Profil terlebih dahulu.')->send();
             return;
         }
 
         try {
             app(PhoneVerificationService::class)->send($user, request()->ip());
-
-            Notification::make()
-                ->success()
-                ->title('OTP berhasil dikirim.')
-                ->body('Kode berlaku selama 5 menit.')
-                ->send();
+            Notification::make()->success()->title('OTP berhasil dikirim.')
+                ->body('Kode berlaku selama 5 menit.')->send();
         } catch (DomainException $exception) {
             Notification::make()->warning()->title($exception->getMessage())->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()
-                ->danger()
-                ->title('OTP gagal dikirim.')
-                ->body('Silakan coba kembali beberapa saat lagi.')
-                ->send();
+            Notification::make()->danger()->title('OTP gagal dikirim.')
+                ->body('Silakan coba kembali beberapa saat lagi.')->send();
         }
     }
 
     public function verify(): void
     {
-        if (config('phone-verification.mode', 'manual') !== 'otp') {
-            Notification::make()
-                ->warning()
-                ->title('Verifikasi nomor HP dilakukan oleh admin.')
-                ->send();
-
+        if (! $this->usesOtp()) {
+            Notification::make()->warning()->title('Verifikasi nomor HP menunggu persetujuan admin.')->send();
             return;
         }
 
         $state = $this->form->getState();
         $user = auth()->user();
-
         abort_unless($user !== null, 403);
 
         try {
             app(PhoneVerificationService::class)->verify($user, (string) $state['code']);
-
-            Notification::make()
-                ->success()
-                ->title('Nomor HP berhasil diverifikasi.')
-                ->send();
-
+            Notification::make()->success()->title('Nomor HP berhasil diverifikasi.')->send();
             $this->redirect('/supplier');
         } catch (DomainException $exception) {
             Notification::make()->danger()->title($exception->getMessage())->send();
@@ -133,20 +120,24 @@ class VerifyPhone extends Page implements HasForms
     public function maskedPhone(): string
     {
         $phone = (string) auth()->user()?->phone;
-
-        if ($phone === '') {
-            return 'Belum diisi';
-        }
-
-        if (strlen($phone) <= 7) {
-            return $phone;
-        }
+        if ($phone === '') return 'Belum diisi';
+        if (strlen($phone) <= 7) return '+'.$phone;
 
         return '+'.substr($phone, 0, 4).' **** '.substr($phone, -4);
     }
 
+    public function usesOtp(): bool
+    {
+        return config('phone-verification.mode', 'otp') === 'otp';
+    }
+
+    public function usesManualVerification(): bool
+    {
+        return config('phone-verification.mode', 'otp') === 'manual';
+    }
+
     public function usesLogDriver(): bool
     {
-        return config('phone-verification.driver') === 'log';
+        return $this->usesOtp() && config('phone-verification.driver') === 'log';
     }
 }
