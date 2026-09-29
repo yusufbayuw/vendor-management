@@ -198,6 +198,19 @@ class SupplierResource extends Resource
                         static::requirePermission(SystemPermission::SupplierVerify);
                         static::runDomainAction(fn () => app(RequestSupplierRevisionAction::class)->execute($record, $data['reason']), 'Permintaan perbaikan dikirim.');
                     }),
+                Action::make('contactWhatsApp')
+                    ->label('Hubungi PIC via WhatsApp')
+                    ->icon('heroicon-o-chat-bubble-left-right')
+                    ->color('info')
+                    ->visible(static fn (Supplier $record): bool => static::canVerify() && static::pendingPhoneVerification($record) !== null)
+                    ->url(static function (Supplier $record): ?string {
+                        $request = static::pendingPhoneVerification($record);
+
+                        return $request
+                            ? app(ManualPhoneVerificationService::class)->whatsappUrlForAdmin($request)
+                            : null;
+                    })
+                    ->openUrlInNewTab(),
                 Action::make('verifyWhatsApp')
                     ->label('Verifikasi WhatsApp PIC')
                     ->color('success')
