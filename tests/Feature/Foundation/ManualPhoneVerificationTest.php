@@ -14,12 +14,9 @@ class ManualPhoneVerificationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_manual_whatsapp_request_contains_personalized_reference_and_can_be_verified(): void
+    public function test_manual_whatsapp_request_lets_admin_contact_supplier_and_then_verify(): void
     {
-        config([
-            'phone-verification.mode' => 'manual',
-            'phone-verification.whatsapp_admin' => '628111111111',
-        ]);
+        config(['phone-verification.mode' => 'manual']);
 
         $user = User::factory()->create([
             'name' => 'Budi Supplier',
@@ -32,10 +29,11 @@ class ManualPhoneVerificationTest extends TestCase
 
         $service = app(ManualPhoneVerificationService::class);
         $request = $service->currentOrCreate($user);
-        $url = urldecode($service->whatsappUrl($user, $request));
+        $url = urldecode($service->whatsappUrlForAdmin($request));
 
-        $this->assertStringStartsWith('https://wa.me/628111111111?text=', $url);
-        $this->assertStringContainsString('Budi Supplier', $url);
+        $this->assertStringStartsWith('https://wa.me/6281234567890?text=', $url);
+        $this->assertStringContainsString('Halo Bapak/Ibu Budi Supplier', $url);
+        $this->assertStringContainsString('Nomor terdaftar: +081234567890', $url);
         $this->assertStringContainsString($request->reference, $url);
         $this->assertSame(PhoneVerificationRequest::STATUS_PENDING, $request->status);
 
