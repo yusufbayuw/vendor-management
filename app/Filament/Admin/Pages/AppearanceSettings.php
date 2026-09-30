@@ -89,6 +89,11 @@ class AppearanceSettings extends Page
         return app(ThemeRegistry::class)->modes();
     }
 
+    public function isRecommendedTheme(string $theme): bool
+    {
+        return $theme === ThemeRegistry::DEFAULT_THEME;
+    }
+
     public function save(): RedirectResponse
     {
         abort_unless($this->canManage(), 403);
