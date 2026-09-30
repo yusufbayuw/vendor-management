@@ -147,7 +147,7 @@ class ReferencePreviewModal
                     ? $type.' · '.($reference->getAttribute('number') ?? '#'.$reference->getKey())
                     : $type;
             })
-            ->modalWidth('5xl')
+            ->modalWidth('4xl')
             ->modalContent(function (Model $record) use ($resolver, $fields, $items, $url, $type) {
                 $reference = $resolver($record);
 
