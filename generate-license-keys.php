@@ -57,6 +57,136 @@ function hasFlag(string $flag): bool
     return in_array($flag, $argv ?? [], true);
 }
 
+function openSslErrors(): string
+{
+    $errors = [];
+
+    while (($error = openssl_error_string()) !== false) {
+        $errors[] = $error;
+    }
+
+    return $errors === [] ? 'unknown OpenSSL error' : implode(' | ', $errors);
+}
+
+/**
+ * @return array{path:string,temporary:bool,source:string}
+ */
+function resolveOpenSslConfig(): array
+{
+    $candidates = [];
+
+    foreach (['OPENSSL_CONF', 'SSLEAY_CONF'] as $environmentVariable) {
+        $value = getenv($environmentVariable);
+
+        if (is_string($value) && trim($value) !== '') {
+            $candidates[] = [
+                'path' => trim($value),
+                'source' => $environmentVariable,
+            ];
+        }
+    }
+
+    $phpDirectory = dirname(PHP_BINARY);
+    $phpParentDirectory = dirname($phpDirectory);
+
+    foreach ([
+        $phpDirectory.DIRECTORY_SEPARATOR.'openssl.cnf',
+        $phpDirectory.DIRECTORY_SEPARATOR.'ssl'.DIRECTORY_SEPARATOR.'openssl.cnf',
+        $phpDirectory.DIRECTORY_SEPARATOR.'extras'.DIRECTORY_SEPARATOR.'ssl'.DIRECTORY_SEPARATOR.'openssl.cnf',
+        $phpDirectory.DIRECTORY_SEPARATOR.'extras'.DIRECTORY_SEPARATOR.'openssl'.DIRECTORY_SEPARATOR.'openssl.cnf',
+        $phpParentDirectory.DIRECTORY_SEPARATOR.'openssl.cnf',
+        $phpParentDirectory.DIRECTORY_SEPARATOR.'ssl'.DIRECTORY_SEPARATOR.'openssl.cnf',
+        $phpParentDirectory.DIRECTORY_SEPARATOR.'extras'.DIRECTORY_SEPARATOR.'ssl'.DIRECTORY_SEPARATOR.'openssl.cnf',
+    ] as $path) {
+        $candidates[] = [
+            'path' => $path,
+            'source' => 'PHP installation',
+        ];
+    }
+
+    if (PHP_OS_FAMILY === 'Windows') {
+        $programFiles = getenv('ProgramFiles');
+        $programFilesX86 = getenv('ProgramFiles(x86)');
+        $userProfile = getenv('USERPROFILE');
+
+        if (is_string($programFiles) && $programFiles !== '') {
+            $candidates[] = [
+                'path' => $programFiles.'\Common Files\SSL\openssl.cnf',
+                'source' => 'Windows Common Files',
+            ];
+        }
+
+        if (is_string($programFilesX86) && $programFilesX86 !== '') {
+            $candidates[] = [
+                'path' => $programFilesX86.'\Common Files\SSL\openssl.cnf',
+                'source' => 'Windows Common Files (x86)',
+            ];
+        }
+
+        $candidates[] = [
+            'path' => 'C:\usr\local\ssl\openssl.cnf',
+            'source' => 'legacy Windows default',
+        ];
+
+        if (is_string($userProfile) && $userProfile !== '') {
+            $herdBin = $userProfile.'\.config\herd\bin';
+            $phpFolder = basename($phpDirectory);
+
+            foreach ([
+                $herdBin.'\'.$phpFolder.'\openssl.cnf',
+                $herdBin.'\'.$phpFolder.'\ssl\openssl.cnf',
+                $herdBin.'\'.$phpFolder.'\extras\ssl\openssl.cnf',
+                $herdBin.'\'.$phpFolder.'\extras\openssl\openssl.cnf',
+            ] as $path) {
+                $candidates[] = [
+                    'path' => $path,
+                    'source' => 'Laravel Herd',
+                ];
+            }
+        }
+    }
+
+    foreach ($candidates as $candidate) {
+        $path = $candidate['path'];
+
+        if (is_file($path) && is_readable($path)) {
+            return [
+                'path' => $path,
+                'temporary' => false,
+                'source' => $candidate['source'],
+            ];
+        }
+    }
+
+    $temporaryPath = tempnam(sys_get_temp_dir(), 'vendor-openssl-');
+
+    if ($temporaryPath === false) {
+        fail('Tidak dapat membuat openssl.cnf sementara di '.sys_get_temp_dir().'.');
+    }
+
+    $minimalConfig = <<<'CNF'
+[ req ]
+default_bits = 3072
+default_md = sha256
+distinguished_name = req_distinguished_name
+prompt = no
+
+[ req_distinguished_name ]
+CN = Vendor Management License Signing
+CNF;
+
+    if (file_put_contents($temporaryPath, $minimalConfig.PHP_EOL, LOCK_EX) === false) {
+        @unlink($temporaryPath);
+        fail('Tidak dapat menulis openssl.cnf sementara.');
+    }
+
+    return [
+        'path' => $temporaryPath,
+        'temporary' => true,
+        'source' => 'temporary minimal config',
+    ];
+}
+
 if (PHP_SAPI !== 'cli') {
     fail('Script ini hanya boleh dijalankan melalui PHP CLI.');
 }
@@ -73,6 +203,8 @@ $requiredFunctions = [
     'openssl_pkey_new',
     'openssl_pkey_export',
     'openssl_pkey_get_details',
+    'openssl_pkey_get_private',
+    'openssl_pkey_get_public',
     'openssl_sign',
     'openssl_verify',
 ];
@@ -110,106 +242,129 @@ if ($existingFiles !== [] && ! $force) {
     exit(2);
 }
 
+$opensslConfig = resolveOpenSslConfig();
+
 info('Vendor Management License Key Generator');
 info('=======================================');
 info('PHP       : '.PHP_VERSION);
 info('OS        : '.PHP_OS_FAMILY);
+info('OpenSSL   : '.(defined('OPENSSL_VERSION_TEXT') ? OPENSSL_VERSION_TEXT : 'unknown'));
 info('RSA bits  : '.RSA_BITS);
 info('Directory : '.__DIR__);
+info('Config    : '.$opensslConfig['path']);
+info('Source    : '.$opensslConfig['source']);
 info('');
 
 $config = [
+    'config' => $opensslConfig['path'],
     'private_key_bits' => RSA_BITS,
     'private_key_type' => OPENSSL_KEYTYPE_RSA,
+    'digest_alg' => 'sha256',
 ];
 
-$key = openssl_pkey_new($config);
+$key = null;
 
-if ($key === false) {
-    fail('Gagal membuat RSA private key: '.(openssl_error_string() ?: 'unknown OpenSSL error'));
-}
+try {
+    while (openssl_error_string() !== false) {
+        // Clear stale errors before key generation.
+    }
 
-$privateKey = '';
+    $key = openssl_pkey_new($config);
 
-if (! openssl_pkey_export($key, $privateKey)) {
-    fail('Gagal mengekspor private key: '.(openssl_error_string() ?: 'unknown OpenSSL error'));
-}
+    if ($key === false) {
+        fail(
+            'Gagal membuat RSA private key.'.PHP_EOL.
+            'OpenSSL config: '.$opensslConfig['path'].PHP_EOL.
+            'Detail: '.openSslErrors()
+        );
+    }
 
-$details = openssl_pkey_get_details($key);
+    $privateKey = '';
 
-if (! is_array($details) || ! isset($details['key']) || ! is_string($details['key'])) {
-    fail('Gagal mendapatkan public key dari private key.');
-}
+    if (! openssl_pkey_export($key, $privateKey, null, $config)) {
+        fail('Gagal mengekspor private key: '.openSslErrors());
+    }
 
-$publicKey = $details['key'];
+    $details = openssl_pkey_get_details($key);
 
-if (file_put_contents($privateKeyPath, $privateKey, LOCK_EX) === false) {
-    fail('Gagal menulis '.$privateKeyPath);
-}
+    if (! is_array($details) || ! isset($details['key']) || ! is_string($details['key'])) {
+        fail('Gagal mendapatkan public key dari private key: '.openSslErrors());
+    }
 
-if (file_put_contents($publicKeyPath, $publicKey, LOCK_EX) === false) {
-    @unlink($privateKeyPath);
-    fail('Gagal menulis '.$publicKeyPath);
-}
+    $publicKey = $details['key'];
 
-/*
- * chmod() is effective on Unix-like systems. On Windows it may have limited
- * effect, but calling it is harmless; Windows file ACLs remain authoritative.
- */
-@chmod($privateKeyPath, 0600);
-@chmod($publicKeyPath, 0644);
+    if (file_put_contents($privateKeyPath, $privateKey, LOCK_EX) === false) {
+        fail('Gagal menulis '.$privateKeyPath);
+    }
 
-/*
- * Verify that both generated files form a working pair.
- */
-$verificationPayload = 'vendor-management-keypair-check:'.bin2hex(random_bytes(16));
-$signature = '';
+    if (file_put_contents($publicKeyPath, $publicKey, LOCK_EX) === false) {
+        @unlink($privateKeyPath);
+        fail('Gagal menulis '.$publicKeyPath);
+    }
 
-$privateResource = openssl_pkey_get_private((string) file_get_contents($privateKeyPath));
-$publicResource = openssl_pkey_get_public((string) file_get_contents($publicKeyPath));
+    /*
+     * chmod() is effective on Unix-like systems. On Windows it may have limited
+     * effect, but calling it is harmless; Windows file ACLs remain authoritative.
+     */
+    @chmod($privateKeyPath, 0600);
+    @chmod($publicKeyPath, 0644);
 
-if ($privateResource === false || $publicResource === false) {
-    @unlink($privateKeyPath);
-    @unlink($publicKeyPath);
-    fail('Key file berhasil ditulis tetapi gagal dibaca kembali oleh OpenSSL.');
-}
+    /*
+     * Verify that both generated files form a working pair.
+     */
+    $verificationPayload = 'vendor-management-keypair-check:'.bin2hex(random_bytes(16));
+    $signature = '';
 
-if (! openssl_sign($verificationPayload, $signature, $privateResource, OPENSSL_ALGO_SHA256)) {
-    @unlink($privateKeyPath);
-    @unlink($publicKeyPath);
-    fail('Keypair gagal pada self-test signing.');
-}
+    $privateResource = openssl_pkey_get_private((string) file_get_contents($privateKeyPath));
+    $publicResource = openssl_pkey_get_public((string) file_get_contents($publicKeyPath));
 
-if (openssl_verify($verificationPayload, $signature, $publicResource, OPENSSL_ALGO_SHA256) !== 1) {
-    @unlink($privateKeyPath);
-    @unlink($publicKeyPath);
-    fail('Keypair gagal pada self-test verification.');
-}
+    if ($privateResource === false || $publicResource === false) {
+        @unlink($privateKeyPath);
+        @unlink($publicKeyPath);
+        fail('Key file berhasil ditulis tetapi gagal dibaca kembali oleh OpenSSL: '.openSslErrors());
+    }
 
-$fingerprint = strtoupper(
-    implode(
-        ':',
-        str_split(
-            hash('sha256', $publicKey),
-            2,
+    if (! openssl_sign($verificationPayload, $signature, $privateResource, OPENSSL_ALGO_SHA256)) {
+        @unlink($privateKeyPath);
+        @unlink($publicKeyPath);
+        fail('Keypair gagal pada self-test signing: '.openSslErrors());
+    }
+
+    if (openssl_verify($verificationPayload, $signature, $publicResource, OPENSSL_ALGO_SHA256) !== 1) {
+        @unlink($privateKeyPath);
+        @unlink($publicKeyPath);
+        fail('Keypair gagal pada self-test verification: '.openSslErrors());
+    }
+
+    $fingerprint = strtoupper(
+        implode(
+            ':',
+            str_split(
+                hash('sha256', $publicKey),
+                2,
+            ),
         ),
-    ),
-);
+    );
 
-info('[OK] Keypair berhasil dibuat dan lolos self-test.');
-info('');
-info('Private key : '.$privateKeyPath);
-info('Public key  : '.$publicKeyPath);
-info('SHA-256     : '.$fingerprint);
-info('');
-info('LANGKAH BERIKUTNYA');
-info('1. Backup private_key.pem ke lokasi aman/terenkripsi.');
-info('2. Jangan pernah upload private_key.pem ke server client.');
-info('3. Salin isi public_key.pem ke public key di app/Support/SystemBoot.php.');
-info('4. Commit hanya perubahan source code; *.pem sudah di-ignore repository.');
-info('5. Setelah public key aplikasi cocok, buat lisensi dengan:');
-info('   php artisan license:create <system-signature> --client="Nama Client"');
-info('');
-info('Public key:');
-info('-----------');
-info(trim($publicKey));
+    info('[OK] Keypair berhasil dibuat dan lolos self-test.');
+    info('');
+    info('Private key : '.$privateKeyPath);
+    info('Public key  : '.$publicKeyPath);
+    info('SHA-256     : '.$fingerprint);
+    info('');
+    info('LANGKAH BERIKUTNYA');
+    info('1. Backup private_key.pem ke lokasi aman/terenkripsi.');
+    info('2. Jangan pernah upload private_key.pem ke server client.');
+    info('3. Salin isi public_key.pem ke public key di app/Support/SystemBoot.php.');
+    info('4. Commit hanya perubahan source code; *.pem sudah di-ignore repository.');
+    info('5. Setelah public key aplikasi cocok, buat lisensi dengan:');
+    info('   php artisan license:create <system-signature> --client="Nama Client"');
+    info('');
+    info('Public key:');
+    info('-----------');
+    info(trim($publicKey));
+} finally {
+    if ($opensslConfig['temporary']) {
+        @unlink($opensslConfig['path']);
+    }
+}
