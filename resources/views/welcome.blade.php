@@ -568,27 +568,41 @@
             background: #fff;
         }
 
-        .prep-item-icon {
+        .prep-item > .prep-item-icon {
             width: 46px;
             height: 46px;
             display: grid;
             place-items: center;
+            margin: 0;
             border-radius: 14px;
             color: var(--emerald);
             background: #eff9f4;
+            font-size: inherit;
+            line-height: 1;
         }
 
-        .prep-item-icon svg {
+        .prep-item > .prep-item-icon svg {
+            display: block;
             width: 22px;
             height: 22px;
+            margin: 0;
+        }
+
+        .prep-item > span:not(.prep-item-icon) {
+            display: block;
+            min-width: 0;
+            margin: 0;
+            color: inherit;
+            font-size: inherit;
         }
 
         .prep-item strong {
             display: block;
+            color: var(--ink);
             font-size: 15px;
         }
 
-        .prep-item span {
+        .prep-item > span:not(.prep-item-icon) > span {
             display: block;
             margin-top: 4px;
             color: var(--muted);
