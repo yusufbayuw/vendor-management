@@ -11,7 +11,6 @@ use App\Http\Controllers\TransactionDocumentController;
 use Filament\Http\Middleware\SetUpPanel;
 use Illuminate\Support\Facades\Route;
 
-
 Route::get('/login', [UnifiedLoginController::class, 'create'])
     ->middleware(SetUpPanel::class.':admin')
     ->name('login');
