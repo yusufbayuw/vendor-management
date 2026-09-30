@@ -48,6 +48,10 @@ class SupplierPanelProvider extends PanelProvider
                 fn () => view('pwa.meta', ['panelId' => 'supplier']),
             )
             ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn () => view('filament.theme.runtime', ['panelId' => 'supplier']),
+            )
+            ->renderHook(
                 PanelsRenderHook::BODY_END,
                 fn () => view('pwa.client', ['showBanner' => auth()->check()]),
             )

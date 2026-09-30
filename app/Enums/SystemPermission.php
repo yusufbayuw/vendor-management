@@ -38,6 +38,8 @@ enum SystemPermission: string
     case InvoiceApprove = 'invoice.approve';
     case PaymentCreate = 'payment.create';
     case PaymentVerify = 'payment.verify';
+    case AppearanceView = 'appearance.view';
+    case AppearanceManage = 'appearance.manage';
     case AuditView = 'audit.view';
     case ReportsView = 'reports.view';
 }

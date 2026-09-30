@@ -1,0 +1,1064 @@
+/*
+ * Vendor Management — Theme Pack System
+ *
+ * Theme assets are intentionally plain CSS and checked into public/ so an
+ * administrator can switch themes without npm/vite/shell execution.
+ *
+ * Liquid Glass rule: content stays readable and mostly solid; navigation,
+ * controls, overlays, and chrome receive the glass treatment.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Appearance settings page (theme-independent)                               */
+/* -------------------------------------------------------------------------- */
+
+.theme-settings-shell {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.theme-settings-callout,
+.theme-settings-readonly,
+.theme-settings-panel,
+.theme-settings-footer {
+    border: 1px solid rgb(148 163 184 / 0.22);
+    border-radius: 1rem;
+    background: rgb(255 255 255 / 0.88);
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.dark .theme-settings-callout,
+.dark .theme-settings-readonly,
+.dark .theme-settings-panel,
+.dark .theme-settings-footer {
+    border-color: rgb(148 163 184 / 0.16);
+    background: rgb(24 24 27 / 0.88);
+}
+
+.theme-settings-callout {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 1.15rem 1.25rem;
+}
+
+.theme-settings-callout-icon {
+    display: grid;
+    flex: 0 0 auto;
+    width: 2.75rem;
+    height: 2.75rem;
+    place-items: center;
+    border-radius: 0.9rem;
+    background: rgb(245 158 11 / 0.12);
+    color: rgb(217 119 6);
+}
+
+.theme-settings-callout-icon svg {
+    width: 1.35rem;
+    height: 1.35rem;
+}
+
+.theme-settings-callout h2,
+.theme-settings-panel h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: rgb(15 23 42);
+}
+
+.dark .theme-settings-callout h2,
+.dark .theme-settings-panel h2 {
+    color: rgb(244 244 245);
+}
+
+.theme-settings-callout p,
+.theme-settings-panel-header p,
+.theme-mode-row p,
+.theme-settings-footer p {
+    margin: 0.3rem 0 0;
+    color: rgb(100 116 139);
+    font-size: 0.875rem;
+    line-height: 1.55;
+}
+
+.dark .theme-settings-callout p,
+.dark .theme-settings-panel-header p,
+.dark .theme-mode-row p,
+.dark .theme-settings-footer p {
+    color: rgb(161 161 170);
+}
+
+.theme-settings-readonly {
+    padding: 0.9rem 1rem;
+    border-color: rgb(59 130 246 / 0.25);
+    background: rgb(239 246 255 / 0.92);
+    color: rgb(30 64 175);
+    font-size: 0.875rem;
+}
+
+.dark .theme-settings-readonly {
+    border-color: rgb(96 165 250 / 0.24);
+    background: rgb(30 58 138 / 0.16);
+    color: rgb(147 197 253);
+}
+
+.theme-settings-readonly code {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.theme-settings-panel {
+    overflow: hidden;
+}
+
+.theme-settings-panel-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 1.25rem;
+    border-bottom: 1px solid rgb(148 163 184 / 0.16);
+}
+
+.dark .theme-settings-panel-header {
+    border-color: rgb(148 163 184 / 0.12);
+}
+
+.theme-settings-panel-kicker {
+    margin-bottom: 0.2rem;
+    color: rgb(148 163 184);
+    font: 600 0.72rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.theme-pack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    padding: 1.25rem;
+}
+
+.theme-pack-card {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    border: 1px solid rgb(148 163 184 / 0.22);
+    border-radius: 1rem;
+    background: rgb(248 250 252 / 0.7);
+    cursor: pointer;
+    transition:
+        transform 160ms ease,
+        border-color 160ms ease,
+        box-shadow 160ms ease,
+        background-color 160ms ease;
+}
+
+.dark .theme-pack-card {
+    border-color: rgb(148 163 184 / 0.14);
+    background: rgb(39 39 42 / 0.52);
+}
+
+.theme-pack-card:hover {
+    transform: translateY(-2px);
+    border-color: rgb(245 158 11 / 0.5);
+    box-shadow: 0 10px 24px rgb(15 23 42 / 0.08);
+}
+
+.theme-pack-card.is-selected {
+    border-color: rgb(245 158 11 / 0.78);
+    box-shadow:
+        0 0 0 2px rgb(245 158 11 / 0.14),
+        0 12px 26px rgb(15 23 42 / 0.08);
+}
+
+.theme-pack-radio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.theme-pack-radio:focus-visible + .theme-pack-preview {
+    outline: 3px solid rgb(59 130 246 / 0.45);
+    outline-offset: -3px;
+}
+
+.theme-pack-preview {
+    position: relative;
+    display: grid;
+    grid-template-columns: 30% 70%;
+    height: 150px;
+    overflow: hidden;
+    background: #eef2f7;
+    border-bottom: 1px solid rgb(148 163 184 / 0.16);
+}
+
+.theme-pack-preview[data-preview-theme="liquid"] {
+    background:
+        radial-gradient(circle at 80% 18%, rgb(59 130 246 / 0.24), transparent 34%),
+        radial-gradient(circle at 18% 82%, rgb(245 158 11 / 0.26), transparent 32%),
+        linear-gradient(135deg, #eef4fb, #f8fafc);
+}
+
+.theme-pack-preview[data-preview-theme="liquid"][data-preview-panel="supplier"] {
+    background:
+        radial-gradient(circle at 78% 20%, rgb(16 185 129 / 0.25), transparent 34%),
+        radial-gradient(circle at 12% 86%, rgb(14 165 233 / 0.18), transparent 32%),
+        linear-gradient(135deg, #eefaf5, #f8fafc);
+}
+
+.theme-preview-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 10px 0 10px 10px;
+    padding: 10px 8px;
+    border-right: 1px solid rgb(148 163 184 / 0.16);
+    background: rgb(255 255 255 / 0.92);
+}
+
+[data-preview-theme="liquid"] .theme-preview-sidebar {
+    border: 1px solid rgb(255 255 255 / 0.7);
+    border-radius: 12px;
+    background: rgb(255 255 255 / 0.56);
+    box-shadow: 0 10px 30px rgb(15 23 42 / 0.08);
+    backdrop-filter: blur(10px);
+}
+
+.theme-preview-brand {
+    width: 55%;
+    height: 7px;
+    margin-bottom: 5px;
+    border-radius: 99px;
+    background: rgb(51 65 85 / 0.72);
+}
+
+.theme-preview-nav {
+    width: 86%;
+    height: 9px;
+    border-radius: 99px;
+    background: rgb(148 163 184 / 0.35);
+}
+
+.theme-preview-nav.is-active {
+    background: rgb(245 158 11 / 0.54);
+}
+
+[data-preview-panel="supplier"] .theme-preview-nav.is-active {
+    background: rgb(16 185 129 / 0.55);
+}
+
+.theme-preview-content {
+    padding: 10px;
+}
+
+.theme-preview-topbar {
+    width: 100%;
+    height: 22px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    background: rgb(255 255 255 / 0.9);
+}
+
+[data-preview-theme="liquid"] .theme-preview-topbar {
+    border: 1px solid rgb(255 255 255 / 0.72);
+    background: rgb(255 255 255 / 0.52);
+    box-shadow: 0 6px 20px rgb(15 23 42 / 0.06);
+    backdrop-filter: blur(10px);
+}
+
+.theme-preview-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    margin-bottom: 8px;
+}
+
+.theme-preview-stats span {
+    height: 28px;
+    border: 1px solid rgb(148 163 184 / 0.16);
+    border-radius: 7px;
+    background: rgb(255 255 255 / 0.8);
+}
+
+[data-preview-theme="liquid"] .theme-preview-stats span {
+    background: rgb(255 255 255 / 0.58);
+    backdrop-filter: blur(8px);
+}
+
+.theme-preview-table {
+    display: grid;
+    gap: 5px;
+    padding: 7px;
+    border: 1px solid rgb(148 163 184 / 0.13);
+    border-radius: 8px;
+    background: rgb(255 255 255 / 0.96);
+}
+
+.theme-preview-table i {
+    display: block;
+    width: 90%;
+    height: 5px;
+    border-radius: 99px;
+    background: rgb(148 163 184 / 0.3);
+}
+
+.theme-preview-table i:nth-child(2) { width: 72%; }
+.theme-preview-table i:nth-child(3) { width: 82%; }
+.theme-preview-table i:nth-child(4) { width: 64%; }
+
+.theme-pack-meta {
+    padding: 1rem;
+}
+
+.theme-pack-title-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.theme-pack-title-row strong {
+    color: rgb(15 23 42);
+    font-size: 0.94rem;
+}
+
+.dark .theme-pack-title-row strong {
+    color: rgb(244 244 245);
+}
+
+.theme-pack-recommended {
+    padding: 0.18rem 0.45rem;
+    border-radius: 999px;
+    background: rgb(245 158 11 / 0.12);
+    color: rgb(180 83 9);
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.dark .theme-pack-recommended {
+    color: rgb(252 211 77);
+}
+
+.theme-pack-selected-mark {
+    display: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-left: auto;
+    place-items: center;
+    border-radius: 999px;
+    background: rgb(245 158 11);
+    color: white;
+}
+
+.theme-pack-selected-mark svg {
+    width: 0.8rem;
+    height: 0.8rem;
+}
+
+.theme-pack-card.is-selected .theme-pack-selected-mark {
+    display: grid;
+}
+
+.theme-pack-meta p {
+    margin: 0.45rem 0 0;
+    color: rgb(100 116 139);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.dark .theme-pack-meta p {
+    color: rgb(161 161 170);
+}
+
+.theme-mode-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1.5rem;
+    align-items: center;
+    padding: 1rem 1.25rem 1.25rem;
+}
+
+.theme-mode-row strong,
+.theme-settings-footer strong {
+    color: rgb(30 41 59);
+    font-size: 0.875rem;
+}
+
+.dark .theme-mode-row strong,
+.dark .theme-settings-footer strong {
+    color: rgb(228 228 231);
+}
+
+.theme-mode-control select {
+    min-width: 220px;
+    padding: 0.55rem 2rem 0.55rem 0.75rem;
+    border: 1px solid rgb(148 163 184 / 0.34);
+    border-radius: 0.65rem;
+    background-color: white;
+    color: rgb(15 23 42);
+    font-size: 0.875rem;
+}
+
+.dark .theme-mode-control select {
+    border-color: rgb(148 163 184 / 0.2);
+    background-color: rgb(39 39 42);
+    color: rgb(244 244 245);
+}
+
+.theme-mode-control select:focus {
+    border-color: rgb(245 158 11 / 0.72);
+    outline: 3px solid rgb(245 158 11 / 0.12);
+}
+
+.theme-settings-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem 1.25rem;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Liquid Glass tokens                                                        */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] {
+    --lg-canvas: #eef2f7;
+    --lg-canvas-2: #f8fafc;
+    --lg-ink: #172033;
+    --lg-muted: #64748b;
+    --lg-line: rgb(148 163 184 / 0.22);
+    --lg-line-strong: rgb(255 255 255 / 0.68);
+    --lg-glass: rgb(255 255 255 / 0.66);
+    --lg-glass-strong: rgb(255 255 255 / 0.82);
+    --lg-glass-soft: rgb(255 255 255 / 0.5);
+    --lg-content: rgb(255 255 255 / 0.9);
+    --lg-content-solid: rgb(255 255 255 / 0.97);
+    --lg-field: rgb(255 255 255 / 0.74);
+    --lg-shadow: 0 18px 50px rgb(15 23 42 / 0.09);
+    --lg-shadow-soft: 0 8px 24px rgb(15 23 42 / 0.065);
+    --lg-inner-highlight: inset 0 1px 0 rgb(255 255 255 / 0.72);
+    --lg-radius-sm: 0.7rem;
+    --lg-radius-md: 1rem;
+    --lg-radius-lg: 1.35rem;
+    --lg-blur: 22px;
+    --lg-saturate: 150%;
+    --lg-primary-tint: rgb(245 158 11 / 0.14);
+    --lg-primary-tint-strong: rgb(245 158 11 / 0.24);
+    --lg-primary-line: rgb(245 158 11 / 0.34);
+}
+
+html.dark[data-app-theme="liquid-glass"] {
+    --lg-canvas: #090d14;
+    --lg-canvas-2: #111827;
+    --lg-ink: #f4f4f5;
+    --lg-muted: #a1a1aa;
+    --lg-line: rgb(148 163 184 / 0.14);
+    --lg-line-strong: rgb(255 255 255 / 0.12);
+    --lg-glass: rgb(17 24 39 / 0.68);
+    --lg-glass-strong: rgb(24 24 27 / 0.84);
+    --lg-glass-soft: rgb(24 24 27 / 0.56);
+    --lg-content: rgb(24 24 27 / 0.9);
+    --lg-content-solid: rgb(24 24 27 / 0.98);
+    --lg-field: rgb(39 39 42 / 0.76);
+    --lg-shadow: 0 22px 60px rgb(0 0 0 / 0.32);
+    --lg-shadow-soft: 0 10px 28px rgb(0 0 0 / 0.24);
+    --lg-inner-highlight: inset 0 1px 0 rgb(255 255 255 / 0.08);
+    --lg-primary-tint: rgb(245 158 11 / 0.12);
+    --lg-primary-tint-strong: rgb(245 158 11 / 0.2);
+    --lg-primary-line: rgb(251 191 36 / 0.28);
+}
+
+html[data-app-theme="liquid-glass"][data-app-panel="supplier"] {
+    --lg-primary-tint: rgb(16 185 129 / 0.13);
+    --lg-primary-tint-strong: rgb(16 185 129 / 0.22);
+    --lg-primary-line: rgb(16 185 129 / 0.32);
+}
+
+html.dark[data-app-theme="liquid-glass"][data-app-panel="supplier"] {
+    --lg-primary-tint: rgb(16 185 129 / 0.11);
+    --lg-primary-tint-strong: rgb(16 185 129 / 0.18);
+    --lg-primary-line: rgb(52 211 153 / 0.26);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Canvas and global chrome                                                   */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] body {
+    color: var(--lg-ink);
+    background:
+        radial-gradient(circle at 82% 4%, rgb(59 130 246 / 0.12), transparent 30rem),
+        radial-gradient(circle at 9% 92%, rgb(245 158 11 / 0.11), transparent 28rem),
+        linear-gradient(135deg, var(--lg-canvas), var(--lg-canvas-2));
+    background-attachment: fixed;
+}
+
+html[data-app-theme="liquid-glass"][data-app-panel="supplier"] body {
+    background:
+        radial-gradient(circle at 84% 5%, rgb(16 185 129 / 0.12), transparent 30rem),
+        radial-gradient(circle at 8% 92%, rgb(14 165 233 / 0.1), transparent 28rem),
+        linear-gradient(135deg, var(--lg-canvas), var(--lg-canvas-2));
+    background-attachment: fixed;
+}
+
+html[data-app-theme="liquid-glass"] body::before {
+    content: "";
+    position: fixed;
+    z-index: -1;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+        linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: linear-gradient(to bottom, black 0%, transparent 82%);
+}
+
+html[data-app-theme="liquid-glass"] .fi-body,
+html[data-app-theme="liquid-glass"] .fi-layout {
+    background: transparent;
+}
+
+html[data-app-theme="liquid-glass"] .fi-main {
+    position: relative;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Topbar                                                                     */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] .fi-topbar {
+    border-bottom: 1px solid var(--lg-line-strong);
+    background: var(--lg-glass);
+    box-shadow:
+        var(--lg-inner-highlight),
+        0 8px 28px rgb(15 23 42 / 0.055);
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+}
+
+html[data-app-theme="liquid-glass"] .fi-topbar nav {
+    background: transparent;
+}
+
+html[data-app-theme="liquid-glass"] .fi-topbar button,
+html[data-app-theme="liquid-glass"] .fi-topbar a {
+    transition:
+        background-color 150ms ease,
+        box-shadow 150ms ease,
+        transform 150ms ease;
+}
+
+html[data-app-theme="liquid-glass"] .fi-topbar button:hover,
+html[data-app-theme="liquid-glass"] .fi-topbar a:hover {
+    background-color: var(--lg-glass-soft);
+}
+
+html[data-app-theme="liquid-glass"] .fi-topbar button:active,
+html[data-app-theme="liquid-glass"] .fi-topbar a:active {
+    transform: scale(0.98);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sidebar                                                                    */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] .fi-sidebar {
+    border-right: 1px solid var(--lg-line-strong);
+    background: var(--lg-glass);
+    box-shadow:
+        var(--lg-inner-highlight),
+        14px 0 38px rgb(15 23 42 / 0.055);
+    backdrop-filter: blur(calc(var(--lg-blur) + 4px)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(calc(var(--lg-blur) + 4px)) saturate(var(--lg-saturate));
+}
+
+html[data-app-theme="liquid-glass"] .fi-sidebar-header {
+    border-bottom-color: var(--lg-line);
+    background: transparent;
+}
+
+html[data-app-theme="liquid-glass"] .fi-sidebar-group-label {
+    color: var(--lg-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+}
+
+html[data-app-theme="liquid-glass"] .fi-sidebar-item-button {
+    margin-inline: 0.35rem;
+    border: 1px solid transparent;
+    border-radius: var(--lg-radius-sm);
+    transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        box-shadow 140ms ease,
+        transform 140ms ease;
+}
+
+html[data-app-theme="liquid-glass"] .fi-sidebar-item-button:hover {
+    border-color: var(--lg-line);
+    background: var(--lg-glass-soft);
+    box-shadow: var(--lg-inner-highlight);
+}
+
+html[data-app-theme="liquid-glass"] .fi-sidebar-item.fi-active > .fi-sidebar-item-button,
+html[data-app-theme="liquid-glass"] .fi-sidebar-item-button[aria-current="page"] {
+    border-color: var(--lg-primary-line);
+    background: var(--lg-primary-tint-strong);
+    box-shadow:
+        var(--lg-inner-highlight),
+        0 6px 18px rgb(15 23 42 / 0.05);
+}
+
+html[data-app-theme="liquid-glass"] .fi-sidebar-item-button:active {
+    transform: scale(0.985);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Page header / breadcrumbs / tabs                                           */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] .fi-header-heading {
+    color: var(--lg-ink);
+    letter-spacing: -0.02em;
+}
+
+html[data-app-theme="liquid-glass"] .fi-header-subheading,
+html[data-app-theme="liquid-glass"] .fi-breadcrumbs,
+html[data-app-theme="liquid-glass"] .fi-breadcrumbs-item {
+    color: var(--lg-muted);
+}
+
+html[data-app-theme="liquid-glass"] .fi-tabs {
+    gap: 0.2rem;
+    padding: 0.25rem;
+    border: 1px solid var(--lg-line-strong);
+    border-radius: 0.9rem;
+    background: var(--lg-glass-soft);
+    box-shadow: var(--lg-inner-highlight);
+    backdrop-filter: blur(14px) saturate(135%);
+    -webkit-backdrop-filter: blur(14px) saturate(135%);
+}
+
+html[data-app-theme="liquid-glass"] .fi-tabs-item {
+    border-radius: 0.68rem;
+}
+
+html[data-app-theme="liquid-glass"] .fi-tabs-item-active {
+    background: var(--lg-glass-strong);
+    box-shadow: var(--lg-shadow-soft);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sections and dashboard cards                                               */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] .fi-section {
+    overflow: hidden;
+    border: 1px solid var(--lg-line-strong);
+    border-radius: var(--lg-radius-md);
+    background: var(--lg-content);
+    box-shadow:
+        var(--lg-inner-highlight),
+        var(--lg-shadow-soft);
+}
+
+html[data-app-theme="liquid-glass"] .fi-section .fi-section {
+    border-color: var(--lg-line);
+    background: var(--lg-content-solid);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html[data-app-theme="liquid-glass"] .fi-section-header {
+    border-bottom-color: var(--lg-line);
+    background: rgb(255 255 255 / 0.18);
+}
+
+html.dark[data-app-theme="liquid-glass"] .fi-section-header {
+    background: rgb(255 255 255 / 0.025);
+}
+
+html[data-app-theme="liquid-glass"] .fi-wi-stats-overview-stat,
+html[data-app-theme="liquid-glass"] .fi-wi-widget > .fi-section {
+    border: 1px solid var(--lg-line-strong);
+    border-radius: var(--lg-radius-md);
+    background: var(--lg-glass-strong);
+    box-shadow:
+        var(--lg-inner-highlight),
+        var(--lg-shadow-soft);
+    backdrop-filter: blur(16px) saturate(135%);
+    -webkit-backdrop-filter: blur(16px) saturate(135%);
+}
+
+html[data-app-theme="liquid-glass"] .fi-wi-stats-overview-stat {
+    transition:
+        transform 160ms ease,
+        box-shadow 160ms ease,
+        border-color 160ms ease;
+}
+
+html[data-app-theme="liquid-glass"] .fi-wi-stats-overview-stat:hover {
+    transform: translateY(-2px);
+    border-color: var(--lg-primary-line);
+    box-shadow:
+        var(--lg-inner-highlight),
+        var(--lg-shadow);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tables — deliberately content-first / high opacity                         */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] .fi-ta,
+html[data-app-theme="liquid-glass"] .fi-ta-ctn {
+    overflow: hidden;
+    border: 1px solid var(--lg-line-strong);
+    border-radius: var(--lg-radius-md);
+    background: var(--lg-content-solid);
+    box-shadow:
+        var(--lg-inner-highlight),
+        var(--lg-shadow-soft);
+}
+
+html[data-app-theme="liquid-glass"] .fi-ta-header,
+html[data-app-theme="liquid-glass"] .fi-ta-header-toolbar,
+html[data-app-theme="liquid-glass"] .fi-ta-filters {
+    border-color: var(--lg-line);
+    background: var(--lg-glass-strong);
+    backdrop-filter: blur(12px) saturate(130%);
+    -webkit-backdrop-filter: blur(12px) saturate(130%);
+}
+
+html[data-app-theme="liquid-glass"] .fi-ta-content,
+html[data-app-theme="liquid-glass"] .fi-ta-table {
+    background: var(--lg-content-solid);
+}
+
+html[data-app-theme="liquid-glass"] .fi-ta-table thead {
+    background: var(--lg-content-solid);
+}
+
+html[data-app-theme="liquid-glass"] .fi-ta-table tbody tr {
+    border-color: var(--lg-line);
+    background: transparent;
+    transition: background-color 120ms ease;
+}
+
+html[data-app-theme="liquid-glass"] .fi-ta-table tbody tr:hover {
+    background: var(--lg-primary-tint);
+}
+
+html[data-app-theme="liquid-glass"] .fi-ta-table th {
+    color: var(--lg-muted);
+    font-weight: 700;
+}
+
+html[data-app-theme="liquid-glass"] .fi-ta-table td {
+    color: var(--lg-ink);
+}
+
+html[data-app-theme="liquid-glass"][data-app-panel="admin"] .fi-ta-cell {
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+}
+
+html[data-app-theme="liquid-glass"] .fi-pagination {
+    border-top-color: var(--lg-line);
+    background: var(--lg-content-solid);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Forms                                                                      */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] .fi-fo-field-wrp-label label,
+html[data-app-theme="liquid-glass"] .fi-fo-field-wrp-label span {
+    color: var(--lg-ink);
+}
+
+html[data-app-theme="liquid-glass"] .fi-fo-field-wrp-helper-text {
+    color: var(--lg-muted);
+}
+
+html[data-app-theme="liquid-glass"] .fi-input-wrp {
+    border-color: var(--lg-line);
+    border-radius: var(--lg-radius-sm);
+    background: var(--lg-field);
+    box-shadow:
+        var(--lg-inner-highlight),
+        0 2px 8px rgb(15 23 42 / 0.035);
+    transition:
+        border-color 140ms ease,
+        box-shadow 140ms ease,
+        background-color 140ms ease;
+}
+
+html[data-app-theme="liquid-glass"] .fi-input-wrp:focus-within {
+    border-color: var(--lg-primary-line);
+    background: var(--lg-content-solid);
+    box-shadow:
+        0 0 0 3px var(--lg-primary-tint),
+        var(--lg-inner-highlight);
+}
+
+html[data-app-theme="liquid-glass"] input,
+html[data-app-theme="liquid-glass"] textarea,
+html[data-app-theme="liquid-glass"] select {
+    color: var(--lg-ink);
+}
+
+html[data-app-theme="liquid-glass"] input::placeholder,
+html[data-app-theme="liquid-glass"] textarea::placeholder {
+    color: var(--lg-muted);
+    opacity: 0.72;
+}
+
+html[data-app-theme="liquid-glass"][data-app-panel="supplier"] .fi-input-wrp {
+    min-height: 2.65rem;
+}
+
+html[data-app-theme="liquid-glass"][data-app-panel="supplier"] .fi-btn {
+    min-height: 2.45rem;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Buttons, badges, actions                                                   */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] .fi-btn {
+    border-radius: 0.72rem;
+    box-shadow:
+        var(--lg-inner-highlight),
+        0 5px 14px rgb(15 23 42 / 0.08);
+    transition:
+        transform 130ms ease,
+        box-shadow 130ms ease,
+        filter 130ms ease;
+}
+
+html[data-app-theme="liquid-glass"] .fi-btn:hover {
+    box-shadow:
+        var(--lg-inner-highlight),
+        0 8px 18px rgb(15 23 42 / 0.12);
+}
+
+html[data-app-theme="liquid-glass"] .fi-btn:active {
+    transform: scale(0.985);
+    box-shadow:
+        var(--lg-inner-highlight),
+        0 3px 9px rgb(15 23 42 / 0.08);
+}
+
+html[data-app-theme="liquid-glass"] .fi-badge {
+    border: 1px solid rgb(255 255 255 / 0.18);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+    backdrop-filter: blur(8px) saturate(130%);
+    -webkit-backdrop-filter: blur(8px) saturate(130%);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dropdowns, modals, slide-overs, notifications                              */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] .fi-dropdown-panel,
+html[data-app-theme="liquid-glass"] .fi-modal-window,
+html[data-app-theme="liquid-glass"] .fi-no-notification,
+html[data-app-theme="liquid-glass"] .fi-notification {
+    border: 1px solid var(--lg-line-strong);
+    background: var(--lg-glass-strong);
+    box-shadow:
+        var(--lg-inner-highlight),
+        var(--lg-shadow);
+    backdrop-filter: blur(calc(var(--lg-blur) + 6px)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(calc(var(--lg-blur) + 6px)) saturate(var(--lg-saturate));
+}
+
+html[data-app-theme="liquid-glass"] .fi-dropdown-panel {
+    border-radius: var(--lg-radius-md);
+}
+
+html[data-app-theme="liquid-glass"] .fi-modal-window {
+    border-radius: var(--lg-radius-lg);
+}
+
+html[data-app-theme="liquid-glass"] .fi-modal-close-btn,
+html[data-app-theme="liquid-glass"] .fi-dropdown-list-item {
+    border-radius: 0.65rem;
+}
+
+html[data-app-theme="liquid-glass"] .fi-dropdown-list-item:hover {
+    background: var(--lg-primary-tint);
+}
+
+html[data-app-theme="liquid-glass"] .fi-modal-close-overlay {
+    background: rgb(15 23 42 / 0.3);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+html.dark[data-app-theme="liquid-glass"] .fi-modal-close-overlay {
+    background: rgb(0 0 0 / 0.5);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Auth / simple layout                                                       */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] .fi-simple-layout {
+    background:
+        radial-gradient(circle at 14% 18%, var(--lg-primary-tint-strong), transparent 30rem),
+        radial-gradient(circle at 86% 78%, rgb(59 130 246 / 0.18), transparent 32rem),
+        linear-gradient(135deg, var(--lg-canvas), var(--lg-canvas-2));
+}
+
+html[data-app-theme="liquid-glass"][data-app-panel="supplier"] .fi-simple-layout {
+    background:
+        radial-gradient(circle at 15% 18%, rgb(16 185 129 / 0.2), transparent 30rem),
+        radial-gradient(circle at 86% 78%, rgb(14 165 233 / 0.15), transparent 32rem),
+        linear-gradient(135deg, var(--lg-canvas), var(--lg-canvas-2));
+}
+
+html[data-app-theme="liquid-glass"] .fi-simple-main {
+    border: 1px solid var(--lg-line-strong);
+    border-radius: var(--lg-radius-lg);
+    background: var(--lg-glass-strong);
+    box-shadow:
+        var(--lg-inner-highlight),
+        0 28px 80px rgb(15 23 42 / 0.2);
+    backdrop-filter: blur(calc(var(--lg-blur) + 8px)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(calc(var(--lg-blur) + 8px)) saturate(var(--lg-saturate));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Utility surfaces                                                           */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"] .fi-sc,
+html[data-app-theme="liquid-glass"] .fi-ac {
+    --tw-ring-color: var(--lg-primary-line);
+}
+
+html[data-app-theme="liquid-glass"] ::selection {
+    background: var(--lg-primary-tint-strong);
+}
+
+html[data-app-theme="liquid-glass"] * {
+    scrollbar-color: rgb(100 116 139 / 0.42) transparent;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Central color-mode policy                                                  */
+/* -------------------------------------------------------------------------- */
+
+html[data-app-theme="liquid-glass"][data-app-mode="light"] .fi-theme-switcher,
+html[data-app-theme="liquid-glass"][data-app-mode="dark"] .fi-theme-switcher,
+html[data-app-theme="liquid-glass"][data-app-mode="system"] .fi-theme-switcher {
+    display: none;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Progressive enhancement / accessibility                                    */
+/* -------------------------------------------------------------------------- */
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    html[data-app-theme="liquid-glass"] .fi-topbar,
+    html[data-app-theme="liquid-glass"] .fi-sidebar,
+    html[data-app-theme="liquid-glass"] .fi-dropdown-panel,
+    html[data-app-theme="liquid-glass"] .fi-modal-window,
+    html[data-app-theme="liquid-glass"] .fi-no-notification,
+    html[data-app-theme="liquid-glass"] .fi-notification,
+    html[data-app-theme="liquid-glass"] .fi-simple-main,
+    html[data-app-theme="liquid-glass"] .fi-wi-stats-overview-stat,
+    html[data-app-theme="liquid-glass"] .fi-wi-widget > .fi-section {
+        background: var(--lg-content-solid);
+    }
+}
+
+@media (prefers-contrast: more) {
+    html[data-app-theme="liquid-glass"] {
+        --lg-glass: rgb(255 255 255 / 0.9);
+        --lg-glass-strong: rgb(255 255 255 / 0.97);
+        --lg-content: rgb(255 255 255 / 0.98);
+        --lg-line: rgb(71 85 105 / 0.45);
+        --lg-line-strong: rgb(71 85 105 / 0.55);
+    }
+
+    html.dark[data-app-theme="liquid-glass"] {
+        --lg-glass: rgb(24 24 27 / 0.94);
+        --lg-glass-strong: rgb(24 24 27 / 0.99);
+        --lg-content: rgb(24 24 27 / 0.99);
+        --lg-line: rgb(212 212 216 / 0.3);
+        --lg-line-strong: rgb(212 212 216 / 0.4);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-app-theme="liquid-glass"] *,
+    .theme-pack-card {
+        scroll-behavior: auto;
+        transition-duration: 0.001ms !important;
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .theme-settings-panel-header,
+    .theme-mode-row,
+    .theme-settings-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .theme-mode-control select {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .theme-pack-grid {
+        grid-template-columns: 1fr;
+    }
+
+    html[data-app-theme="liquid-glass"] {
+        --lg-blur: 16px;
+    }
+
+    html[data-app-theme="liquid-glass"] .fi-topbar {
+        box-shadow:
+            var(--lg-inner-highlight),
+            0 5px 18px rgb(15 23 42 / 0.06);
+    }
+
+    html[data-app-theme="liquid-glass"] .fi-modal-window {
+        border-radius: 1rem 1rem 0 0;
+    }
+}
+
+@media print {
+    html[data-app-theme="liquid-glass"] body,
+    html[data-app-theme="liquid-glass"] .fi-body,
+    html[data-app-theme="liquid-glass"] .fi-layout,
+    html[data-app-theme="liquid-glass"] .fi-main,
+    html[data-app-theme="liquid-glass"] .fi-section,
+    html[data-app-theme="liquid-glass"] .fi-ta,
+    html[data-app-theme="liquid-glass"] .fi-ta-ctn {
+        color: #000;
+        background: #fff;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    html[data-app-theme="liquid-glass"] body::before,
+    html[data-app-theme="liquid-glass"] .fi-sidebar,
+    html[data-app-theme="liquid-glass"] .fi-topbar {
+        display: none;
+    }
+}

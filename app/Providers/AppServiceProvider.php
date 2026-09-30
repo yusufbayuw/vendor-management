@@ -25,6 +25,7 @@ use App\Models\Supplier;
 use App\Models\SupplierBankAccount;
 use App\Models\SupplierDocument;
 use App\Models\SupplierProduct;
+use App\Models\ThemeSetting;
 use App\Observers\AuditableObserver;
 use App\Observers\TransactionNotificationObserver;
 use App\Policies\RolePolicy;
@@ -164,6 +165,7 @@ class AppServiceProvider extends ServiceProvider
             SupplierBankAccount::class,
             SupplierDocument::class,
             SupplierProduct::class,
+            ThemeSetting::class,
             GovernancePolicy::class,
             LegacyImportBatch::class,
             DataProvenance::class,

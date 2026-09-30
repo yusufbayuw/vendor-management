@@ -178,6 +178,7 @@ class AuditAnalyticsService
             'Invoice' => 'Invoice',
             'InvoiceAdjustment' => 'Invoice Adjustment',
             'Payment' => 'Payment',
+            'ThemeSetting' => 'Pengaturan Tema',
             default => class_basename($type),
         };
     }

@@ -33,6 +33,8 @@ class RoleAndPermissionSeeder extends Seeder
             SystemPermission::KitchenManage,
             SystemPermission::UserView,
             SystemPermission::UserManage,
+            SystemPermission::AppearanceView,
+            SystemPermission::AppearanceManage,
             SystemPermission::MasterDataView,
             SystemPermission::LegacyImportManage,
             SystemPermission::SupplierView,

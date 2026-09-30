@@ -45,6 +45,10 @@ class AdminPanelProvider extends PanelProvider
                 fn () => view('pwa.meta', ['panelId' => 'admin']),
             )
             ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn () => view('filament.theme.runtime', ['panelId' => 'admin']),
+            )
+            ->renderHook(
                 PanelsRenderHook::BODY_END,
                 fn () => view('pwa.client', ['showBanner' => auth()->check()]),
             )
