@@ -1,9 +1,8 @@
 @php
-    use App\Services\Theme\ThemeManager;
-    use App\Support\Theme\ThemeRegistry;
-
-    $appearance = app(ThemeManager::class)->resolve($panelId);
-    $themeAsset = asset('css/filament/theme-packs.css') . '?v=' . ThemeRegistry::ASSET_VERSION;
+    $appearance = app(\App\Services\Theme\ThemeManager::class)->resolve($panelId);
+    $themeAsset = asset('css/filament/theme-packs.css')
+        . '?v='
+        . \App\Support\Theme\ThemeRegistry::ASSET_VERSION;
 @endphp
 
 <script>
