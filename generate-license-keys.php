@@ -109,34 +109,39 @@ function resolveOpenSslConfig(): array
         $programFilesX86 = getenv('ProgramFiles(x86)');
         $userProfile = getenv('USERPROFILE');
 
+        $join = static fn (string ...$segments): string => implode(DIRECTORY_SEPARATOR, $segments);
+
         if (is_string($programFiles) && $programFiles !== '') {
             $candidates[] = [
-                'path' => $programFiles.'\Common Files\SSL\openssl.cnf',
+                'path' => $join($programFiles, 'Common Files', 'SSL', 'openssl.cnf'),
                 'source' => 'Windows Common Files',
             ];
         }
 
         if (is_string($programFilesX86) && $programFilesX86 !== '') {
             $candidates[] = [
-                'path' => $programFilesX86.'\Common Files\SSL\openssl.cnf',
+                'path' => $join($programFilesX86, 'Common Files', 'SSL', 'openssl.cnf'),
                 'source' => 'Windows Common Files (x86)',
             ];
         }
 
+        $systemDrive = getenv('SystemDrive');
+        $systemDrive = is_string($systemDrive) && $systemDrive !== '' ? rtrim($systemDrive, '\\/') : 'C:';
+
         $candidates[] = [
-            'path' => 'C:\usr\local\ssl\openssl.cnf',
+            'path' => $join($systemDrive, 'usr', 'local', 'ssl', 'openssl.cnf'),
             'source' => 'legacy Windows default',
         ];
 
         if (is_string($userProfile) && $userProfile !== '') {
-            $herdBin = $userProfile.'\.config\herd\bin';
+            $herdBin = $join($userProfile, '.config', 'herd', 'bin');
             $phpFolder = basename($phpDirectory);
 
             foreach ([
-                $herdBin.'\'.$phpFolder.'\openssl.cnf',
-                $herdBin.'\'.$phpFolder.'\ssl\openssl.cnf',
-                $herdBin.'\'.$phpFolder.'\extras\ssl\openssl.cnf',
-                $herdBin.'\'.$phpFolder.'\extras\openssl\openssl.cnf',
+                $join($herdBin, $phpFolder, 'openssl.cnf'),
+                $join($herdBin, $phpFolder, 'ssl', 'openssl.cnf'),
+                $join($herdBin, $phpFolder, 'extras', 'ssl', 'openssl.cnf'),
+                $join($herdBin, $phpFolder, 'extras', 'openssl', 'openssl.cnf'),
             ] as $path) {
                 $candidates[] = [
                     'path' => $path,
