@@ -18,8 +18,7 @@ class PublicLandingPageTest extends TestCase
             ->assertSee('Purchase Order yang jelas')
             ->assertSee('Keamanan & transparansi', false)
             ->assertSee(url('/supplier/register'), false)
-            ->assertSee(url('/supplier/login'), false)
-            ->assertSee(url('/admin/login'), false);
+            ->assertSee(url('/login'), false);
     }
 
     public function test_supplier_authentication_entry_points_remain_available(): void
