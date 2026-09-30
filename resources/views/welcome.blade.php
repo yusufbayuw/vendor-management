@@ -1147,7 +1147,7 @@
                     <span><strong>Rekening dan dokumen pendukung</strong><span>Data pembayaran dan dokumen administratif yang relevan dengan proses verifikasi.</span></span>
                 </div>
                 <div class="prep-item">
-                    <span class="prep-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h18M5 7l1 14h12l1-14M8 7l1-4h6l1 4M9 11v6m6-6v6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    <span class="prep-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m7.5 4.27 9 5.15M3.75 6.75l8.25 4.76 8.25-4.76M12 22V11.51M20.25 16.5v-9a2.25 2.25 0 0 0-1.12-1.95l-6-3.43a2.25 2.25 0 0 0-2.26 0l-6 3.43A2.25 2.25 0 0 0 3.75 7.5v9a2.25 2.25 0 0 0 1.12 1.95l6 3.43a2.25 2.25 0 0 0 2.26 0l6-3.43a2.25 2.25 0 0 0 1.12-1.95Z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                     <span><strong>Produk atau komoditas</strong><span>Informasi barang yang dapat disediakan beserta satuan dan informasi penawaran terkait.</span></span>
                 </div>
             </div>
