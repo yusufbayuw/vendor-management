@@ -116,7 +116,7 @@
                                 <div class="theme-pack-title-row">
                                     <strong>{{ $theme->label }}</strong>
 
-                                    @if ($theme->key === AppSupportThemeThemeRegistry::DEFAULT_THEME)
+                                    @if ($this->isRecommendedTheme($theme->key))
                                         <span class="theme-pack-recommended">Rekomendasi</span>
                                     @endif
 
