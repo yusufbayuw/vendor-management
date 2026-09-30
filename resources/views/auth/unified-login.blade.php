@@ -51,6 +51,11 @@
             object-fit: contain;
         }
 
+        .unified-login__submit {
+            width: 100%;
+            justify-content: center;
+        }
+
         .unified-login__links {
             display: grid;
             gap: .45rem;
@@ -197,7 +202,7 @@
                     </div>
                 </x-filament-forms::field-wrapper>
 
-                <x-filament::button type="submit">
+                <x-filament::button type="submit" class="unified-login__submit">
                     Masuk
                 </x-filament::button>
             </form>
