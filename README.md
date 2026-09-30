@@ -380,7 +380,25 @@ Upload supplier document, delivery note, goods receipt evidence, payment evidenc
 
 ## Authentication security
 
-Login internal dan supplier mendukung identifier yang dinormalisasi sesuai implementasi aplikasi, termasuk email, username, dan nomor telepon.
+Aplikasi menggunakan **satu entry point login** untuk user internal dan supplier:
+
+```text
+/login
+```
+
+Route login panel lama tetap tersedia sebagai compatibility redirect:
+
+```text
+/admin/login    -> /login
+/supplier/login -> /login
+```
+
+Setelah autentikasi berhasil, sistem menentukan portal tujuan berdasarkan role akun:
+
+- role internal -> `/admin`
+- `supplier_admin` / `supplier_operator` -> `/supplier`
+
+Login mendukung identifier yang dinormalisasi berupa email, username, atau nomor telepon. Intended URL hanya dipertahankan bila masih berada dalam boundary portal yang memang boleh diakses user.
 
 Captcha login ditangani secara lokal tanpa third-party CAPTCHA provider. CAPTCHA:
 
