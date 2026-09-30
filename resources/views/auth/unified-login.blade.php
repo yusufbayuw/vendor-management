@@ -1,15 +1,114 @@
 <x-filament-panels::layout.simple>
     @include('filament.auth.login-background')
 
+    <style>
+        .unified-login {
+            display: grid;
+            width: 100%;
+            gap: 1.5rem;
+        }
+
+        .unified-login__form {
+            display: grid;
+            gap: 1.15rem;
+        }
+
+        .unified-login__remember {
+            display: flex;
+            align-items: center;
+            gap: .7rem;
+            margin-top: -.1rem;
+            color: #374151;
+            font-size: .875rem;
+            font-weight: 500;
+        }
+
+        .unified-login__captcha {
+            display: grid;
+            gap: .75rem;
+        }
+
+        .unified-login__captcha-preview {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+        }
+
+        .unified-login__captcha-image {
+            min-width: 0;
+            flex: 1 1 auto;
+            overflow: hidden;
+            border: 1px solid #d1d5db;
+            border-radius: .7rem;
+            background: #f9fafb;
+        }
+
+        .unified-login__captcha-image img {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-height: 6rem;
+            object-fit: contain;
+        }
+
+        .unified-login__links {
+            display: grid;
+            gap: .45rem;
+            text-align: center;
+            color: #6b7280;
+            font-size: .875rem;
+        }
+
+        .unified-login__links p {
+            margin: 0;
+        }
+
+        .unified-login__link {
+            font-weight: 650;
+            color: rgb(var(--primary-600));
+        }
+
+        .unified-login__link:hover {
+            text-decoration: underline;
+        }
+
+        html.dark .unified-login__remember {
+            color: #e5e7eb;
+        }
+
+        html.dark .unified-login__captcha-image {
+            border-color: #4b5563;
+            background: #111827;
+        }
+
+        html.dark .unified-login__links {
+            color: #9ca3af;
+        }
+
+        html.dark .unified-login__link {
+            color: rgb(var(--primary-400));
+        }
+
+        @media (max-width: 520px) {
+            .unified-login__form {
+                gap: 1rem;
+            }
+
+            .unified-login__captcha-preview {
+                align-items: stretch;
+            }
+        }
+    </style>
+
     <div class="fi-simple-page">
-        <section class="grid auto-cols-fr gap-y-6">
+        <section class="unified-login">
             <x-filament-panels::header.simple
                 heading="Masuk ke SPPG Vendor Management"
                 :logo="true"
                 :subheading="null"
             />
 
-            <form method="POST" action="{{ route('login.store', absolute: false) }}" class="grid gap-y-6">
+            <form method="POST" action="{{ route('login.store', absolute: false) }}" class="unified-login__form">
                 @csrf
 
                 <x-filament-forms::field-wrapper
@@ -48,7 +147,7 @@
                     </x-filament::input.wrapper>
                 </x-filament-forms::field-wrapper>
 
-                <label class="flex items-center gap-x-3 text-sm font-medium text-gray-700 dark:text-gray-200">
+                <label class="unified-login__remember">
                     <x-filament::input.checkbox
                         name="remember"
                         value="1"
@@ -64,48 +163,49 @@
                     helper-text="Masukkan 5 karakter pada gambar. Huruf besar/kecil tidak dibedakan."
                     required
                 >
-                    <div class="flex items-center gap-3">
-                        <div class="overflow-hidden rounded-lg bg-gray-950">
-                            <img
-                                id="unified-login-captcha-image"
-                                src="{{ $captcha['image_light'] }}"
-                                alt="Kode keamanan"
-                                class="block h-auto max-w-full"
-                            >
+                    <div class="unified-login__captcha">
+                        <div class="unified-login__captcha-preview">
+                            <div class="unified-login__captcha-image">
+                                <img
+                                    id="unified-login-captcha-image"
+                                    src="{{ $captcha['image_light'] }}"
+                                    alt="Kode keamanan"
+                                >
+                            </div>
+
+                            <x-filament::icon-button
+                                id="refresh-unified-login-captcha"
+                                type="button"
+                                icon="heroicon-m-arrow-path"
+                                color="gray"
+                                tooltip="Muat kode baru"
+                            />
                         </div>
 
-                        <x-filament::icon-button
-                            id="refresh-unified-login-captcha"
-                            type="button"
-                            icon="heroicon-m-arrow-path"
-                            color="gray"
-                            tooltip="Muat kode baru"
-                        />
+                        <x-filament::input.wrapper>
+                            <x-filament::input
+                                id="captcha"
+                                type="text"
+                                name="captcha"
+                                autocomplete="off"
+                                autocapitalize="off"
+                                spellcheck="false"
+                                maxlength="5"
+                                required
+                            />
+                        </x-filament::input.wrapper>
                     </div>
-
-                    <x-filament::input.wrapper>
-                        <x-filament::input
-                            id="captcha"
-                            type="text"
-                            name="captcha"
-                            autocomplete="off"
-                            autocapitalize="off"
-                            spellcheck="false"
-                            maxlength="5"
-                            required
-                        />
-                    </x-filament::input.wrapper>
                 </x-filament-forms::field-wrapper>
 
-                <x-filament::button type="submit" class="w-full">
+                <x-filament::button type="submit">
                     Masuk
                 </x-filament::button>
             </form>
 
-            <div class="grid gap-2 text-center text-sm text-gray-500 dark:text-gray-400">
+            <div class="unified-login__links">
                 <a
                     href="{{ url('/supplier/password-reset/request') }}"
-                    class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                    class="unified-login__link"
                 >
                     Lupa kata sandi?
                 </a>
@@ -114,7 +214,7 @@
                     Belum menjadi supplier?
                     <a
                         href="{{ url('/supplier/register') }}"
-                        class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                        class="unified-login__link"
                     >
                         Daftar supplier
                     </a>
