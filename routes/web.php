@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\UnifiedLoginController;
 use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\LicenseController;
 use App\Http\Controllers\PrivateVendorFileController;
@@ -7,7 +8,21 @@ use App\Http\Controllers\ProcurementReportController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\PwaIconController;
 use App\Http\Controllers\TransactionDocumentController;
+use Filament\Http\Middleware\SetUpPanel;
 use Illuminate\Support\Facades\Route;
+
+
+Route::get('/login', [UnifiedLoginController::class, 'create'])
+    ->middleware(SetUpPanel::class.':admin')
+    ->name('login');
+
+Route::post('/login', [UnifiedLoginController::class, 'store'])
+    ->middleware('guest')
+    ->name('login.store');
+
+Route::get('/login/captcha', [UnifiedLoginController::class, 'captcha'])
+    ->middleware(['guest', 'throttle:30,1'])
+    ->name('login.captcha');
 
 Route::get('/email/verify/{id}/{hash}', EmailVerificationController::class)
     ->middleware(['signed', 'throttle:6,1'])
