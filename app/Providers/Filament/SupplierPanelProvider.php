@@ -9,6 +9,7 @@ use App\Filament\Supplier\Widgets\SupplierOnboardingOverview;
 use App\Filament\Supplier\Widgets\SupplierOverview;
 use App\Http\Middleware\EnsureLicenseIsValid;
 use App\Http\Middleware\EnsureSupplierPhoneIsVerified;
+use App\Http\Middleware\RedirectLegacyPanelLogin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -79,6 +80,7 @@ class SupplierPanelProvider extends PanelProvider
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
+                RedirectLegacyPanelLogin::class,
                 AuthenticateSession::class,
                 ShareErrorsFromSession::class,
                 VerifyCsrfToken::class,
