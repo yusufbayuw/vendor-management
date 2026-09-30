@@ -1135,19 +1135,19 @@
 
             <div class="prep-list">
                 <div class="prep-item">
-                    <span class="prep-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V5l8-3 8 3v16M8 8h.01M12 8h.01M16 8h.01M8 12h.01M12 12h.01M16 12h.01M9 21v-5h6v5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    <span class="prep-item-icon" aria-hidden="true"><x-heroicon-o-building-storefront /></span>
                     <span><strong>Identitas dan profil usaha</strong><span>Informasi dasar supplier yang dapat diverifikasi dan digunakan dalam proses procurement.</span></span>
                 </div>
                 <div class="prep-item">
-                    <span class="prep-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21a8 8 0 0 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    <span class="prep-item-icon" aria-hidden="true"><x-heroicon-o-user-circle /></span>
                     <span><strong>PIC yang dapat dihubungi</strong><span>Kontak penanggung jawab yang aktif untuk verifikasi dan komunikasi transaksi.</span></span>
                 </div>
                 <div class="prep-item">
-                    <span class="prep-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10h18M5 10V7l7-4 7 4v3M5 10v9m4-9v9m6-9v9m4-9v9M3 21h18" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    <span class="prep-item-icon" aria-hidden="true"><x-heroicon-o-document-text /></span>
                     <span><strong>Rekening dan dokumen pendukung</strong><span>Data pembayaran dan dokumen administratif yang relevan dengan proses verifikasi.</span></span>
                 </div>
                 <div class="prep-item">
-                    <span class="prep-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m7.5 4.27 9 5.15M3.75 6.75l8.25 4.76 8.25-4.76M12 22V11.51M20.25 16.5v-9a2.25 2.25 0 0 0-1.12-1.95l-6-3.43a2.25 2.25 0 0 0-2.26 0l-6 3.43A2.25 2.25 0 0 0 3.75 7.5v9a2.25 2.25 0 0 0 1.12 1.95l6 3.43a2.25 2.25 0 0 0 2.26 0l6-3.43a2.25 2.25 0 0 0 1.12-1.95Z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    <span class="prep-item-icon" aria-hidden="true"><x-heroicon-o-cube /></span>
                     <span><strong>Produk atau komoditas</strong><span>Informasi barang yang dapat disediakan beserta satuan dan informasi penawaran terkait.</span></span>
                 </div>
             </div>
