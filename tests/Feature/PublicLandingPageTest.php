@@ -24,7 +24,7 @@ class PublicLandingPageTest extends TestCase
 
     public function test_supplier_authentication_entry_points_remain_available(): void
     {
-        $this->get('/supplier/login')->assertOk();
+        $this->get('/supplier/login')->assertRedirect('/login');
         $this->get('/supplier/register')->assertOk();
     }
 }
