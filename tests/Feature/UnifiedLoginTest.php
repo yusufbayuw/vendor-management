@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Enums\SystemRole;
 use App\Models\User;
-use App\Support\Auth\LoginCaptcha;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
