@@ -975,7 +975,7 @@
         </nav>
 
         <div class="nav-actions">
-            <a class="button button-secondary" href="{{ url('/supplier/login') }}">Masuk Supplier</a>
+            <a class="button button-secondary" href="{{ url('/login') }}">Masuk Supplier</a>
             <a class="button button-primary" href="{{ url('/supplier/register') }}">Daftar Supplier</a>
         </div>
     </div>
@@ -998,7 +998,7 @@
                             <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </a>
-                    <a class="button button-secondary" href="{{ url('/supplier/login') }}">Saya sudah punya akun</a>
+                    <a class="button button-secondary" href="{{ url('/login') }}">Saya sudah punya akun</a>
                 </div>
 
                 <div class="micro-trust" aria-label="Keunggulan portal">
@@ -1197,7 +1197,7 @@
                 </details>
                 <details>
                     <summary>Saya sudah memiliki akun. Ke mana saya harus masuk?</summary>
-                    <p>Gunakan tombol Masuk Supplier di halaman ini untuk membuka portal supplier. Staf internal menggunakan panel internal yang terpisah.</p>
+                    <p>Gunakan tombol Masuk di halaman ini. Sistem akan mengarahkan supplier ke portal supplier dan staf internal ke panel internal sesuai role akun.</p>
                 </details>
             </div>
         </div>
@@ -1212,7 +1212,7 @@
                 </div>
                 <div class="final-cta-actions">
                     <a class="button button-primary" href="{{ url('/supplier/register') }}">Daftar Supplier</a>
-                    <a class="button button-secondary" href="{{ url('/supplier/login') }}">Masuk Portal</a>
+                    <a class="button button-secondary" href="{{ url('/login') }}">Masuk Portal</a>
                 </div>
             </section>
         </div>
@@ -1223,9 +1223,9 @@
     <div class="shell footer-row">
         <div class="footer-copy">&copy; {{ now()->year }} {{ config('app.name', 'SPPG Vendor Management') }}. Portal procurement dan kemitraan supplier.</div>
         <div class="footer-links">
-            <a href="{{ url('/supplier/login') }}">Portal Supplier</a>
+            <a href="{{ url('/login') }}">Portal Supplier</a>
             <a href="{{ url('/supplier/register') }}">Registrasi Supplier</a>
-            <a href="{{ url('/admin/login') }}">Akses Internal</a>
+            <a href="{{ url('/login') }}">Akses Internal</a>
         </div>
     </div>
 </footer>
