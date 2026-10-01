@@ -712,6 +712,26 @@ html[data-app-theme="liquid-glass"] .fi-wi-stats-overview-stat:hover {
         var(--lg-shadow);
 }
 
+
+/*
+ * Stats overview already consists of self-contained cards.
+ * Keep the structural Filament section wrapper visually neutral so cards do
+ * not look nested inside a second card, especially on narrow/mobile layouts.
+ */
+html[data-app-theme="liquid-glass"] .fi-wi-widget > .fi-section:has(.fi-wi-stats-overview-stat) {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html[data-app-theme="liquid-glass"] .fi-wi-widget > .fi-section:has(.fi-wi-stats-overview-stat) > .fi-section-content {
+    padding: 0;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Tables — deliberately content-first / high opacity                         */
 /* -------------------------------------------------------------------------- */
