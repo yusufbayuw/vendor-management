@@ -10,7 +10,7 @@ final class ThemeRegistry
 
     public const DEFAULT_MODE = 'user';
 
-    public const ASSET_VERSION = '2026.10.01.1';
+    public const ASSET_VERSION = '2026.10.01.2';
 
     /**
      * @return array<string, ThemePack>
