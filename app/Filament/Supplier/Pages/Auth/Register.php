@@ -27,6 +27,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as DatabaseSchema;
@@ -36,6 +37,8 @@ use Throwable;
 
 class Register extends BaseRegister
 {
+    protected Width|string|null $maxContentWidth = Width::FiveExtraLarge;
+
     public function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -86,7 +89,10 @@ class Register extends BaseRegister
                     $this->getPasswordFormComponent(),
                     $this->getPasswordConfirmationFormComponent(),
                 ])
-                ->columns(2),
+                ->columns([
+                    'default' => 1,
+                    'md' => 2,
+                ]),
             Section::make('Profil & alamat')
                 ->description('Bisa dilengkapi setelah login sebelum pengajuan verifikasi.')
                 ->schema([
@@ -145,7 +151,10 @@ class Register extends BaseRegister
                         ->disabled(fn (Get $get): bool => blank($get('district_code'))),
                     TextInput::make('postal_code')->label('Kode Pos')->maxLength(10),
                 ])
-                ->columns(2)
+                ->columns([
+                    'default' => 1,
+                    'md' => 2,
+                ])
                 ->collapsible()
                 ->collapsed(),
             Section::make('Produk & dokumen')
@@ -191,7 +200,10 @@ class Register extends BaseRegister
                         ->maxSize(10240)
                         ->columnSpanFull(),
                 ])
-                ->columns(2)
+                ->columns([
+                    'default' => 1,
+                    'md' => 2,
+                ])
                 ->collapsible()
                 ->collapsed(),
             Section::make('Rekening pembayaran')
@@ -210,7 +222,10 @@ class Register extends BaseRegister
                         ->maxLength(255)
                         ->required(fn (Get $get): bool => filled($get('bank_name')) || filled($get('bank_account_number'))),
                 ])
-                ->columns(2)
+                ->columns([
+                    'default' => 1,
+                    'md' => 2,
+                ])
                 ->collapsible()
                 ->collapsed(),
         ]);
