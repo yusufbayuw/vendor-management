@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\SppgKitchens;
 
+use BackedEnum;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\SppgKitchens\Pages\ManageSppgKitchens;
 use App\Models\Organization;
@@ -33,6 +34,8 @@ class SppgKitchenResource extends Resource
     protected static ?string $pluralModelLabel = 'dapur SPPG';
 
     protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-home-modern';
 
     protected static ?int $navigationSort = 20;
 

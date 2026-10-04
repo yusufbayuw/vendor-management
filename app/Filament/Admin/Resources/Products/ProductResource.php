@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\Products;
 
+use BackedEnum;
 use App\Filament\Admin\Resources\Concerns\AuthorizesMasterData;
 use App\Filament\Admin\Resources\Products\Pages\ManageProducts;
 use App\Filament\Admin\Support\MasterDataDuplicateGuard;
@@ -34,6 +35,8 @@ class ProductResource extends Resource
     protected static ?string $pluralModelLabel = 'produk';
 
     protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-cube';
 
     protected static ?int $navigationSort = 50;
 

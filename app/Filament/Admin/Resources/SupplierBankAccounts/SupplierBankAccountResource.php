@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\SupplierBankAccounts;
 
+use BackedEnum;
 use App\Actions\Supplier\RejectSupplierBankAccountAction;
 use App\Actions\Supplier\VerifySupplierBankAccountAction;
 use App\Enums\SystemPermission;
@@ -32,6 +33,8 @@ class SupplierBankAccountResource extends Resource
     protected static ?string $pluralModelLabel = 'rekening supplier';
 
     protected static string|UnitEnum|null $navigationGroup = 'Supplier';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-library';
 
     protected static ?int $navigationSort = 30;
 

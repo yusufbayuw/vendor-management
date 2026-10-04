@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\Payments;
 
+use BackedEnum;
 use App\Actions\Payment\AttachPaymentProofAction;
 use App\Actions\Payment\RejectPaymentAction;
 use App\Actions\Payment\SubmitAndVerifyPaymentAction;
@@ -41,6 +42,8 @@ class PaymentResource extends Resource
     protected static ?string $navigationLabel = '6. Payment';
 
     protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';
 
     protected static ?int $navigationSort = 60;
 

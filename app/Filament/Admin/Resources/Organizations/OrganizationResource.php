@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\Organizations;
 
+use BackedEnum;
 use App\Enums\OperationalProfile;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Organizations\Pages\ManageOrganizations;
@@ -32,6 +33,8 @@ class OrganizationResource extends Resource
     protected static ?string $pluralModelLabel = 'organisasi';
 
     protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-office-2';
 
     protected static ?int $navigationSort = 10;
 

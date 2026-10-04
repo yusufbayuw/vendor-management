@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\Suppliers;
 
+use BackedEnum;
 use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Actions\Supplier\ApproveSupplierAction;
 use App\Actions\Supplier\RequestSupplierRevisionAction;
@@ -50,6 +51,8 @@ class SupplierResource extends Resource
     protected static ?string $pluralModelLabel = 'supplier';
 
     protected static string|UnitEnum|null $navigationGroup = 'Supplier';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
     protected static ?int $navigationSort = 10;
 

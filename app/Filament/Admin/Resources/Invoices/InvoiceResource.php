@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\Invoices;
 
+use BackedEnum;
 use App\Actions\Billing\AddInvoiceAdjustmentAction;
 use App\Actions\Billing\ApproveInvoiceAction;
 use App\Actions\Billing\SubmitInvoiceAction;
@@ -52,6 +53,8 @@ class InvoiceResource extends Resource
     protected static ?string $pluralModelLabel = 'invoice';
 
     protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-receipt-percent';
 
     protected static ?int $navigationSort = 50;
 

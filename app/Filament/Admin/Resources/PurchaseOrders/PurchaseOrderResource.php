@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\PurchaseOrders;
 
+use BackedEnum;
 use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
 use App\Actions\Fulfillment\ApprovePurchaseOrderExceptionCloseAction;
 use App\Actions\Fulfillment\ClosePurchaseOrderWithExceptionAction;
@@ -61,6 +62,8 @@ class PurchaseOrderResource extends Resource
     protected static ?string $pluralModelLabel = 'purchase order';
 
     protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shopping-cart';
 
     protected static ?int $navigationSort = 20;
 

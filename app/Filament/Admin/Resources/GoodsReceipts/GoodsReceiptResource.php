@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\GoodsReceipts;
 
+use BackedEnum;
 use App\Actions\Fulfillment\AddGoodsReceiptAttachmentAction;
 use App\Actions\Fulfillment\InspectGoodsReceiptAction;
 use App\Enums\GoodsReceiptAttachmentType;
@@ -44,6 +45,8 @@ class GoodsReceiptResource extends Resource
     protected static ?string $pluralModelLabel = 'penerimaan barang';
 
     protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-inbox-arrow-down';
 
     protected static ?int $navigationSort = 40;
 

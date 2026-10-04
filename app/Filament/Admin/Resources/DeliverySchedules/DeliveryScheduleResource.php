@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\DeliverySchedules;
 
+use BackedEnum;
 use App\Actions\Fulfillment\ConfirmDeliveryScheduleAction;
 use App\Actions\Fulfillment\MarkDeliveryInTransitAction;
 use App\Actions\Fulfillment\RecordAndInspectGoodsReceiptAction;
@@ -50,6 +51,8 @@ class DeliveryScheduleResource extends Resource
     protected static ?string $pluralModelLabel = 'jadwal pengiriman';
 
     protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-truck';
 
     protected static ?int $navigationSort = 30;
 

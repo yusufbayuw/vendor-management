@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\GovernancePolicies;
 
+use BackedEnum;
 use App\Enums\GovernanceProcess;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\GovernancePolicies\Pages\ManageGovernancePolicies;
@@ -33,6 +34,8 @@ class GovernancePolicyResource extends Resource
     protected static ?string $pluralModelLabel = 'kebijakan approval';
 
     protected static string|UnitEnum|null $navigationGroup = 'Administrasi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shield-check';
 
     protected static ?int $navigationSort = 92;
 

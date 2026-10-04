@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\PurchaseRequests;
 
+use BackedEnum;
 use App\Actions\Procurement\AllocateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
 use App\Actions\Procurement\ApprovePurchaseRequestAction;
@@ -64,6 +65,8 @@ class PurchaseRequestResource extends Resource
     protected static ?string $pluralModelLabel = 'purchase request';
 
     protected static string|UnitEnum|null $navigationGroup = 'Alur Transaksi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
     protected static ?int $navigationSort = 10;
 

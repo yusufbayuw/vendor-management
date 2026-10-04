@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\ProductCategories;
 
+use BackedEnum;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Concerns\AuthorizesMasterData;
 use App\Filament\Admin\Resources\ProductCategories\Pages\ManageProductCategories;
@@ -36,6 +37,8 @@ class ProductCategoryResource extends Resource
     protected static ?string $pluralModelLabel = 'kategori produk';
 
     protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-tag';
 
     protected static ?int $navigationSort = 40;
 

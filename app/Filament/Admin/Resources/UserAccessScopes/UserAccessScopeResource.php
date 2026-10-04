@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\UserAccessScopes;
 
+use BackedEnum;
 use App\Enums\AccessScopeType;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\UserAccessScopes\Pages\ManageUserAccessScopes;
@@ -33,6 +34,8 @@ class UserAccessScopeResource extends Resource
     protected static ?string $pluralModelLabel = 'cakupan akses';
 
     protected static string|UnitEnum|null $navigationGroup = 'Administrasi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-key';
 
     protected static ?int $navigationSort = 91;
 

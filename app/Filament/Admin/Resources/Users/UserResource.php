@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\Users;
 
+use BackedEnum;
 use App\Actions\Auth\ManuallyVerifyPhoneAction;
 use App\Enums\SystemPermission;
 use App\Enums\SystemRole;
@@ -39,6 +40,8 @@ class UserResource extends Resource
     protected static ?string $pluralModelLabel = 'pengguna';
 
     protected static string|UnitEnum|null $navigationGroup = 'Administrasi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-users';
 
     protected static ?int $navigationSort = 90;
 

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\SupplierDocuments;
 
+use BackedEnum;
 use App\Actions\Supplier\RejectSupplierDocumentAction;
 use App\Actions\Supplier\VerifySupplierDocumentAction;
 use App\Enums\SupplierDocumentStatus;
@@ -32,6 +33,8 @@ class SupplierDocumentResource extends Resource
     protected static ?string $pluralModelLabel = 'dokumen supplier';
 
     protected static string|UnitEnum|null $navigationGroup = 'Supplier';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-check';
 
     protected static ?int $navigationSort = 20;
 

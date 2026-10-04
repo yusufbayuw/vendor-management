@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\Units;
 
+use BackedEnum;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Concerns\AuthorizesMasterData;
 use App\Filament\Admin\Resources\Units\Pages\ManageUnits;
@@ -32,6 +33,8 @@ class UnitResource extends Resource
     protected static ?string $pluralModelLabel = 'satuan';
 
     protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-calculator';
 
     protected static ?int $navigationSort = 30;
 

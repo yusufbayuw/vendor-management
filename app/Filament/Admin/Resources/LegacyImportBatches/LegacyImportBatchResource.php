@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\LegacyImportBatches;
 
+use BackedEnum;
 use App\Enums\LegacyImportType;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\LegacyImportBatches\Pages\CreateLegacyImportBatch;
@@ -34,6 +35,8 @@ class LegacyImportBatchResource extends Resource
     protected static ?string $pluralModelLabel = 'import data lama';
 
     protected static string|UnitEnum|null $navigationGroup = 'Administrasi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-arrow-up-tray';
 
     protected static ?int $navigationSort = 96;
 

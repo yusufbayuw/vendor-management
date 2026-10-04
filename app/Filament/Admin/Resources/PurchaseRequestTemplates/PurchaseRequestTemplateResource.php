@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\PurchaseRequestTemplates;
 
+use BackedEnum;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\PurchaseRequestTemplates\Pages\ManagePurchaseRequestTemplates;
 use App\Filament\Admin\Support\MasterDataOptionFactory;
@@ -40,6 +41,8 @@ class PurchaseRequestTemplateResource extends Resource
     protected static ?string $pluralModelLabel = 'template PR';
 
     protected static string|UnitEnum|null $navigationGroup = 'Master & Organisasi';
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-duplicate';
 
     protected static ?int $navigationSort = 70;
 
