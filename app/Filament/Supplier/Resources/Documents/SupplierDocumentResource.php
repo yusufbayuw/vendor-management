@@ -29,9 +29,13 @@ class SupplierDocumentResource extends Resource
 {
     protected static ?string $model = SupplierDocument::class;
 
-    protected static ?string $navigationLabel = 'Dokumen Legal';
+    protected static ?string $navigationLabel = 'Dokumen Usaha';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Perusahaan';
+    protected static ?string $modelLabel = 'dokumen usaha';
+
+    protected static ?string $pluralModelLabel = 'dokumen usaha';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Usaha Saya';
 
     protected static ?int $navigationSort = 20;
 
@@ -39,26 +43,27 @@ class SupplierDocumentResource extends Resource
     {
         return $schema->components([
             Select::make('supplier_id')
-                ->label('Supplier')
+                ->label('Usaha')
                 ->options(static::supplierOptions())
                 ->default(fn (): ?int => static::singleSupplierId())
                 ->disabled(fn (): bool => static::singleSupplierId() !== null)
                 ->dehydrated()
                 ->required(),
-            Select::make('document_type')->label('Jenis Dokumen')->options([
+            Select::make('document_type')->label('Dokumen apa ini?')->helperText('Pilih jenis dokumen yang paling sesuai.')->options([
                 'nib' => 'NIB',
                 'npwp' => 'NPWP',
                 'halal_certificate' => 'Sertifikat Halal',
                 'business_license' => 'Izin Usaha',
                 'food_safety' => 'Sertifikat Keamanan Pangan',
                 'domicile' => 'Surat Domisili',
-                'other' => 'Lainnya',
+                'other' => 'Dokumen lainnya',
             ])->required(),
-            TextInput::make('document_number')->label('Nomor Dokumen')->maxLength(255),
-            DatePicker::make('issued_at')->label('Tanggal Terbit')->native(false),
-            DatePicker::make('expires_at')->label('Berlaku Sampai')->native(false)->afterOrEqual('issued_at'),
+            TextInput::make('document_number')->label('Nomor dokumen (jika ada)')->maxLength(255),
+            DatePicker::make('issued_at')->label('Tanggal diterbitkan (jika ada)')->native(false),
+            DatePicker::make('expires_at')->label('Berlaku sampai (jika ada)')->native(false)->afterOrEqual('issued_at'),
             FileUpload::make('file_path')
-                ->label('Dokumen')
+                ->label('Pilih file dokumen')
+                ->helperText('PDF, JPG, PNG, atau WebP. Maksimal 10 MB.')
                 ->disk(VendorFileStorage::DISK)
                 ->directory('supplier-documents')
                 ->visibility('private')
@@ -72,9 +77,9 @@ class SupplierDocumentResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('supplier.display_name')->label('Supplier'),
-            TextColumn::make('document_type')->label('Jenis')->searchable(),
-            TextColumn::make('document_number')->label('Nomor')->searchable(),
+            TextColumn::make('supplier.display_name')->label('Usaha'),
+            TextColumn::make('document_type')->label('Jenis Dokumen')->searchable(),
+            TextColumn::make('document_number')->label('Nomor Dokumen')->searchable(),
             TextColumn::make('file_path')
                 ->label('File')
                 ->icon('heroicon-o-paper-clip')
@@ -93,7 +98,7 @@ class SupplierDocumentResource extends Resource
                 fn ($state) => str($state instanceof SupplierDocumentStatus ? $state->value : (string) $state)->replace('_', ' ')->title(),
             ),
             TextColumn::make('verification_note')
-                ->label('Keterangan Verifikasi')
+                ->label('Catatan Pemeriksaan')
                 ->placeholder('Belum ada keterangan')
                 ->wrap()
                 ->toggleable(),

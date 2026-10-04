@@ -6,6 +6,7 @@ use App\Enums\SupplierDocumentStatus;
 use App\Enums\SupplierStatus;
 use App\Enums\SystemRole;
 use App\Enums\VerificationStatus;
+use App\Models\Bank;
 use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\SupplierBankAccount;
@@ -19,6 +20,7 @@ use App\Support\Auth\LoginIdentifier;
 use Closure;
 use Filament\Auth\Pages\Register as BaseRegister;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -42,13 +44,15 @@ class Register extends BaseRegister
     public function form(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Akun & identitas supplier')
-                ->description('Isi data minimum untuk membuat akun. Kelengkapan operasional dapat dilanjutkan setelah login.')
+            Section::make('Buat akun')
+                ->description('Isi data yang bertanda * untuk membuat akun. Data usaha lainnya boleh dilengkapi setelah masuk.')
                 ->schema([
-                    $this->getNameFormComponent()->label('Nama PIC'),
+                    $this->getNameFormComponent()
+                        ->label('Nama lengkap penanggung jawab')
+                        ->helperText('Isi nama orang yang bisa dihubungi oleh SPPG.'),
                     TextInput::make('supplier_phone')
-                        ->label('Nomor HP PIC / Supplier')
-                        ->helperText('Nomor ini juga dapat digunakan untuk login.')
+                        ->label('Nomor WhatsApp / HP aktif')
+                        ->helperText('Gunakan nomor yang aktif. Nomor ini juga bisa dipakai untuk masuk ke portal.')
                         ->tel()
                         ->required()
                         ->maxLength(40)
@@ -57,57 +61,67 @@ class Register extends BaseRegister
                                 $phone = LoginIdentifier::normalizePhone((string) $value);
 
                                 if ($phone !== null && User::query()->where('phone', $phone)->exists()) {
-                                    $fail('Nomor HP sudah digunakan oleh akun lain.');
+                                    $fail('Nomor WhatsApp / HP ini sudah digunakan oleh akun lain.');
                                 }
                             };
                         }),
                     TextInput::make('email')
-                        ->label('Email PIC')
-                        ->helperText('Opsional. Login tetap dapat menggunakan nomor HP atau username yang dibuat otomatis.')
+                        ->label('Email (jika ada)')
+                        ->helperText('Tidak wajib. Jika diisi, email dapat dipakai untuk menerima pemberitahuan.')
                         ->email()
                         ->maxLength(255)
                         ->unique(User::class, 'email'),
                     TextInput::make('legal_name')
-                        ->label('Nama legal supplier')
+                        ->label('Nama usaha / nama resmi')
+                        ->helperText('Jika punya NIB/NPWP, isi sesuai dokumen. Jika belum punya, isi nama usaha atau toko yang biasa digunakan.')
                         ->required()
                         ->maxLength(255),
                     TextInput::make('display_name')
-                        ->label('Nama dagang')
-                        ->helperText('Jika dikosongkan, sistem menggunakan nama legal.')
+                        ->label('Nama toko / nama yang dikenal (jika berbeda)')
+                        ->helperText('Opsional. Contoh: Berkah Sayur Bandung. Jika kosong, nama usaha di atas akan digunakan.')
                         ->maxLength(255),
                     Select::make('supplier_type')
-                        ->label('Jenis supplier')
+                        ->label('Bentuk usaha')
+                        ->helperText('Pilih yang paling sesuai dengan kondisi usaha Anda.')
                         ->options([
-                            'company' => 'Perusahaan',
-                            'individual' => 'Perorangan',
+                            'individual' => 'Usaha perorangan / UMKM',
+                            'company' => 'Perusahaan / badan usaha',
                             'cooperative' => 'Koperasi',
                             'other' => 'Lainnya',
                         ])
-                        ->default('company')
+                        ->placeholder('Pilih bentuk usaha')
                         ->live()
                         ->required(),
-                    $this->getPasswordFormComponent(),
-                    $this->getPasswordConfirmationFormComponent(),
+                    $this->getPasswordFormComponent()
+                        ->label('Buat kata sandi'),
+                    $this->getPasswordConfirmationFormComponent()
+                        ->label('Ulangi kata sandi'),
                 ])
                 ->columns([
                     'default' => 1,
                     'md' => 2,
                 ]),
-            Section::make('Profil & alamat')
-                ->description('Bisa dilengkapi setelah login sebelum pengajuan verifikasi.')
+            Section::make('Data usaha (boleh dilengkapi nanti)')
+                ->description('Jika data ini belum siap, Anda boleh melewatinya dan melengkapinya setelah masuk.')
                 ->schema([
-                    TextInput::make('npwp')->label('NPWP')->maxLength(40),
+                    TextInput::make('npwp')
+                        ->label('Nomor NPWP (jika ada)')
+                        ->helperText('Isi angka NPWP usaha atau pemilik usaha bila digunakan untuk usaha.')
+                        ->maxLength(40),
                     Toggle::make('npwp_not_applicable')
-                        ->label('Tidak memiliki NPWP / tidak berlaku')
+                        ->label('Saya belum memiliki NPWP')
                         ->live()
                         ->afterStateUpdated(function ($state, Set $set): void {
                             if ($state) {
                                 $set('npwp', null);
                             }
                         }),
-                    TextInput::make('nib')->label('NIB')->maxLength(80),
+                    TextInput::make('nib')
+                        ->label('Nomor Induk Berusaha / NIB (jika ada)')
+                        ->helperText('NIB biasanya terdapat pada dokumen OSS.')
+                        ->maxLength(80),
                     Toggle::make('nib_not_applicable')
-                        ->label('NIB tidak dimiliki / tidak berlaku')
+                        ->label('Saya belum memiliki NIB')
                         ->visible(fn (Get $get): bool => in_array($get('supplier_type'), ['company', 'cooperative'], true))
                         ->live()
                         ->afterStateUpdated(function ($state, Set $set): void {
@@ -115,7 +129,11 @@ class Register extends BaseRegister
                                 $set('nib', null);
                             }
                         }),
-                    Textarea::make('address')->label('Alamat lengkap')->rows(3)->columnSpanFull(),
+                    Textarea::make('address')
+                        ->label('Alamat lengkap usaha')
+                        ->helperText('Tulis nama jalan, nomor, RT/RW, atau patokan bila diperlukan.')
+                        ->rows(3)
+                        ->columnSpanFull(),
                     Select::make('province_code')
                         ->label('Provinsi')
                         ->placeholder('Pilih provinsi')
@@ -129,6 +147,7 @@ class Register extends BaseRegister
                         }),
                     Select::make('regency_code')
                         ->label('Kabupaten / Kota')
+                        ->placeholder('Pilih kabupaten / kota')
                         ->options(fn (Get $get): array => app(IndonesiaRegionService::class)->cities($get('province_code')))
                         ->searchable()
                         ->live()
@@ -139,6 +158,7 @@ class Register extends BaseRegister
                         }),
                     Select::make('district_code')
                         ->label('Kecamatan')
+                        ->placeholder('Pilih kecamatan')
                         ->options(fn (Get $get): array => app(IndonesiaRegionService::class)->districts($get('regency_code')))
                         ->searchable()
                         ->live()
@@ -146,10 +166,13 @@ class Register extends BaseRegister
                         ->afterStateUpdated(fn (Set $set) => $set('village_code', null)),
                     Select::make('village_code')
                         ->label('Desa / Kelurahan')
+                        ->placeholder('Pilih desa / kelurahan')
                         ->options(fn (Get $get): array => app(IndonesiaRegionService::class)->villages($get('district_code')))
                         ->searchable()
                         ->disabled(fn (Get $get): bool => blank($get('district_code'))),
-                    TextInput::make('postal_code')->label('Kode Pos')->maxLength(10),
+                    TextInput::make('postal_code')
+                        ->label('Kode pos (jika tahu)')
+                        ->maxLength(10),
                 ])
                 ->columns([
                     'default' => 1,
@@ -157,11 +180,12 @@ class Register extends BaseRegister
                 ])
                 ->collapsible()
                 ->collapsed(),
-            Section::make('Produk & dokumen')
-                ->description('Opsional saat registrasi. Minimal satu dokumen diperlukan sebelum supplier diajukan untuk verifikasi.')
+            Section::make('Produk & dokumen (boleh dilengkapi nanti)')
+                ->description('Pilih produk yang bisa dipasok dan tambahkan dokumen yang sudah tersedia. Anda bisa menambahkan beberapa dokumen sekaligus.')
                 ->schema([
                     Select::make('product_ids')
-                        ->label('Komoditas / produk yang dapat dipasok')
+                        ->label('Apa yang bisa Anda pasok?')
+                        ->helperText('Boleh pilih lebih dari satu. Ketik nama produk untuk mencari.')
                         ->options(fn (): array => DatabaseSchema::hasTable('products')
                             ? Product::query()
                                 ->with('category')
@@ -177,27 +201,44 @@ class Register extends BaseRegister
                         ->searchable()
                         ->preload()
                         ->columnSpanFull(),
-                    Select::make('legal_document_type')
-                        ->label('Jenis dokumen legal pendukung')
-                        ->options([
-                            'nib' => 'NIB',
-                            'npwp' => 'NPWP',
-                            'halal_certificate' => 'Sertifikat Halal',
-                            'business_license' => 'Izin Usaha',
-                            'food_safety' => 'Sertifikat Keamanan Pangan',
-                            'domicile' => 'Surat Domisili',
-                            'other' => 'Dokumen legal lainnya',
+                    Repeater::make('legal_documents')
+                        ->label('Dokumen pendukung usaha')
+                        ->helperText('Contoh: NIB, NPWP, sertifikat halal, izin usaha, atau dokumen lain. Tambahkan sebanyak yang sudah Anda punya.')
+                        ->schema([
+                            Select::make('document_type')
+                                ->label('Dokumen apa ini?')
+                                ->options([
+                                    'nib' => 'NIB',
+                                    'npwp' => 'NPWP',
+                                    'halal_certificate' => 'Sertifikat Halal',
+                                    'business_license' => 'Izin Usaha',
+                                    'food_safety' => 'Sertifikat Keamanan Pangan',
+                                    'domicile' => 'Surat Domisili',
+                                    'other' => 'Dokumen lainnya',
+                                ])
+                                ->placeholder('Pilih jenis dokumen')
+                                ->required(),
+                            TextInput::make('document_number')
+                                ->label('Nomor dokumen (jika ada)')
+                                ->maxLength(255),
+                            FileUpload::make('file_path')
+                                ->label('Pilih file')
+                                ->helperText('PDF, JPG, PNG, atau WebP. Maksimal 10 MB per file.')
+                                ->disk(VendorFileStorage::DISK)
+                                ->directory('supplier-documents')
+                                ->visibility('private')
+                                ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+                                ->maxSize(10240)
+                                ->required()
+                                ->columnSpanFull(),
                         ])
-                        ->default('nib')
-                        ->required(),
-                    TextInput::make('legal_document_number')->label('Nomor dokumen legal')->maxLength(255),
-                    FileUpload::make('legal_document_file')
-                        ->label('Upload dokumen legal')
-                        ->disk(VendorFileStorage::DISK)
-                        ->directory('supplier-documents')
-                        ->visibility('private')
-                        ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
-                        ->maxSize(10240)
+                        ->columns([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
+                        ->defaultItems(0)
+                        ->addActionLabel('Tambah dokumen lain')
+                        ->reorderable(false)
                         ->columnSpanFull(),
                 ])
                 ->columns([
@@ -206,21 +247,27 @@ class Register extends BaseRegister
                 ])
                 ->collapsible()
                 ->collapsed(),
-            Section::make('Rekening pembayaran')
-                ->description('Opsional saat registrasi. Rekening akan berstatus pending sampai diverifikasi admin.')
+            Section::make('Rekening untuk pembayaran (boleh dilengkapi nanti)')
+                ->description('Pilih rekening yang akan menerima pembayaran dari SPPG. Kode bank akan diisi otomatis.')
                 ->schema([
-                    TextInput::make('bank_name')
-                        ->label('Nama bank')
-                        ->maxLength(255)
+                    Select::make('bank_id')
+                        ->label('Pilih bank')
+                        ->placeholder('Ketik atau pilih nama bank')
+                        ->helperText('Tidak perlu mengisi kode bank secara manual.')
+                        ->options(fn (): array => DatabaseSchema::hasTable('banks') ? Bank::activeOptions() : [])
+                        ->searchable()
+                        ->preload()
                         ->required(fn (Get $get): bool => filled($get('bank_account_number')) || filled($get('bank_account_holder'))),
                     TextInput::make('bank_account_number')
                         ->label('Nomor rekening')
+                        ->helperText('Isi hanya angka nomor rekening.')
                         ->maxLength(100)
-                        ->required(fn (Get $get): bool => filled($get('bank_name')) || filled($get('bank_account_holder'))),
+                        ->required(fn (Get $get): bool => filled($get('bank_id')) || filled($get('bank_account_holder'))),
                     TextInput::make('bank_account_holder')
                         ->label('Nama pemilik rekening')
+                        ->helperText('Isi persis seperti nama yang tercatat di bank.')
                         ->maxLength(255)
-                        ->required(fn (Get $get): bool => filled($get('bank_name')) || filled($get('bank_account_number'))),
+                        ->required(fn (Get $get): bool => filled($get('bank_id')) || filled($get('bank_account_number'))),
                 ])
                 ->columns([
                     'default' => 1,
@@ -274,12 +321,16 @@ class Register extends BaseRegister
                 'is_active' => true,
             ]);
 
-            if (filled($data['legal_document_file'] ?? null)) {
+            foreach ($data['legal_documents'] ?? [] as $document) {
+                if (! filled($document['file_path'] ?? null)) {
+                    continue;
+                }
+
                 SupplierDocument::query()->create([
                     'supplier_id' => $supplier->getKey(),
-                    'document_type' => $data['legal_document_type'],
-                    'document_number' => ($data['legal_document_number'] ?? null) ?: null,
-                    'file_path' => $data['legal_document_file'],
+                    'document_type' => $document['document_type'],
+                    'document_number' => ($document['document_number'] ?? null) ?: null,
+                    'file_path' => $document['file_path'],
                     'status' => SupplierDocumentStatus::Uploaded,
                 ]);
             }
@@ -294,13 +345,19 @@ class Register extends BaseRegister
             }
 
             if (
-                filled($data['bank_name'] ?? null)
+                filled($data['bank_id'] ?? null)
                 && filled($data['bank_account_number'] ?? null)
                 && filled($data['bank_account_holder'] ?? null)
             ) {
+                $bank = Bank::query()
+                    ->active()
+                    ->findOrFail((int) $data['bank_id']);
+
                 SupplierBankAccount::query()->create([
                     'supplier_id' => $supplier->getKey(),
-                    'bank_name' => $data['bank_name'],
+                    'bank_id' => $bank->getKey(),
+                    'bank_code' => $bank->code,
+                    'bank_name' => $bank->name,
                     'account_number' => $data['bank_account_number'],
                     'account_holder' => $data['bank_account_holder'],
                     'is_primary' => true,

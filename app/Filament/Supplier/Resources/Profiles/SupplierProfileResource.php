@@ -30,21 +30,31 @@ class SupplierProfileResource extends Resource
 {
     protected static ?string $model = Supplier::class;
 
-    protected static ?string $navigationLabel = 'Profil Perusahaan';
+    protected static ?string $navigationLabel = 'Data Usaha';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Perusahaan';
+    protected static ?string $modelLabel = 'data usaha';
+
+    protected static ?string $pluralModelLabel = 'data usaha';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Usaha Saya';
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('legal_name')->label('Nama Legal')->required(),
-            TextInput::make('display_name')->label('Nama Dagang'),
+            TextInput::make('legal_name')
+                ->label('Nama usaha / nama resmi')
+                ->helperText('Isi sesuai NIB/NPWP jika ada. Jika belum punya, gunakan nama usaha yang biasa dipakai.')
+                ->required(),
+            TextInput::make('display_name')
+                ->label('Nama toko / nama yang dikenal')
+                ->helperText('Opsional. Kosongkan jika sama dengan nama usaha di atas.'),
 
             Select::make('supplier_type')
-                ->label('Jenis')
+                ->label('Bentuk usaha')
+                ->helperText('Pilih yang paling sesuai dengan kondisi usaha Anda.')
                 ->options([
-                    'company' => 'Perusahaan',
-                    'individual' => 'Perorangan',
+                    'individual' => 'Usaha perorangan / UMKM',
+                    'company' => 'Perusahaan / badan usaha',
                     'cooperative' => 'Koperasi',
                     'other' => 'Lainnya',
                 ])
@@ -52,12 +62,13 @@ class SupplierProfileResource extends Resource
                 ->required(),
 
             TextInput::make('npwp')
-                ->label('NPWP')
+                ->label('Nomor NPWP')
+                ->helperText('Isi NPWP usaha atau pemilik usaha bila digunakan untuk usaha.')
                 ->required(fn (Get $get): bool => ! (bool) $get('onboarding_exemptions.npwp')),
 
             Toggle::make('onboarding_exemptions.npwp')
-                ->label('Tidak memiliki NPWP / tidak berlaku')
-                ->helperText('Gunakan hanya bila memang tidak tersedia. Deklarasi ini dihitung sebagai penyelesaian item onboarding.')
+                ->label('Saya belum memiliki NPWP')
+                ->helperText('Aktifkan jika usaha Anda memang belum memiliki NPWP.')
                 ->live()
                 ->afterStateUpdated(function ($state, Set $set): void {
                     if ($state) {
@@ -66,13 +77,14 @@ class SupplierProfileResource extends Resource
                 }),
 
             TextInput::make('nib')
-                ->label('NIB')
+                ->label('Nomor Induk Berusaha / NIB')
+                ->helperText('NIB biasanya terdapat pada dokumen OSS.')
                 ->required(fn (Get $get): bool => in_array($get('supplier_type'), ['company', 'cooperative'], true)
                     && ! (bool) $get('onboarding_exemptions.nib')),
 
             Toggle::make('onboarding_exemptions.nib')
-                ->label('NIB tidak dimiliki / tidak berlaku')
-                ->helperText('Untuk perusahaan/koperasi, NIB atau deklarasi ini perlu tersedia agar onboarding lengkap.')
+                ->label('Saya belum memiliki NIB')
+                ->helperText('Aktifkan jika usaha Anda memang belum memiliki NIB.')
                 ->visible(fn (Get $get): bool => in_array($get('supplier_type'), ['company', 'cooperative'], true))
                 ->live()
                 ->afterStateUpdated(function ($state, Set $set): void {
@@ -82,15 +94,16 @@ class SupplierProfileResource extends Resource
                 }),
 
             TextInput::make('email')
-                ->label('Email')
-                ->helperText('Opsional. Supplier tetap dapat menggunakan nomor HP dan username untuk akses portal.')
+                ->label('Email (jika ada)')
+                ->helperText('Tidak wajib. Email dipakai untuk pemberitahuan bila tersedia.')
                 ->email(),
 
-            TextInput::make('phone')->label('Telepon')->tel()->required(),
-            TextInput::make('website')->label('Website')->url(),
+            TextInput::make('phone')->label('Nomor WhatsApp / HP')->helperText('Gunakan nomor yang aktif dan mudah dihubungi.')->tel()->required(),
+            TextInput::make('website')->label('Website (jika ada)')->url(),
 
             Textarea::make('address')
-                ->label('Alamat')
+                ->label('Alamat lengkap usaha')
+                ->helperText('Tulis nama jalan, nomor, RT/RW, dan patokan bila diperlukan.')
                 ->required()
                 ->columnSpanFull(),
 
@@ -138,7 +151,7 @@ class SupplierProfileResource extends Resource
                 ->required()
                 ->disabled(fn (Get $get): bool => blank($get('district_code'))),
 
-            TextInput::make('postal_code')->label('Kode Pos')->maxLength(10),
+            TextInput::make('postal_code')->label('Kode pos')->maxLength(10),
         ])->columns(2);
     }
 
@@ -146,22 +159,22 @@ class SupplierProfileResource extends Resource
     {
         return $table->columns([
             TextColumn::make('code')->label('Kode'),
-            TextColumn::make('display_name')->label('Supplier'),
+            TextColumn::make('display_name')->label('Nama Usaha'),
             TextColumn::make('status')->badge()->formatStateUsing(
                 fn ($state) => $state instanceof SupplierStatus ? $state->label() : SupplierStatus::tryFrom((string) $state)?->label(),
             ),
             TextColumn::make('email'),
-            TextColumn::make('phone')->label('Telepon'),
+            TextColumn::make('phone')->label('WhatsApp / HP'),
             TextColumn::make('documents_count')->label('Dokumen'),
             TextColumn::make('products_count')->label('Produk'),
         ])->recordActions([
             EditAction::make()->visible(fn (Supplier $record) => static::canEdit($record)),
-            Action::make('submit')->label('Ajukan Verifikasi')->color('primary')->requiresConfirmation()
+            Action::make('submit')->label('Kirim untuk Diperiksa')->color('primary')->requiresConfirmation()
                 ->visible(fn (Supplier $record) => static::editableStatus($record) && static::owned($record))
                 ->action(function (Supplier $record): void {
                     try {
                         app(SubmitSupplierAction::class)->execute($record);
-                        Notification::make()->success()->title('Supplier diajukan untuk verifikasi.')->send();
+                        Notification::make()->success()->title('Data usaha sudah dikirim untuk diperiksa.')->send();
                     } catch (DomainException $e) {
                         Notification::make()->danger()->title($e->getMessage())->send();
                     }

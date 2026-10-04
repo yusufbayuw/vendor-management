@@ -11,6 +11,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RoleAndPermissionSeeder::class,
             MasterDataSeeder::class,
+            BankSeeder::class,
         ]);
 
         if (! app()->environment('testing')) {

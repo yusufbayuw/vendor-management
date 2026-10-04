@@ -5,6 +5,7 @@ namespace App\Filament\Supplier\Resources\BankAccounts;
 use App\Enums\SystemPermission;
 use App\Enums\VerificationStatus;
 use App\Filament\Supplier\Resources\BankAccounts\Pages\ManageSupplierBankAccounts;
+use App\Models\Bank;
 use App\Models\Supplier;
 use App\Models\SupplierBankAccount;
 use Filament\Actions\Action;
@@ -28,9 +29,13 @@ class SupplierBankAccountResource extends Resource
 {
     protected static ?string $model = SupplierBankAccount::class;
 
-    protected static ?string $navigationLabel = 'Rekening Bank';
+    protected static ?string $navigationLabel = 'Rekening Pembayaran';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Perusahaan';
+    protected static ?string $modelLabel = 'rekening pembayaran';
+
+    protected static ?string $pluralModelLabel = 'rekening pembayaran';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Usaha Saya';
 
     protected static ?int $navigationSort = 30;
 
@@ -38,17 +43,33 @@ class SupplierBankAccountResource extends Resource
     {
         return $schema->components([
             Select::make('supplier_id')
-                ->label('Supplier')
+                ->label('Usaha')
                 ->options(static::supplierOptions())
                 ->default(fn (): ?int => static::singleSupplierId())
                 ->disabled(fn (): bool => static::singleSupplierId() !== null)
                 ->dehydrated()
                 ->required(),
-            TextInput::make('bank_name')->label('Nama Bank')->required()->maxLength(255),
-            TextInput::make('bank_code')->label('Kode Bank')->maxLength(30),
-            TextInput::make('account_number')->label('Nomor Rekening')->required()->maxLength(100),
-            TextInput::make('account_holder')->label('Nama Pemilik Rekening')->required()->maxLength(255),
-            Toggle::make('is_primary')->label('Rekening Utama'),
+            Select::make('bank_id')
+                ->label('Pilih bank')
+                ->placeholder('Ketik atau pilih nama bank')
+                ->helperText('Kode bank diisi otomatis. Anda tidak perlu mencarinya sendiri.')
+                ->options(fn (): array => Bank::activeOptions())
+                ->searchable()
+                ->preload()
+                ->required(),
+            TextInput::make('account_number')
+                ->label('Nomor rekening')
+                ->helperText('Isi hanya nomor rekening.')
+                ->required()
+                ->maxLength(100),
+            TextInput::make('account_holder')
+                ->label('Nama pemilik rekening')
+                ->helperText('Isi persis seperti nama yang tercatat di bank.')
+                ->required()
+                ->maxLength(255),
+            Toggle::make('is_primary')
+                ->label('Jadikan rekening utama untuk pembayaran')
+                ->helperText('Aktifkan jika rekening ini yang paling sering digunakan.'),
             Hidden::make('verification_status')
                 ->default(VerificationStatus::Pending->value)
                 ->dehydrateStateUsing(fn () => VerificationStatus::Pending->value),
@@ -58,38 +79,49 @@ class SupplierBankAccountResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('supplier.display_name')->label('Supplier'),
+            TextColumn::make('supplier.display_name')->label('Usaha'),
             TextColumn::make('bank_name')->label('Bank')->searchable(),
             TextColumn::make('account_number')->label('Nomor Rekening')->searchable(),
-            TextColumn::make('account_holder')->label('Atas Nama'),
-            IconColumn::make('is_primary')->label('Utama')->boolean(),
-            TextColumn::make('verification_status')->label('Verifikasi')->badge()
+            TextColumn::make('account_holder')->label('Nama Pemilik'),
+            IconColumn::make('is_primary')->label('Rekening Utama')->boolean(),
+            TextColumn::make('verification_status')->label('Status Pemeriksaan')->badge()
                 ->formatStateUsing(fn ($state) => str($state instanceof VerificationStatus ? $state->value : (string) $state)->replace('_', ' ')->title()),
         ])->recordActions([
-            EditAction::make(),
+            EditAction::make()->label('Ubah'),
             Action::make('requestChange')
-                ->label('Ajukan Perubahan')
+                ->label('Ganti Rekening')
                 ->color('warning')
                 ->visible(fn (SupplierBankAccount $record): bool => $record->verification_status === VerificationStatus::Verified && static::canEditOwned($record))
                 ->fillForm(fn (SupplierBankAccount $record): array => [
-                    'bank_name' => $record->bank_name,
-                    'bank_code' => $record->bank_code,
+                    'bank_id' => $record->bank_id,
                     'account_number' => $record->account_number,
                     'account_holder' => $record->account_holder,
                     'is_primary' => $record->is_primary,
                 ])
                 ->schema([
-                    TextInput::make('bank_name')->label('Nama Bank')->required()->maxLength(255),
-                    TextInput::make('bank_code')->label('Kode Bank')->maxLength(30),
-                    TextInput::make('account_number')->label('Nomor Rekening')->required()->maxLength(100),
-                    TextInput::make('account_holder')->label('Nama Pemilik Rekening')->required()->maxLength(255),
-                    Toggle::make('is_primary')->label('Jadikan Rekening Utama'),
+                    Select::make('bank_id')
+                        ->label('Pilih bank')
+                        ->placeholder('Ketik atau pilih nama bank')
+                        ->helperText('Kode bank diisi otomatis.')
+                        ->options(fn (): array => Bank::activeOptions())
+                        ->searchable()
+                        ->preload()
+                        ->required(),
+                    TextInput::make('account_number')
+                        ->label('Nomor rekening')
+                        ->required()
+                        ->maxLength(100),
+                    TextInput::make('account_holder')
+                        ->label('Nama pemilik rekening')
+                        ->helperText('Isi persis seperti nama yang tercatat di bank.')
+                        ->required()
+                        ->maxLength(255),
+                    Toggle::make('is_primary')->label('Jadikan rekening utama'),
                 ])
                 ->action(function (SupplierBankAccount $record, array $data): void {
-                    $replacement = SupplierBankAccount::query()->create([
+                    SupplierBankAccount::query()->create([
                         'supplier_id' => $record->supplier_id,
-                        'bank_name' => $data['bank_name'],
-                        'bank_code' => $data['bank_code'] ?? null,
+                        'bank_id' => $data['bank_id'],
                         'account_number' => $data['account_number'],
                         'account_holder' => $data['account_holder'],
                         'is_primary' => (bool) ($data['is_primary'] ?? false),
@@ -98,17 +130,21 @@ class SupplierBankAccountResource extends Resource
 
                     Notification::make()
                         ->success()
-                        ->title('Perubahan rekening diajukan.')
-                        ->body('Rekening lama tetap aktif sampai rekening baru diverifikasi.')
+                        ->title('Perubahan rekening sudah dikirim.')
+                        ->body('Rekening lama tetap digunakan sampai rekening baru selesai diperiksa admin.')
                         ->send();
                 }),
-            DeleteAction::make()->visible(fn (SupplierBankAccount $record) => in_array($record->verification_status, [VerificationStatus::Pending, VerificationStatus::Rejected], true)),
+            DeleteAction::make()
+                ->label('Hapus')
+                ->visible(fn (SupplierBankAccount $record) => in_array($record->verification_status, [VerificationStatus::Pending, VerificationStatus::Rejected], true)),
         ]);
     }
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with('supplier')->whereIn('supplier_id', static::supplierIds());
+        return parent::getEloquentQuery()
+            ->with(['supplier', 'bank'])
+            ->whereIn('supplier_id', static::supplierIds());
     }
 
     public static function canViewAny(): bool

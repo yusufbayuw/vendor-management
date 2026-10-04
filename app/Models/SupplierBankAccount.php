@@ -13,6 +13,7 @@ class SupplierBankAccount extends Model
 
     protected $fillable = [
         'supplier_id',
+        'bank_id',
         'bank_code',
         'bank_name',
         'account_number',
@@ -23,6 +24,24 @@ class SupplierBankAccount extends Model
         'verified_by',
         'rejection_reason',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $account): void {
+            if (! $account->bank_id) {
+                return;
+            }
+
+            $bank = Bank::query()->find($account->bank_id);
+
+            if (! $bank) {
+                return;
+            }
+
+            $account->bank_code = $bank->code;
+            $account->bank_name = $bank->name;
+        });
+    }
 
     protected function casts(): array
     {
@@ -36,6 +55,11 @@ class SupplierBankAccount extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function bank(): BelongsTo
+    {
+        return $this->belongsTo(Bank::class);
     }
 
     public function verifier(): BelongsTo
