@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\UserAccessScopes;
 
-use BackedEnum;
 use App\Enums\AccessScopeType;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\UserAccessScopes\Pages\ManageUserAccessScopes;
@@ -10,6 +9,7 @@ use App\Models\Organization;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\UserAccessScope;
+use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;

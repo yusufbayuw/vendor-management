@@ -3,6 +3,7 @@
 namespace App\Services\Access;
 
 use App\Enums\AccessScopeType;
+use App\Models\Organization;
 use App\Models\SppgKitchen;
 use App\Models\User;
 use App\Models\UserAccessScope;
@@ -30,7 +31,7 @@ class UserAccessService
     public function manageableOrganizationIds(User $user): Collection
     {
         if ($this->hasGlobalAccess($user)) {
-            return \App\Models\Organization::query()->pluck('id')->map(static fn ($id): int => (int) $id);
+            return Organization::query()->pluck('id')->map(static fn ($id): int => (int) $id);
         }
 
         return $this->scopeIds($user, AccessScopeType::Organization);

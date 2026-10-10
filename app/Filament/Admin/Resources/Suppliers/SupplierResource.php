@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\Suppliers;
 
-use BackedEnum;
 use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Actions\Supplier\ApproveSupplierAction;
 use App\Actions\Supplier\RequestSupplierRevisionAction;
@@ -20,6 +19,7 @@ use App\Services\Access\UserAccessService;
 use App\Services\Auth\ManualPhoneVerificationService;
 use App\Services\Regions\IndonesiaRegionService;
 use App\Services\Supplier\SupplierOperationalEligibilityService;
+use BackedEnum;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;

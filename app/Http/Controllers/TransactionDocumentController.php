@@ -61,8 +61,8 @@ class TransactionDocumentController extends Controller
     }
 
     /**
-     * @param array<int, SystemPermission> $internalPermissions
-     * @param array<int, SystemPermission> $supplierPermissions
+     * @param  array<int, SystemPermission>  $internalPermissions
+     * @param  array<int, SystemPermission>  $supplierPermissions
      */
     private function authorizeTransaction(
         ?User $user,

@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\GoodsReceipts;
 
-use BackedEnum;
 use App\Actions\Fulfillment\AddGoodsReceiptAttachmentAction;
 use App\Actions\Fulfillment\InspectGoodsReceiptAction;
 use App\Enums\GoodsReceiptAttachmentType;
@@ -16,6 +15,7 @@ use App\Models\GoodsReceiptAttachment;
 use App\Models\GoodsReceiptItem;
 use App\Services\Access\UserAccessService;
 use App\Services\Files\VendorFileStorage;
+use BackedEnum;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;

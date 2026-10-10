@@ -2,12 +2,12 @@
 
 namespace App\Filament\Admin\Resources\Products;
 
-use BackedEnum;
 use App\Filament\Admin\Resources\Concerns\AuthorizesMasterData;
 use App\Filament\Admin\Resources\Products\Pages\ManageProducts;
 use App\Filament\Admin\Support\MasterDataDuplicateGuard;
 use App\Filament\Admin\Support\MasterDataOptionFactory;
 use App\Models\Product;
+use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;

@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\GovernancePolicies;
 
-use BackedEnum;
 use App\Enums\GovernanceProcess;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\GovernancePolicies\Pages\ManageGovernancePolicies;
@@ -10,6 +9,7 @@ use App\Models\GovernancePolicy;
 use App\Models\Organization;
 use App\Models\User;
 use App\Services\Access\UserAccessService;
+use BackedEnum;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;

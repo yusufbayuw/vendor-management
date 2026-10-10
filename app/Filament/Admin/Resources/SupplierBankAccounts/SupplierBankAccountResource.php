@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\SupplierBankAccounts;
 
-use BackedEnum;
 use App\Actions\Supplier\RejectSupplierBankAccountAction;
 use App\Actions\Supplier\VerifySupplierBankAccountAction;
 use App\Enums\SystemPermission;
@@ -10,6 +9,7 @@ use App\Enums\VerificationStatus;
 use App\Filament\Admin\Resources\SupplierBankAccounts\Pages\ManageSupplierBankAccounts;
 use App\Models\SupplierBankAccount;
 use App\Services\Access\UserAccessService;
+use BackedEnum;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;

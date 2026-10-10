@@ -539,6 +539,7 @@ class LegacyImportService
 
         if ($existing !== null) {
             $this->assertImportedDocumentScope($batch, $existing);
+
             return $existing;
         }
 
@@ -620,6 +621,7 @@ class LegacyImportService
 
         if ($existing !== null) {
             $this->assertImportedDocumentScope($batch, $existing);
+
             return $existing;
         }
 
@@ -760,6 +762,7 @@ class LegacyImportService
 
         if ($existing !== null) {
             $this->assertImportedDocumentScope($batch, $existing);
+
             return $existing;
         }
 

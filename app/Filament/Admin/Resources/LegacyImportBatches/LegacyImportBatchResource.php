@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\LegacyImportBatches;
 
-use BackedEnum;
 use App\Enums\LegacyImportType;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\LegacyImportBatches\Pages\CreateLegacyImportBatch;
@@ -12,6 +11,7 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Services\Access\UserAccessService;
 use App\Services\Files\VendorFileStorage;
+use BackedEnum;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;

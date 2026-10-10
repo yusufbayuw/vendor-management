@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\Payments;
 
-use BackedEnum;
 use App\Actions\Payment\AttachPaymentProofAction;
 use App\Actions\Payment\RejectPaymentAction;
 use App\Actions\Payment\SubmitAndVerifyPaymentAction;
@@ -21,6 +20,7 @@ use App\Models\PaymentAttachment;
 use App\Services\Access\UserAccessService;
 use App\Services\Files\VendorFileStorage;
 use App\Services\Governance\GovernancePolicyService;
+use BackedEnum;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
