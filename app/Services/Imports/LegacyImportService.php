@@ -193,6 +193,8 @@ class LegacyImportService
         $kitchen = $this->kitchen($batch, $row);
         $status = $this->enumValue(PurchaseRequestStatus::class, $this->required($row, 'status'));
 
+        $this->assertImportedDocumentScope($batch, PurchaseRequest::query()->where('number', $this->required($row, 'number'))->first());
+
         $request = PurchaseRequest::query()->updateOrCreate(
             ['number' => $this->required($row, 'number')],
             [
@@ -246,6 +248,8 @@ class LegacyImportService
             $this->required($row, 'number'),
         );
         $status = $this->enumValue(PurchaseOrderStatus::class, $this->required($row, 'status'));
+
+        $this->assertImportedDocumentScope($batch, PurchaseOrder::query()->where('number', $this->required($row, 'number'))->first());
 
         $purchaseOrder = PurchaseOrder::query()->updateOrCreate(
             ['number' => $this->required($row, 'number')],
@@ -439,6 +443,8 @@ class LegacyImportService
             'Invoice diimport tanpa PO upstream yang sudah tersedia.',
         );
 
+        $this->assertImportedDocumentScope($batch, Invoice::query()->where('number', $this->required($row, 'number'))->first());
+
         return Invoice::query()->updateOrCreate(
             ['number' => $this->required($row, 'number')],
             [
@@ -469,6 +475,8 @@ class LegacyImportService
         $paymentDate = $this->requiredDate($row, 'payment_date');
         $amount = $this->number($row, 'amount', 0);
         $invoice = $this->resolveInvoiceForPayment($batch, $row, $actor, $paymentDate, $amount);
+
+        $this->assertImportedDocumentScope($batch, Payment::query()->where('number', $this->required($row, 'number'))->first());
 
         $payment = Payment::query()->updateOrCreate(
             ['number' => $this->required($row, 'number')],
@@ -530,6 +538,7 @@ class LegacyImportService
         $existing = PurchaseRequest::query()->where('number', $number)->first();
 
         if ($existing !== null) {
+            $this->assertImportedDocumentScope($batch, $existing);
             return $existing;
         }
 
@@ -610,6 +619,7 @@ class LegacyImportService
         $existing = PurchaseOrder::query()->where('number', $number)->first();
 
         if ($existing !== null) {
+            $this->assertImportedDocumentScope($batch, $existing);
             return $existing;
         }
 
@@ -749,6 +759,7 @@ class LegacyImportService
         $existing = Invoice::query()->where('number', $number)->first();
 
         if ($existing !== null) {
+            $this->assertImportedDocumentScope($batch, $existing);
             return $existing;
         }
 
@@ -858,6 +869,28 @@ class LegacyImportService
 
         if ($missing !== []) {
             throw new DomainException('Kolom wajib belum tersedia: '.implode(', ', $missing).'.');
+        }
+    }
+
+    /**
+     * Never allow a legacy document number to resolve to a different organization.
+     * This applies to updates as well as synthetic upstream lookups.
+     */
+    private function assertImportedDocumentScope(LegacyImportBatch $batch, ?Model $document): void
+    {
+        if ($document === null) {
+            return;
+        }
+
+        $kitchenId = $document instanceof Payment
+            ? $document->invoice?->sppg_kitchen_id
+            : $document->getAttribute('sppg_kitchen_id');
+
+        if ($kitchenId === null || ! SppgKitchen::query()
+            ->whereKey($kitchenId)
+            ->where('organization_id', $batch->organization_id)
+            ->exists()) {
+            throw new DomainException('Nomor dokumen sudah digunakan oleh organisasi lain. Import tidak akan menimpa transaksi tersebut.');
         }
     }
 

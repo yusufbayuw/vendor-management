@@ -51,8 +51,9 @@ class GovernancePolicyResource extends Resource
                         return [];
                     }
 
-                    return app(UserAccessService::class)
-                        ->applyOrganizationScope(Organization::query()->orderBy('name'), $user)
+                    return Organization::query()
+                        ->whereIn('id', app(UserAccessService::class)->manageableOrganizationIds($user))
+                        ->orderBy('name')
                         ->pluck('name', 'id')
                         ->all();
                 })
@@ -148,7 +149,7 @@ class GovernancePolicyResource extends Resource
         return $user instanceof User
             && $record instanceof GovernancePolicy
             && $user->can(SystemPermission::GovernanceManage->value)
-            && app(UserAccessService::class)->canAccessOrganization($user, $record->organization_id);
+            && app(UserAccessService::class)->canManageOrganization($user, $record->organization_id);
     }
 
     public static function canDelete(Model $record): bool

@@ -5,6 +5,7 @@ namespace App\Actions\Payment;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
+use App\Enums\VerificationStatus;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\SupplierBankAccount;
@@ -40,8 +41,18 @@ class CreatePaymentAction
                 throw new DomainException('Pembayaran hanya dapat dibuat untuk invoice yang sudah disetujui.');
             }
 
-            if ($destinationAccount !== null && $destinationAccount->supplier_id !== $invoice->supplier_id) {
-                throw new DomainException('Rekening tujuan tidak dimiliki supplier pada invoice ini.');
+            if ($destinationAccount !== null) {
+                $destinationAccount = SupplierBankAccount::query()
+                    ->lockForUpdate()
+                    ->findOrFail($destinationAccount->getKey());
+
+                if ($destinationAccount->supplier_id !== $invoice->supplier_id) {
+                    throw new DomainException('Rekening tujuan tidak dimiliki supplier pada invoice ini.');
+                }
+
+                if ($destinationAccount->verification_status !== VerificationStatus::Verified) {
+                    throw new DomainException('Rekening tujuan belum terverifikasi.');
+                }
             }
 
             $committed = (float) Payment::query()

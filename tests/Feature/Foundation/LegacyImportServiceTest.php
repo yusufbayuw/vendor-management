@@ -167,6 +167,43 @@ class LegacyImportServiceTest extends TestCase
         $this->assertFalse((bool) data_get($batch->summary, 'workflow_replayed', true));
     }
 
+    public function test_import_never_overwrites_document_from_another_organization(): void
+    {
+        [$firstOrganization, $actor] = $this->organizationAndActor();
+        [$otherOrganization] = $this->organizationAndActor();
+        $originalKitchen = SppgKitchen::query()->create([
+            'organization_id' => $firstOrganization->getKey(),
+            'code' => 'SPPG-FIRST',
+            'name' => 'Dapur Pertama',
+        ]);
+        $importKitchen = SppgKitchen::query()->create([
+            'organization_id' => $otherOrganization->getKey(),
+            'code' => 'SPPG-OTHER',
+            'name' => 'Dapur Kedua',
+        ]);
+        $existing = PurchaseRequest::query()->create([
+            'number' => 'PR-CROSS-ORG-001',
+            'sppg_kitchen_id' => $originalKitchen->getKey(),
+            'requested_by' => $actor->getKey(),
+            'status' => PurchaseRequestStatus::Draft,
+            'description' => 'Original and untouched',
+        ]);
+
+        $path = 'legacy-imports/cross-org.csv';
+        Storage::disk(VendorFileStorage::DISK)->put(
+            $path,
+            "number,kitchen_code,status,description\nPR-CROSS-ORG-001,{$importKitchen->code},approved,Should not overwrite\n",
+        );
+        $batch = $this->batch($otherOrganization, $actor, LegacyImportType::PurchaseRequests, $path);
+
+        app(LegacyImportService::class)->execute($batch, $actor);
+
+        $this->assertSame('completed_with_errors', $batch->fresh()->status);
+        $this->assertSame(1, $batch->fresh()->failed_rows);
+        $this->assertSame('Original and untouched', $existing->fresh()->description);
+        $this->assertSame($originalKitchen->getKey(), $existing->fresh()->sppg_kitchen_id);
+    }
+
     private function organizationAndActor(): array
     {
         $organization = Organization::query()->create([

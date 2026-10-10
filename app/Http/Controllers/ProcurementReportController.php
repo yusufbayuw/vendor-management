@@ -75,7 +75,14 @@ class ProcurementReportController extends Controller
                     $row[] = $flow['duration_hours'];
                 }
 
-                fputcsv($stream, $row);
+                // Spreadsheet applications may execute formulas in user-controlled strings.
+                fputcsv($stream, array_map(static function ($value) {
+                    if (is_string($value) && preg_match('/^[\\s]*[=+\\-@]/u', $value)) {
+                        return "'".$value;
+                    }
+
+                    return $value;
+                }, $row));
             }
 
             fclose($stream);

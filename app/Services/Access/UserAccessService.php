@@ -16,6 +16,26 @@ class UserAccessService
         return $this->hasScope($user, AccessScopeType::Global, 0);
     }
 
+    /**
+     * A kitchen-level scope grants visibility of its parent organization,
+     * but never permission to change organization-wide governance settings.
+     */
+    public function canManageOrganization(User $user, int $organizationId): bool
+    {
+        return $this->hasGlobalAccess($user)
+            || $this->hasScope($user, AccessScopeType::Organization, $organizationId);
+    }
+
+    /** @return Collection<int, int> */
+    public function manageableOrganizationIds(User $user): Collection
+    {
+        if ($this->hasGlobalAccess($user)) {
+            return \App\Models\Organization::query()->pluck('id')->map(static fn ($id): int => (int) $id);
+        }
+
+        return $this->scopeIds($user, AccessScopeType::Organization);
+    }
+
     public function canAccessOrganization(User $user, int $organizationId): bool
     {
         if ($this->hasGlobalAccess($user)) {

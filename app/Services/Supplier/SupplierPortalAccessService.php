@@ -36,7 +36,7 @@ class SupplierPortalAccessService
 
     private function userCanUsePortal(?User $user): bool
     {
-        return $user !== null && $user->hasOtpVerifiedPhone();
+        return $user !== null && $user->is_active && $user->hasVerifiedPhone();
     }
 
     public function currentSupplier(?User $user): ?Supplier
