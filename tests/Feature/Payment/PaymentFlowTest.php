@@ -8,6 +8,7 @@ use App\Actions\Payment\CreatePaymentAction;
 use App\Actions\Payment\SubmitAndVerifyPaymentAction;
 use App\Actions\Payment\SubmitPaymentForVerificationAction;
 use App\Actions\Payment\VerifyPaymentAction;
+use App\Enums\AccessScopeType;
 use App\Enums\ApprovalDecisionSource;
 use App\Enums\InvoiceStatus;
 use App\Enums\OperationalProfile;
@@ -25,6 +26,7 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\SupplierBankAccount;
 use App\Models\User;
+use App\Models\UserAccessScope;
 use App\Services\Files\VendorFileStorage;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -209,6 +211,37 @@ class PaymentFlowTest extends TestCase
         );
     }
 
+    public function test_transfer_requires_a_verified_supplier_account(): void
+    {
+        [$invoice, $actor] = $this->makeApprovedInvoice(100, OperationalProfile::Lean);
+        $invoice->supplier->bankAccounts()->delete();
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('Transfer bank memerlukan rekening supplier terverifikasi.');
+
+        app(CreatePaymentAction::class)->execute($invoice, 100, PaymentMethod::BankTransfer, $actor);
+    }
+
+    public function test_small_overpayment_is_rejected_without_float_tolerance(): void
+    {
+        [$invoice, $actor] = $this->makeApprovedInvoice(100, OperationalProfile::Lean);
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('melebihi outstanding');
+
+        app(CreatePaymentAction::class)->execute($invoice, 100.01, PaymentMethod::BankTransfer, $actor);
+    }
+
+    public function test_actor_without_payment_permission_is_rejected_by_domain(): void
+    {
+        [$invoice] = $this->makeApprovedInvoice(100, OperationalProfile::Lean);
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('tidak berwenang');
+
+        app(CreatePaymentAction::class)->execute($invoice, 100, PaymentMethod::BankTransfer, User::factory()->create());
+    }
+
     private function storeProof(string $filename): string
     {
         $path = 'payments/'.$filename;
@@ -221,6 +254,15 @@ class PaymentFlowTest extends TestCase
     private function makeApprovedInvoice(float $amount, OperationalProfile $profile): array
     {
         $actor = User::factory()->create();
+        $actor->givePermissionTo([
+            Permission::findOrCreate(SystemPermission::PaymentCreate->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PaymentVerify->value, 'web'),
+        ]);
+        UserAccessScope::query()->create([
+            'user_id' => $actor->getKey(),
+            'scope_type' => AccessScopeType::Global,
+            'scope_id' => 0,
+        ]);
         $organization = Organization::query()->create([
             'code' => fake()->unique()->bothify('ORG-###'),
             'name' => 'Organisasi',
@@ -237,6 +279,16 @@ class PaymentFlowTest extends TestCase
             'email' => fake()->unique()->safeEmail(),
             'phone' => '08123456789',
             'status' => SupplierStatus::Active,
+        ]);
+        SupplierBankAccount::query()->create([
+            'supplier_id' => $supplier->getKey(),
+            'bank_name' => 'Bank Terverifikasi',
+            'account_number' => '123456789012',
+            'account_holder' => 'Supplier',
+            'is_primary' => true,
+            'verification_status' => VerificationStatus::Verified,
+            'verified_at' => now(),
+            'verified_by' => $actor->getKey(),
         ]);
         $request = PurchaseRequest::query()->create([
             'number' => fake()->unique()->bothify('PR-#####'),

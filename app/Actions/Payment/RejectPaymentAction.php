@@ -9,15 +9,22 @@ use App\Enums\PaymentStatus;
 use App\Models\ApprovalRequest;
 use App\Models\Payment;
 use App\Models\User;
+use App\Enums\SystemPermission;
+use App\Services\Access\PaymentActionAuthorizationService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
 class RejectPaymentAction
 {
-    public function __construct(private readonly RejectApprovalRequestAction $rejectApprovalRequest) {}
+    public function __construct(
+        private readonly RejectApprovalRequestAction $rejectApprovalRequest,
+        private readonly PaymentActionAuthorizationService $authorization,
+    ) {}
 
     public function execute(Payment $payment, User $actor, string $reason): Payment
     {
+        $this->authorization->assertForPayment($payment, $actor, SystemPermission::PaymentVerify);
+
         if (! in_array($payment->status, [PaymentStatus::Submitted, PaymentStatus::UnderReview], true)) {
             throw new DomainException('Pembayaran tidak sedang menunggu verifikasi.');
         }

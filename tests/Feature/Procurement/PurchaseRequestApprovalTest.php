@@ -4,6 +4,7 @@ namespace Tests\Feature\Procurement;
 
 use App\Actions\Procurement\ApprovePurchaseRequestAction;
 use App\Actions\Procurement\SubmitPurchaseRequestAction;
+use App\Enums\AccessScopeType;
 use App\Enums\ApprovalDecisionSource;
 use App\Enums\GovernanceProcess;
 use App\Enums\OperationalProfile;
@@ -18,6 +19,7 @@ use App\Models\PurchaseRequestItem;
 use App\Models\SppgKitchen;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\UserAccessScope;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
@@ -56,6 +58,14 @@ class PurchaseRequestApprovalTest extends TestCase
         [$request, $requester, $organization] = $this->makePurchaseRequest(OperationalProfile::Standard, true);
         $approverA = User::factory()->create();
         $approverB = User::factory()->create();
+        foreach ([$approverA, $approverB] as $approver) {
+            $approver->givePermissionTo(Permission::findOrCreate(SystemPermission::PurchaseRequestApprove->value, 'web'));
+            UserAccessScope::query()->create([
+                'user_id' => $approver->getKey(),
+                'scope_type' => AccessScopeType::Global,
+                'scope_id' => 0,
+            ]);
+        }
 
         GovernancePolicy::query()->create([
             'organization_id' => $organization->id,
@@ -82,6 +92,14 @@ class PurchaseRequestApprovalTest extends TestCase
         if ($profile === OperationalProfile::Lean) {
             $permission = Permission::findOrCreate(SystemPermission::PurchaseRequestApprove->value, 'web');
             $requester->givePermissionTo($permission);
+        }
+
+        if ($profile === OperationalProfile::Lean) {
+            UserAccessScope::query()->create([
+                'user_id' => $requester->getKey(),
+                'scope_type' => AccessScopeType::Global,
+                'scope_id' => 0,
+            ]);
         }
 
         $organization = Organization::query()->create([

@@ -7,12 +7,17 @@ use App\Enums\PaymentStatus;
 use App\Models\Payment;
 use App\Models\PaymentAttachment;
 use App\Models\User;
+use App\Enums\SystemPermission;
+use App\Services\Access\PaymentActionAuthorizationService;
 use App\Services\Files\VendorFileStorage;
 use DomainException;
 
 class AttachPaymentProofAction
 {
-    public function __construct(private readonly VendorFileStorage $files) {}
+    public function __construct(
+        private readonly VendorFileStorage $files,
+        private readonly PaymentActionAuthorizationService $authorization,
+    ) {}
 
     public function execute(
         Payment $payment,
@@ -23,6 +28,8 @@ class AttachPaymentProofAction
         ?int $size = null,
         ?string $caption = null,
     ): PaymentAttachment {
+        $this->authorization->assertForPayment($payment, $actor, SystemPermission::PaymentCreate);
+
         if (! in_array($payment->status, [PaymentStatus::Draft, PaymentStatus::Submitted, PaymentStatus::UnderReview], true)) {
             throw new DomainException('Bukti pembayaran tidak dapat diubah setelah pembayaran selesai diverifikasi.');
         }

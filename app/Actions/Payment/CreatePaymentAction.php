@@ -10,14 +10,20 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\SupplierBankAccount;
 use App\Models\User;
+use App\Enums\SystemPermission;
+use App\Services\Access\PaymentActionAuthorizationService;
 use App\Services\Documents\DocumentNumberService;
+use App\Support\MoneyMinorUnits;
 use DomainException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class CreatePaymentAction
 {
-    public function __construct(private readonly DocumentNumberService $documentNumbers) {}
+    public function __construct(
+        private readonly DocumentNumberService $documentNumbers,
+        private readonly PaymentActionAuthorizationService $authorization,
+    ) {}
 
     public function execute(
         Invoice $invoice,
@@ -30,12 +36,14 @@ class CreatePaymentAction
         ?SupplierBankAccount $destinationAccount = null,
         ?string $notes = null,
     ): Payment {
-        if ($amount <= 0) {
+        if (MoneyMinorUnits::fromDecimal($amount) <= 0) {
             throw new DomainException('Nilai pembayaran harus lebih dari nol.');
         }
 
         return DB::transaction(function () use ($invoice, $amount, $method, $actor, $paymentDate, $sourceBankName, $referenceNumber, $destinationAccount, $notes): Payment {
             $invoice = Invoice::query()->with(['kitchen', 'supplier'])->lockForUpdate()->findOrFail($invoice->getKey());
+
+            $this->authorization->assertForInvoice($invoice, $actor, SystemPermission::PaymentCreate);
 
             if (! in_array($invoice->status, [InvoiceStatus::Approved, InvoiceStatus::PartiallyPaid], true)) {
                 throw new DomainException('Pembayaran hanya dapat dibuat untuk invoice yang sudah disetujui.');
@@ -55,14 +63,28 @@ class CreatePaymentAction
                 }
             }
 
-            $committed = (float) Payment::query()
+            if ($method === PaymentMethod::BankTransfer && $destinationAccount === null) {
+                $destinationAccount = SupplierBankAccount::query()
+                    ->where('supplier_id', $invoice->supplier_id)
+                    ->where('verification_status', VerificationStatus::Verified->value)
+                    ->where('is_primary', true)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($destinationAccount === null) {
+                    throw new DomainException('Transfer bank memerlukan rekening supplier terverifikasi.');
+                }
+            }
+
+            $committed = Payment::query()
                 ->where('invoice_id', $invoice->getKey())
                 ->whereNotIn('status', [PaymentStatus::Rejected->value, PaymentStatus::Cancelled->value])
                 ->sum('amount');
-            $outstanding = max(0, (float) $invoice->payable_amount - $committed);
+            $outstandingMinor = max(0, MoneyMinorUnits::fromDecimal($invoice->payable_amount)
+                - MoneyMinorUnits::fromDecimal($committed));
 
-            if ($amount - $outstanding > 0.01) {
-                throw new DomainException(sprintf('Pembayaran melebihi outstanding invoice. Sisa: %.2f.', $outstanding));
+            if (MoneyMinorUnits::fromDecimal($amount) > $outstandingMinor) {
+                throw new DomainException(sprintf('Pembayaran melebihi outstanding invoice. Sisa: %.2f.', $outstandingMinor / 100));
             }
 
             return Payment::query()->create([
