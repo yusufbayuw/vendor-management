@@ -35,6 +35,6 @@ class TransactionDocumentSecurityTest extends TestCase
         $this->actingAs($user)
             ->get(route('documents.purchase-orders.show', $po))
             ->assertOk()
-            ->assertHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+            ->assertHeader('Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store, private');
     }
 }
