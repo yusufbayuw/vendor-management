@@ -52,74 +52,45 @@ class LegacyImportService
 
     public function execute(LegacyImportBatch $batch, User $actor): LegacyImportBatch
     {
-        if (! in_array($batch->status, ['pending', 'failed', 'completed_with_errors'], true)) {
-            throw new DomainException('Batch import ini sedang atau sudah selesai diproses.');
-        }
+        $batch = DB::transaction(function () use ($batch): LegacyImportBatch {
+            $locked = LegacyImportBatch::query()->lockForUpdate()->findOrFail($batch->getKey());
 
-        $batch->forceFill([
-            'status' => 'processing',
-            'imported_rows' => 0,
-            'failed_rows' => 0,
-            'summary' => null,
-            'imported_at' => null,
-        ])->save();
+            if (! in_array($locked->status, ['pending', 'queued', 'failed', 'completed_with_errors'], true)) {
+                throw new DomainException('Batch import ini sedang atau sudah selesai diproses.');
+            }
+
+            $locked->forceFill([
+                'status' => 'processing',
+                'total_rows' => 0,
+                'imported_rows' => 0,
+                'failed_rows' => 0,
+                'summary' => null,
+                'imported_at' => null,
+            ])->save();
+
+            return $locked;
+        });
 
         try {
-            $rows = $this->reader->rows(
-                $this->files->absolutePath($batch->file_path),
-                $batch->original_filename,
-            );
-            $this->assertColumns($batch->import_type, $rows);
+            $total = $this->preflight($batch);
+            $batch->forceFill(['total_rows' => $total])->save();
 
-            $result = ImportExecutionContext::withoutWorkflowNotifications(function () use ($batch, $actor, $rows): array {
-                $imported = 0;
-                $failed = 0;
-                $errors = [];
-
-                foreach ($rows as $row) {
-                    try {
-                        DB::transaction(function () use ($batch, $actor, $row): void {
-                            $sourceable = $this->importRow($batch, $actor, $row);
-                            $this->recordProvenance($batch, $sourceable, $row);
-                        }, 3);
-
-                        $imported++;
-                    } catch (Throwable $exception) {
-                        $failed++;
-
-                        if (count($errors) < 100) {
-                            $errors[] = [
-                                'row' => (int) ($row['_source_row'] ?? 0),
-                                'message' => $exception->getMessage(),
-                            ];
-                        }
-                    }
-                }
-
-                return [
-                    'imported' => $imported,
-                    'failed' => $failed,
-                    'errors' => $errors,
-                ];
-            });
-
-            $imported = $result['imported'];
-            $failed = $result['failed'];
-            $errors = $result['errors'];
-            $syntheticRecords = DataProvenance::query()
-                ->where('legacy_import_batch_id', $batch->getKey())
-                ->where('provenance_type', 'legacy_import_synthetic')
-                ->count();
+            $result = $batch->dry_run
+                ? $this->preview($batch, $actor)
+                : $this->processRows($batch, $actor);
 
             $batch->forceFill([
-                'status' => $failed > 0 ? 'completed_with_errors' : 'completed',
-                'total_rows' => count($rows),
-                'imported_rows' => $imported,
-                'failed_rows' => $failed,
+                'status' => $batch->dry_run
+                    ? 'preview_completed'
+                    : ($result['failed'] > 0 ? 'completed_with_errors' : 'completed'),
+                'total_rows' => $total,
+                'imported_rows' => $result['imported'],
+                'failed_rows' => $result['failed'],
                 'summary' => [
                     'workflow_replayed' => false,
-                    'synthetic_upstream_records' => $syntheticRecords,
-                    'errors' => $errors,
+                    'dry_run' => (bool) $batch->dry_run,
+                    'synthetic_upstream_records' => $result['synthetic'],
+                    'errors' => $result['errors'],
                 ],
                 'imported_at' => now(),
             ])->save();
@@ -130,6 +101,7 @@ class LegacyImportService
                 'status' => 'failed',
                 'summary' => [
                     'workflow_replayed' => false,
+                    'dry_run' => (bool) $batch->dry_run,
                     'fatal_error' => $exception->getMessage(),
                 ],
                 'imported_at' => now(),
@@ -137,6 +109,101 @@ class LegacyImportService
 
             throw $exception;
         }
+    }
+
+    private function preflight(LegacyImportBatch $batch): int
+    {
+        $rows = $this->reader->streamRows(
+            $this->files->absolutePath($batch->file_path),
+            $batch->original_filename,
+        );
+        $total = 0;
+
+        foreach ($rows as $row) {
+            if ($total === 0) {
+                $this->assertColumns($batch->import_type, [$row]);
+            }
+
+            if (++$total > LegacyTabularReader::MAX_ROWS) {
+                throw new DomainException('File import melebihi batas '.LegacyTabularReader::MAX_ROWS.' baris. Pecah file menjadi beberapa batch.');
+            }
+        }
+
+        if ($total === 0) {
+            throw new DomainException('File import tidak memiliki data.');
+        }
+
+        return $total;
+    }
+
+    /** @return array{imported:int,failed:int,synthetic:int,errors:array<int,array{row:int,message:string}>} */
+    private function preview(LegacyImportBatch $batch, User $actor): array
+    {
+        $result = null;
+
+        try {
+            DB::transaction(function () use ($batch, $actor, &$result): void {
+                $result = $this->processRows($batch, $actor);
+
+                // Database savepoints preserve earlier simulated rows for dependent records.
+                // Roll back the entire simulation, including audit and provenance records.
+                throw new LegacyImportPreviewRolledBack;
+            });
+        } catch (LegacyImportPreviewRolledBack) {
+            // An intentional rollback signals a complete, non-destructive simulation.
+        }
+
+        return $result;
+    }
+
+    /** @return array{imported:int,failed:int,synthetic:int,errors:array<int,array{row:int,message:string}>} */
+    private function processRows(LegacyImportBatch $batch, User $actor): array
+    {
+        return ImportExecutionContext::withoutWorkflowNotifications(function () use ($batch, $actor): array {
+            $rows = $this->reader->streamRows(
+                $this->files->absolutePath($batch->file_path),
+                $batch->original_filename,
+            );
+            $imported = 0;
+            $failed = 0;
+            $errors = [];
+
+            foreach ($rows as $row) {
+                try {
+                    DB::transaction(function () use ($batch, $actor, $row): void {
+                        $sourceable = $this->importRow($batch, $actor, $row);
+                        $this->recordProvenance($batch, $sourceable, $row);
+                    }, 3);
+                    $imported++;
+                } catch (Throwable $exception) {
+                    $failed++;
+
+                    if (count($errors) < 100) {
+                        $errors[] = [
+                            'row' => (int) ($row['_source_row'] ?? 0),
+                            'message' => $exception->getMessage(),
+                        ];
+                    }
+                }
+
+                if (! $batch->dry_run && ($imported + $failed) % 100 === 0) {
+                    $batch->forceFill([
+                        'imported_rows' => $imported,
+                        'failed_rows' => $failed,
+                    ])->save();
+                }
+            }
+
+            return [
+                'imported' => $imported,
+                'failed' => $failed,
+                'synthetic' => DataProvenance::query()
+                    ->where('legacy_import_batch_id', $batch->getKey())
+                    ->where('provenance_type', 'legacy_import_synthetic')
+                    ->count(),
+                'errors' => $errors,
+            ];
+        });
     }
 
     private function importRow(LegacyImportBatch $batch, User $actor, array $row): Model

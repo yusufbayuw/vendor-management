@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources\LegacyImportBatches;
 
 use App\Enums\LegacyImportType;
+use App\Jobs\ProcessLegacyImportBatch;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\LegacyImportBatches\Pages\CreateLegacyImportBatch;
 use App\Filament\Admin\Resources\LegacyImportBatches\Pages\ListLegacyImportBatches;
@@ -15,10 +16,14 @@ use BackedEnum;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
+use DomainException;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -52,8 +57,9 @@ class LegacyImportBatchResource extends Resource
                         return [];
                     }
 
-                    return app(UserAccessService::class)
-                        ->applyOrganizationScope(Organization::query()->orderBy('name'), $user)
+                    return Organization::query()
+                        ->whereIn('id', app(UserAccessService::class)->manageableOrganizationIds($user))
+                        ->orderBy('name')
                         ->pluck('name', 'id')
                         ->all();
                 })
@@ -90,6 +96,10 @@ class LegacyImportBatchResource extends Resource
                 ->maxSize(20480)
                 ->required()
                 ->helperText('Baris pertama harus berisi nama kolom. Import tidak menjalankan ulang approval/notifikasi workflow.'),
+            Toggle::make('dry_run')
+                ->label('Dry-run: simulasi tanpa menyimpan perubahan')
+                ->default(true)
+                ->helperText('Direkomendasikan. Setelah simulasi berhasil, klik Jalankan Import pada baris hasil preview.'),
             Textarea::make('notes')
                 ->label('Catatan migrasi')
                 ->rows(3)
@@ -108,11 +118,16 @@ class LegacyImportBatchResource extends Resource
                     ->badge()
                     ->formatStateUsing(static fn ($state): string => $state instanceof LegacyImportType ? $state->label() : (LegacyImportType::tryFrom((string) $state)?->label() ?? (string) $state)),
                 TextColumn::make('original_filename')->label('File')->searchable()->wrap(),
+                TextColumn::make('dry_run')->label('Mode')
+                    ->formatStateUsing(static fn ($state): string => $state ? 'Simulasi' : 'Import')
+                    ->badge(),
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
                     ->color(static fn (string $state): string => match ($state) {
                         'completed' => 'success',
+                        'preview_completed' => 'success',
+                        'queued' => 'info',
                         'completed_with_errors' => 'warning',
                         'failed' => 'danger',
                         'processing' => 'info',
@@ -123,6 +138,45 @@ class LegacyImportBatchResource extends Resource
                 TextColumn::make('failed_rows')->label('Gagal')->numeric(),
                 TextColumn::make('importer.name')->label('Diimport oleh')->placeholder('-'),
                 TextColumn::make('imported_at')->label('Diproses')->dateTime('d/m/Y H:i')->placeholder('-'),
+            ])
+            ->recordActions([
+                Action::make('runPreview')
+                    ->label('Jalankan Import')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->modalDescription('Import nyata akan membuat/memperbarui record sesuai file preview. Pastikan hasil simulasi tidak memiliki error.')
+                    ->visible(static fn (LegacyImportBatch $record): bool => $record->dry_run
+                        && $record->status === 'preview_completed'
+                        && $record->failed_rows === 0
+                        && ! LegacyImportBatch::query()->where('source_preview_batch_id', $record->getKey())->exists())
+                    ->action(static function (LegacyImportBatch $record): void {
+                        $actor = auth()->user();
+                        $access = app(UserAccessService::class);
+
+                        if (! $actor instanceof User || ! $actor->is_active
+                            || ! $actor->can(SystemPermission::LegacyImportManage->value)
+                            || ! $access->canManageOrganization($actor, (int) $record->organization_id)) {
+                            throw new DomainException('Tidak berwenang menjalankan import organisasi ini.');
+                        }
+
+                        $batch = LegacyImportBatch::query()->create([
+                            'organization_id' => $record->organization_id,
+                            'import_type' => $record->import_type,
+                            'original_filename' => $record->original_filename,
+                            'file_path' => $record->file_path,
+                            'dry_run' => false,
+                            'source_preview_batch_id' => $record->getKey(),
+                            'status' => 'queued',
+                            'imported_by' => $actor->getKey(),
+                            'notes' => $record->notes,
+                        ]);
+
+                        ProcessLegacyImportBatch::dispatch($batch->getKey())->afterCommit();
+                        Notification::make()->success()
+                            ->title('Import nyata dijadwalkan')
+                            ->body('Batch #'.$batch->getKey().' diproses oleh queue worker.')
+                            ->send();
+                    }),
             ])
             ->defaultSort('id', 'desc');
     }

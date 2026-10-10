@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Foundation;
 
+use App\Enums\AccessScopeType;
 use App\Enums\InvoiceStatus;
+use App\Enums\SystemPermission;
 use App\Enums\LegacyImportType;
 use App\Enums\OperationalProfile;
 use App\Enums\PaymentStatus;
@@ -24,11 +26,17 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\UserAccessScope;
+use App\Jobs\ProcessLegacyImportBatch;
+use App\Services\Imports\LegacyTabularReader;
 use App\Services\Files\VendorFileStorage;
 use App\Services\Imports\LegacyImportService;
 use App\Services\Supplier\SupplierOperationalEligibilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Queue;
+use Spatie\Permission\Models\Permission;
+use ZipArchive;
 use Tests\TestCase;
 
 class LegacyImportServiceTest extends TestCase
@@ -202,6 +210,146 @@ class LegacyImportServiceTest extends TestCase
         $this->assertSame(1, $batch->fresh()->failed_rows);
         $this->assertSame('Original and untouched', $existing->fresh()->description);
         $this->assertSame($originalKitchen->getKey(), $existing->fresh()->sppg_kitchen_id);
+    }
+
+    public function test_preview_rolls_back_supplier_and_provenance_writes(): void
+    {
+        [$organization, $actor] = $this->organizationAndActor();
+
+        $path = 'legacy-imports/preview-suppliers.csv';
+        Storage::disk(VendorFileStorage::DISK)->put(
+            $path,
+            "code,legal_name,status\nSUP-PREVIEW-001,Supplier Simulasi,active\n",
+        );
+
+        $batch = $this->batch($organization, $actor, LegacyImportType::Suppliers, $path);
+        $batch->forceFill(['dry_run' => true])->save();
+
+        app(LegacyImportService::class)->execute($batch, $actor);
+
+        $this->assertSame('preview_completed', $batch->refresh()->status);
+        $this->assertSame(1, $batch->imported_rows);
+        $this->assertTrue((bool) data_get($batch->summary, 'dry_run'));
+        $this->assertDatabaseMissing('suppliers', ['code' => 'SUP-PREVIEW-001']);
+        $this->assertSame(0, DataProvenance::query()->where('legacy_import_batch_id', $batch->getKey())->count());
+    }
+
+    public function test_preview_preserves_dependent_rows_but_leaves_no_synthetic_records(): void
+    {
+        [$organization, $actor] = $this->organizationAndActor();
+
+        $kitchen = SppgKitchen::query()->create([
+            'organization_id' => $organization->getKey(),
+            'code' => 'SPPG-PREVIEW',
+            'name' => 'Dapur Preview',
+        ]);
+        Supplier::query()->create([
+            'code' => 'SUP-PREVIEW',
+            'legal_name' => 'Supplier Preview',
+        ]);
+
+        $path = 'legacy-imports/preview-downstream.csv';
+        Storage::disk(VendorFileStorage::DISK)->put(
+            $path,
+            "number,payment_date,amount,payment_method,status,supplier_code,kitchen_code\n".
+            "PAY-PREVIEW-001,2026-08-25,250000,cash,verified,SUP-PREVIEW,{$kitchen->code}\n",
+        );
+
+        $batch = $this->batch($organization, $actor, LegacyImportType::Payments, $path);
+        $batch->forceFill(['dry_run' => true])->save();
+        app(LegacyImportService::class)->execute($batch, $actor);
+
+        $this->assertSame('preview_completed', $batch->refresh()->status);
+        $this->assertSame(1, $batch->imported_rows);
+        $this->assertGreaterThanOrEqual(3, (int) data_get($batch->summary, 'synthetic_upstream_records', 0));
+        $this->assertDatabaseMissing('payments', ['number' => 'PAY-PREVIEW-001']);
+        $this->assertDatabaseMissing('invoices', ['number' => 'LEGACY-INV-PAY-PREVIEW-001']);
+        $this->assertDatabaseMissing('purchase_orders', ['number' => 'LEGACY-PO-PAY-PREVIEW-001']);
+    }
+
+    public function test_import_job_requires_authorized_active_operator_and_can_complete_real_import(): void
+    {
+        [$organization, $actor] = $this->organizationAndActor();
+
+        $path = 'legacy-imports/queued-suppliers.csv';
+        Storage::disk(VendorFileStorage::DISK)->put(
+            $path,
+            "code,legal_name,status\nSUP-QUEUE-001,Supplier Queued,active\n",
+        );
+        $batch = $this->batch($organization, $actor, LegacyImportType::Suppliers, $path);
+        $batch->forceFill(['status' => 'queued'])->save();
+
+        $job = new ProcessLegacyImportBatch($batch->getKey());
+
+        try {
+            $job->handle(app(LegacyImportService::class), app(\App\Services\Access\UserAccessService::class));
+            $this->fail('Unprivileged import operator must be denied.');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('permission', $e->getMessage());
+        }
+
+        $actor->givePermissionTo(Permission::findOrCreate(SystemPermission::LegacyImportManage->value, 'web'));
+        UserAccessScope::query()->create([
+            'user_id' => $actor->getKey(),
+            'scope_type' => AccessScopeType::Organization,
+            'scope_id' => $organization->getKey(),
+        ]);
+
+        $job->handle(app(LegacyImportService::class), app(\App\Services\Access\UserAccessService::class));
+
+        $this->assertSame('completed', $batch->fresh()->status);
+        $this->assertDatabaseHas('suppliers', ['code' => 'SUP-QUEUE-001']);
+    }
+
+    public function test_csv_can_be_streamed_without_building_an_array_of_all_rows(): void
+    {
+        $path = 'legacy-imports/stream.csv';
+        Storage::disk(VendorFileStorage::DISK)->put(
+            $path,
+            "number,status\n".implode('', array_map(
+                static fn (int $index): string => "PR-STREAM-{$index},approved\n",
+                range(1, 1500),
+            )),
+        );
+
+        $reader = app(LegacyTabularReader::class);
+        $stream = $reader->streamRows(
+            Storage::disk(VendorFileStorage::DISK)->path($path),
+            basename($path),
+        );
+
+        $this->assertSame(2, $stream->current()['_source_row']);
+        $count = 0;
+        foreach ($stream as $row) {
+            $count++;
+        }
+
+        $this->assertSame(1500, $count);
+    }
+
+    public function test_xlsx_reads_rows_by_streaming_xml(): void
+    {
+        if (! class_exists(ZipArchive::class)) {
+            $this->markTestSkipped('ZIP extension unavailable.');
+        }
+
+        $path = Storage::disk(VendorFileStorage::DISK)->path('legacy-imports/stream.xlsx');
+        @mkdir(dirname($path), 0775, true);
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $zip->addFromString('xl/worksheets/sheet1.xml',
+            '<?xml version="1.0" encoding="UTF-8"?>'.
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'.
+            '<row r="1"><c r="A1" t="inlineStr"><is><t>code</t></is></c><c r="B1" t="inlineStr"><is><t>legal_name</t></is></c></row>'.
+            '<row r="2"><c r="A2" t="inlineStr"><is><t>SUP-STREAM-XLSX</t></is></c><c r="B2" t="inlineStr"><is><t>Supplier XLSX</t></is></c></row>'.
+            '</sheetData></worksheet>');
+        $zip->close();
+
+        $rows = iterator_to_array(app(LegacyTabularReader::class)->streamRows($path, 'stream.xlsx'));
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('SUP-STREAM-XLSX', $rows[0]['code']);
+        $this->assertSame(2, $rows[0]['_source_row']);
     }
 
     private function organizationAndActor(): array

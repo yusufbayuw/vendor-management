@@ -545,6 +545,12 @@ atau gunakan cron production Laravel yang memanggil `schedule:run`.
 
 Queue worker dan scheduler harus dikelola process manager/system service agar tetap aktif setelah restart server.
 
+### Legacy import asynchronous
+
+Fitur **Import Data Lama** memakai antrean dan mendukung dry-run default. Preview sepenuhnya rollback, tanpa menulis data transaksi/provenance. Setelah preview tanpa error, jalankan import nyata dari aksi batch.
+
+Production wajib menjalankan worker database queue dengan `--timeout=600` dan `DB_QUEUE_RETRY_AFTER=660`, serta memastikan `QUEUE_CONNECTION=database` (bukan `sync`). Batas file 20 MB dan 10.000 baris per batch. Panduan rinci tersedia di [Legacy Data Import](docs/legacy-import.md).
+
 ## Installation
 
 Clone repository:

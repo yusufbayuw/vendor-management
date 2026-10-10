@@ -4,24 +4,45 @@ namespace App\Services\Imports;
 
 use DomainException;
 use Illuminate\Support\Str;
+use Generator;
+use XMLReader;
 use ZipArchive;
 
 class LegacyTabularReader
 {
+    public const MAX_ROWS = 10000;
+
+    public const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+    private const MAX_SHEET_BYTES = 40 * 1024 * 1024;
+
+    private const MAX_SHARED_STRINGS_BYTES = 8 * 1024 * 1024;
+
     /** @return array<int, array<string, mixed>> */
     public function rows(string $absolutePath, string $filename): array
     {
+        return iterator_to_array($this->streamRows($absolutePath, $filename), false);
+    }
+
+    /** @return Generator<int, array<string, mixed>> */
+    public function streamRows(string $absolutePath, string $filename): Generator
+    {
         $extension = Str::lower(pathinfo($filename, PATHINFO_EXTENSION));
 
-        return match ($extension) {
+        $size = @filesize($absolutePath);
+        if (! is_int($size) || $size > self::MAX_FILE_BYTES) {
+            throw new DomainException('File import tidak ditemukan atau melebihi batas 20 MB.');
+        }
+
+        yield from match ($extension) {
             'csv' => $this->csvRows($absolutePath),
             'xlsx' => $this->xlsxRows($absolutePath),
             default => throw new DomainException('Format import hanya mendukung CSV atau XLSX.'),
         };
     }
 
-    /** @return array<int, array<string, mixed>> */
-    private function csvRows(string $path): array
+    /** @return Generator<int, array<string, mixed>> */
+    private function csvRows(string $path): Generator
     {
         $handle = fopen($path, 'rb');
 
@@ -31,7 +52,6 @@ class LegacyTabularReader
 
         try {
             $headers = null;
-            $rows = [];
             $rowNumber = 0;
 
             while (($row = fgetcsv($handle)) !== false) {
@@ -47,20 +67,19 @@ class LegacyTabularReader
                     continue;
                 }
 
-                $rows[] = $this->combine($headers, $row, $rowNumber);
+                yield $this->combine($headers, $row, $rowNumber);
             }
 
-            return $rows;
         } finally {
             fclose($handle);
         }
     }
 
-    /** @return array<int, array<string, mixed>> */
-    private function xlsxRows(string $path): array
+    /** @return Generator<int, array<string, mixed>> */
+    private function xlsxRows(string $path): Generator
     {
-        if (! class_exists(ZipArchive::class)) {
-            throw new DomainException('Ekstensi PHP zip diperlukan untuk membaca XLSX.');
+        if (! class_exists(ZipArchive::class) || ! class_exists(XMLReader::class)) {
+            throw new DomainException('Ekstensi PHP zip dan XMLReader diperlukan untuk membaca XLSX.');
         }
 
         $zip = new ZipArchive;
@@ -70,54 +89,68 @@ class LegacyTabularReader
         }
 
         try {
+            $sheet = $zip->statName('xl/worksheets/sheet1.xml');
+            $strings = $zip->statName('xl/sharedStrings.xml');
+
+            if ($sheet === false || ($sheet['size'] ?? 0) > self::MAX_SHEET_BYTES
+                || ($strings !== false && ($strings['size'] ?? 0) > self::MAX_SHARED_STRINGS_BYTES)) {
+                throw new DomainException('Sheet XLSX hilang atau melebihi batas ukuran aman.');
+            }
+
             $sharedStrings = $this->sharedStrings($zip);
-            $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        } finally {
+            $zip->close();
+        }
 
-            if (! is_string($sheetXml)) {
-                throw new DomainException('Sheet pertama pada XLSX tidak ditemukan.');
-            }
+        $reader = new XMLReader;
+        $uri = 'zip://'.$path.'#xl/worksheets/sheet1.xml';
 
-            $xml = simplexml_load_string($sheetXml);
+        if (! $reader->open($uri, null, LIBXML_NONET | LIBXML_COMPACT)) {
+            throw new DomainException('Sheet XLSX tidak dapat dibaca.');
+        }
 
-            if ($xml === false) {
-                throw new DomainException('Struktur XLSX tidak valid.');
-            }
-
-            $namespaces = $xml->getNamespaces(true);
-            $main = $namespaces[''] ?? null;
-
-            if ($main !== null) {
-                $xml->registerXPathNamespace('x', $main);
-                $rowNodes = $xml->xpath('//x:sheetData/x:row') ?: [];
-            } else {
-                $rowNodes = $xml->sheetData->row ?? [];
-            }
-
+        try {
             $headers = null;
-            $rows = [];
+            $sourceRow = 0;
 
-            foreach ($rowNodes as $rowNode) {
+            while ($reader->read()) {
+                if ($reader->nodeType !== XMLReader::ELEMENT || $reader->localName !== 'row') {
+                    continue;
+                }
+
+                $sourceRow = (int) ($reader->getAttribute('r') ?: ($sourceRow + 1));
+                $fragment = $reader->readOuterXml();
+
+                if (strlen($fragment) > 128 * 1024) {
+                    throw new DomainException('Baris XLSX terlalu besar.');
+                }
+
+                $rowNode = simplexml_load_string($fragment, 'SimpleXMLElement', LIBXML_NONET);
+
+                if ($rowNode === false) {
+                    throw new DomainException('Struktur baris XLSX tidak valid.');
+                }
+
                 $values = [];
-                $cells = $main !== null ? ($rowNode->xpath('./x:c') ?: []) : ($rowNode->c ?? []);
+                $rowNode->registerXPathNamespace('x', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+                $cells = $rowNode->xpath('./x:c') ?: [];
 
                 foreach ($cells as $cell) {
-                    $reference = (string) $cell['r'];
-                    $columnIndex = $this->columnIndex($reference);
-                    $type = (string) $cell['t'];
-
-                    if ($main !== null) {
-                        $cell->registerXPathNamespace('x', $main);
+                    $columnIndex = $this->columnIndex((string) $cell['r']);
+                    if ($columnIndex >= 200) {
+                        throw new DomainException('XLSX memiliki terlalu banyak kolom.');
                     }
 
+                    $cell->registerXPathNamespace('x', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+                    $type = (string) $cell['t'];
+
                     if ($type === 'inlineStr') {
-                        $textNodes = $main !== null ? ($cell->xpath('.//x:is/x:t') ?: []) : ($cell->xpath('.//is/t') ?: []);
-                        $value = implode('', array_map(static fn ($text): string => (string) $text, $textNodes));
+                        $texts = $cell->xpath('.//x:is/x:t') ?: [];
+                        $value = implode('', array_map(static fn ($text): string => (string) $text, $texts));
                     } else {
-                        $valueNodes = $main !== null ? ($cell->xpath('./x:v') ?: []) : ($cell->xpath('./v') ?: []);
-                        $raw = isset($valueNodes[0]) ? (string) $valueNodes[0] : '';
-                        $value = $type === 's'
-                            ? ($sharedStrings[(int) $raw] ?? '')
-                            : $raw;
+                        $nodes = $cell->xpath('./x:v') ?: [];
+                        $raw = isset($nodes[0]) ? (string) $nodes[0] : '';
+                        $value = $type === 's' ? ($sharedStrings[(int) $raw] ?? '') : $raw;
                     }
 
                     $values[$columnIndex] = trim((string) $value);
@@ -129,9 +162,7 @@ class LegacyTabularReader
 
                 ksort($values);
                 $dense = [];
-                $maxIndex = max(array_keys($values));
-
-                for ($index = 0; $index <= $maxIndex; $index++) {
+                for ($index = 0; $index <= max(array_keys($values)); $index++) {
                     $dense[] = $values[$index] ?? '';
                 }
 
@@ -141,17 +172,12 @@ class LegacyTabularReader
                     continue;
                 }
 
-                if ($this->isEmptyRow($dense)) {
-                    continue;
+                if (! $this->isEmptyRow($dense)) {
+                    yield $this->combine($headers, $dense, $sourceRow);
                 }
-
-                $sourceRow = (int) ($rowNode['r'] ?? 0);
-                $rows[] = $this->combine($headers, $dense, $sourceRow);
             }
-
-            return $rows;
         } finally {
-            $zip->close();
+            $reader->close();
         }
     }
 
@@ -164,7 +190,7 @@ class LegacyTabularReader
             return [];
         }
 
-        $xml = simplexml_load_string($xmlContent);
+        $xml = simplexml_load_string($xmlContent, 'SimpleXMLElement', LIBXML_NONET);
 
         if ($xml === false) {
             return [];
