@@ -62,3 +62,51 @@ jobs:
 
       - name: Build frontend assets
         run: npm run build
+
+  mariadb-import:
+    name: MariaDB legacy import
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root-ci-password
+          MARIADB_DATABASE: vendor_ci
+          MARIADB_USER: vendor_ci
+          MARIADB_PASSWORD: vendor-ci-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_DATABASE: vendor_ci
+      DB_USERNAME: vendor_ci
+      DB_PASSWORD: vendor-ci-password
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: database
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup PHP with MySQL
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, zip, xmlreader, gd
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Migrate MariaDB
+        run: php artisan migrate:fresh --force
+      - name: Test legacy imports on MariaDB
+        run: php artisan test tests/Feature/Foundation/LegacyImportServiceTest.php
