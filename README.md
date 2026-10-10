@@ -649,6 +649,16 @@ password
 
 Akun demo tidak ditujukan untuk production.
 
+## Kebijakan integritas transaksi (Fase 2)
+
+- Aksi membuat, mengunggah bukti, mengajukan, memverifikasi, dan menolak pembayaran memerlukan **permission yang sesuai dan scope dapur terkait** di lapisan domain. Menyembunyikan tombol pada panel bukan pengganti otorisasi.
+- Semua keputusan approval diperiksa kembali berdasarkan **jenis proses, permission, organisasi, dan dapur terkait**. Kebijakan self-approval Lean tetap berlaku hanya bagi operator yang memiliki izin dan cakupan sah.
+- **Transfer bank** memerlukan rekening supplier yang berstatus **verified**. Jika rekening tidak dipilih, sistem hanya boleh memilih rekening **utama terverifikasi** milik supplier yang sama. Jika tidak tersedia, transaksi ditolak sampai rekening diverifikasi. Metode cash dan virtual account tidak otomatis diwajibkan memiliki rekening tujuan.
+- Outstanding, validasi kelebihan pembayaran, dan penentuan invoice lunas menggunakan satuan minor dua desimal tanpa toleransi tambahan Rp0,01. Nominal dengan lebih dari dua desimal ditolak.
+- Pembayaran yang dibuat sebelum perubahan tidak dimutasi oleh kode ini. Pemeriksaan rekening dilakukan untuk pembuatan pembayaran baru.
+
+Sebelum mengaktifkan perubahan pada instalasi existing, pastikan **finance/verifier mempunyai role/permission yang sesuai, kitchen scope, dan rekening bank utama terverifikasi** untuk setiap supplier yang dibayar melalui transfer.
+
 ## Development checks
 
 Sebelum perubahan dianggap siap:

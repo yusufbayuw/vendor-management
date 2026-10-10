@@ -7,11 +7,14 @@ use App\Enums\ApprovalStatus;
 use App\Models\ApprovalAction;
 use App\Models\ApprovalRequest;
 use App\Models\User;
+use App\Services\Access\ApprovalDecisionAuthorizationService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
 class RejectApprovalRequestAction
 {
+    public function __construct(private readonly ApprovalDecisionAuthorizationService $authorization) {}
+
     public function execute(ApprovalRequest $approvalRequest, User $actor, string $reason): ApprovalRequest
     {
         if (blank($reason)) {
@@ -20,6 +23,8 @@ class RejectApprovalRequestAction
 
         return DB::transaction(function () use ($approvalRequest, $actor, $reason): ApprovalRequest {
             $approvalRequest = ApprovalRequest::query()->lockForUpdate()->findOrFail($approvalRequest->getKey());
+
+            $this->authorization->assertCanDecide($approvalRequest, $actor);
 
             if ($approvalRequest->status !== ApprovalStatus::Pending) {
                 throw new DomainException('Approval ini sudah tidak menunggu keputusan.');

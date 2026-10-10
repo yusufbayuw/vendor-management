@@ -5,6 +5,7 @@ namespace Tests\Feature\Foundation;
 use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
 use App\Actions\Billing\SubmitInvoiceAction;
 use App\Actions\Procurement\SubmitPurchaseOrderForApprovalAction;
+use App\Enums\AccessScopeType;
 use App\Enums\ApprovalDecisionSource;
 use App\Enums\InvoiceStatus;
 use App\Enums\OperationalProfile;
@@ -22,6 +23,7 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\UserAccessScope;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -74,6 +76,11 @@ class LeanAutoApprovalTest extends TestCase
             Permission::findOrCreate(SystemPermission::InvoiceApprove->value, 'web'),
         ]);
 
+        UserAccessScope::query()->create([
+            'user_id' => $actor->getKey(),
+            'scope_type' => AccessScopeType::Global,
+            'scope_id' => 0,
+        ]);
         $organization = Organization::query()->create([
             'code' => fake()->unique()->bothify('ORG-L-###'),
             'name' => 'Lean Organization',

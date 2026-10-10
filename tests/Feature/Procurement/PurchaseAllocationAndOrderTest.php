@@ -7,6 +7,7 @@ use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
 use App\Actions\Procurement\CreateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\GeneratePurchaseOrdersAction;
 use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
+use App\Enums\AccessScopeType;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\PurchaseRequestStatus;
@@ -20,6 +21,7 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\UserAccessScope;
 use DomainException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -170,6 +172,12 @@ class PurchaseAllocationAndOrderTest extends TestCase
     private function makeApprovedPurchaseRequest(array $quantities, OperationalProfile $profile = OperationalProfile::Standard): array
     {
         $actor = User::factory()->create();
+        $actor->givePermissionTo(Permission::findOrCreate(SystemPermission::PurchaseOrderApprove->value, 'web'));
+        UserAccessScope::query()->create([
+            'user_id' => $actor->getKey(),
+            'scope_type' => AccessScopeType::Global,
+            'scope_id' => 0,
+        ]);
         $organization = Organization::query()->create(['code' => fake()->unique()->bothify('ORG-###'), 'name' => 'Organisasi', 'operational_profile' => $profile]);
         $kitchen = SppgKitchen::query()->create([
             'organization_id' => $organization->id,

@@ -24,6 +24,7 @@ use App\Actions\Procurement\IssuePurchaseOrderAction;
 use App\Actions\Procurement\SubmitPurchaseOrderForApprovalAction;
 use App\Actions\Procurement\SubmitPurchaseRequestAction;
 use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
+use App\Enums\AccessScopeType;
 use App\Enums\ApprovalStatus;
 use App\Enums\DiscrepancyResolution;
 use App\Enums\DiscrepancyStatus;
@@ -33,6 +34,8 @@ use App\Enums\OperationalProfile;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
+use App\Enums\SystemPermission;
+use App\Enums\VerificationStatus;
 use App\Models\ApprovalAction;
 use App\Models\ApprovalRequest;
 use App\Models\Organization;
@@ -42,11 +45,14 @@ use App\Models\PurchaseRequest;
 use App\Models\PurchaseRequestItem;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
+use App\Models\SupplierBankAccount;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\UserAccessScope;
 use App\Services\Files\VendorFileStorage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class ProcurementExceptionLifecycleTest extends TestCase
@@ -69,6 +75,24 @@ class ProcurementExceptionLifecycleTest extends TestCase
         $receiver = User::factory()->create(['name' => 'Receiver Exception']);
         $finance = User::factory()->create(['name' => 'Finance Exception']);
         $paymentVerifier = User::factory()->create(['name' => 'Payment Verifier Exception']);
+
+        $approver->givePermissionTo([
+            Permission::findOrCreate(SystemPermission::PurchaseRequestApprove->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PurchaseOrderApprove->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PurchaseOrderExceptionClose->value, 'web'),
+        ]);
+        $finance->givePermissionTo([
+            Permission::findOrCreate(SystemPermission::InvoiceApprove->value, 'web'),
+            Permission::findOrCreate(SystemPermission::PaymentCreate->value, 'web'),
+        ]);
+        $paymentVerifier->givePermissionTo(Permission::findOrCreate(SystemPermission::PaymentVerify->value, 'web'));
+        foreach ([$approver, $finance, $paymentVerifier] as $operator) {
+            UserAccessScope::query()->create([
+                'user_id' => $operator->getKey(),
+                'scope_type' => AccessScopeType::Global,
+                'scope_id' => 0,
+            ]);
+        }
 
         $organization = Organization::query()->create([
             'code' => 'ORG-E2E-EXC',
@@ -109,6 +133,17 @@ class ProcurementExceptionLifecycleTest extends TestCase
             true,
             true,
         );
+
+        SupplierBankAccount::query()->create([
+            'supplier_id' => $supplier->getKey(),
+            'bank_name' => 'Bank Supplier E2E',
+            'account_number' => '9876543210',
+            'account_holder' => 'Supplier E2E',
+            'is_primary' => true,
+            'verification_status' => VerificationStatus::Verified,
+            'verified_at' => now(),
+            'verified_by' => $finance->getKey(),
+        ]);
 
         $purchaseRequest = PurchaseRequest::query()->create([
             'number' => 'PR-E2E-EXC-001',

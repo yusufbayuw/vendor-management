@@ -9,15 +9,21 @@ use App\Enums\GovernanceProcess;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
+use App\Enums\SystemPermission;
 use App\Models\ApprovalRequest;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\Access\PaymentActionAuthorizationService;
+use App\Support\MoneyMinorUnits;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
 class VerifyPaymentAction
 {
-    public function __construct(private readonly ApproveApprovalRequestAction $approveApprovalRequest) {}
+    public function __construct(
+        private readonly ApproveApprovalRequestAction $approveApprovalRequest,
+        private readonly PaymentActionAuthorizationService $authorization,
+    ) {}
 
     public function execute(
         Payment $payment,
@@ -26,6 +32,8 @@ class VerifyPaymentAction
         ?string $overrideReason = null,
         ApprovalDecisionSource $decisionSource = ApprovalDecisionSource::Manual,
     ): Payment {
+        $this->authorization->assertForPayment($payment, $actor, SystemPermission::PaymentVerify);
+
         if (! in_array($payment->status, [PaymentStatus::Submitted, PaymentStatus::UnderReview], true)) {
             throw new DomainException('Pembayaran tidak sedang menunggu verifikasi.');
         }
@@ -62,11 +70,11 @@ class VerifyPaymentAction
             ])->save();
 
             $invoice = $payment->invoice()->lockForUpdate()->firstOrFail();
-            $verifiedAmount = (float) $invoice->payments()
+            $verifiedAmountMinor = MoneyMinorUnits::fromDecimal($invoice->payments()
                 ->where('status', PaymentStatus::Verified->value)
-                ->sum('amount');
+                ->sum('amount'));
 
-            if ($verifiedAmount + 0.01 >= (float) $invoice->payable_amount) {
+            if ($verifiedAmountMinor >= MoneyMinorUnits::fromDecimal($invoice->payable_amount)) {
                 $invoice->update(['status' => InvoiceStatus::Paid]);
 
                 $purchaseOrder = $invoice->purchaseOrder()

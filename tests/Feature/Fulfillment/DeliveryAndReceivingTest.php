@@ -9,6 +9,7 @@ use App\Actions\Fulfillment\CreateDeliveryScheduleAction;
 use App\Actions\Fulfillment\InspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordAndInspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordGoodsReceiptAction;
+use App\Enums\AccessScopeType;
 use App\Enums\ApprovalDecisionSource;
 use App\Enums\DeliveryScheduleStatus;
 use App\Enums\DiscrepancyStatus;
@@ -30,6 +31,7 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\UserAccessScope;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
@@ -223,6 +225,12 @@ class DeliveryAndReceivingTest extends TestCase
         OperationalProfile $profile = OperationalProfile::Standard,
     ): array {
         $actor = User::factory()->create();
+        $actor->givePermissionTo(Permission::findOrCreate(SystemPermission::PurchaseOrderExceptionClose->value, 'web'));
+        UserAccessScope::query()->create([
+            'user_id' => $actor->getKey(),
+            'scope_type' => AccessScopeType::Global,
+            'scope_id' => 0,
+        ]);
         $organization = Organization::query()->create([
             'code' => fake()->unique()->bothify('ORG-###'),
             'name' => 'Organisasi',
