@@ -3,9 +3,12 @@
 namespace Tests\Feature\Foundation;
 
 use App\Models\PhoneVerificationRequest;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Notifications\VerifySupplierEmail;
 use App\Services\Auth\ManualPhoneVerificationService;
+use App\Services\Supplier\SupplierOperationalEligibilityService;
+use App\Services\Supplier\SupplierPortalAccessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -44,6 +47,31 @@ class ManualPhoneVerificationTest extends TestCase
         $this->assertSame(PhoneVerificationRequest::METHOD_WHATSAPP_MANUAL, $user->phone_verification_method);
         $this->assertSame($actor->getKey(), $user->phone_verified_by);
         $this->assertSame(PhoneVerificationRequest::STATUS_VERIFIED, $request->fresh()->status);
+    }
+
+    public function test_manual_whatsapp_verified_account_can_access_operational_supplier(): void
+    {
+        $user = User::factory()->create([
+            'email' => null,
+            'phone' => '081234567890',
+            'phone_verified_at' => null,
+        ]);
+        $supplier = Supplier::query()->create([
+            'code' => 'SUP-MANUAL-001',
+            'legal_name' => 'Supplier Verifikasi Manual',
+        ]);
+        $supplier->users()->attach($user->getKey(), ['is_owner' => true, 'is_active' => true]);
+
+        $request = app(ManualPhoneVerificationService::class)->currentOrCreate($user);
+        app(ManualPhoneVerificationService::class)->verify($request, User::factory()->create());
+
+        $eligibility = \Mockery::mock(SupplierOperationalEligibilityService::class);
+        $eligibility->shouldReceive('isOperationallyEligible')->andReturn(true);
+        $this->app->instance(SupplierOperationalEligibilityService::class, $eligibility);
+
+        $service = app(SupplierPortalAccessService::class);
+        $this->assertTrue($service->hasActiveSupplier($user->fresh()));
+        $this->assertSame([$supplier->getKey()], $service->activeSupplierIds($user->fresh()));
     }
 
     public function test_changing_phone_clears_manual_verification_metadata(): void

@@ -3,6 +3,7 @@
 namespace App\Services\Access;
 
 use App\Enums\AccessScopeType;
+use App\Models\Organization;
 use App\Models\SppgKitchen;
 use App\Models\User;
 use App\Models\UserAccessScope;
@@ -14,6 +15,26 @@ class UserAccessService
     public function hasGlobalAccess(User $user): bool
     {
         return $this->hasScope($user, AccessScopeType::Global, 0);
+    }
+
+    /**
+     * A kitchen-level scope grants visibility of its parent organization,
+     * but never permission to change organization-wide governance settings.
+     */
+    public function canManageOrganization(User $user, int $organizationId): bool
+    {
+        return $this->hasGlobalAccess($user)
+            || $this->hasScope($user, AccessScopeType::Organization, $organizationId);
+    }
+
+    /** @return Collection<int, int> */
+    public function manageableOrganizationIds(User $user): Collection
+    {
+        if ($this->hasGlobalAccess($user)) {
+            return Organization::query()->pluck('id')->map(static fn ($id): int => (int) $id);
+        }
+
+        return $this->scopeIds($user, AccessScopeType::Organization);
     }
 
     public function canAccessOrganization(User $user, int $organizationId): bool

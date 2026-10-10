@@ -94,6 +94,7 @@ class PrivateVendorFileController extends Controller
                 SystemPermission::AuditView,
                 SystemPermission::ReportsView,
             ],
+            false,
         );
 
         return $this->serve(
@@ -162,10 +163,11 @@ class PrivateVendorFileController extends Controller
         int $kitchenId,
         int $supplierId,
         array $permissions,
+        bool $allowSupplier = true,
     ): void {
         $user = $this->authenticatedUser($request);
 
-        if ($this->ownsSupplier($user, $supplierId)) {
+        if ($allowSupplier && $this->ownsSupplier($user, $supplierId)) {
             return;
         }
 

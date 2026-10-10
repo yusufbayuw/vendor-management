@@ -16,12 +16,14 @@ use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
+use App\Enums\VerificationStatus;
 use App\Models\Invoice;
 use App\Models\Organization;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\SppgKitchen;
 use App\Models\Supplier;
+use App\Models\SupplierBankAccount;
 use App\Models\User;
 use App\Services\Files\VendorFileStorage;
 use DomainException;
@@ -182,6 +184,29 @@ class PaymentFlowTest extends TestCase
 
         $this->expectException(DomainException::class);
         app(AttachPaymentProofAction::class)->execute($payment, $path, $actor);
+    }
+
+    public function test_unverified_destination_bank_account_cannot_be_selected(): void
+    {
+        [$invoice, $actor] = $this->makeApprovedInvoice(1_000_000, OperationalProfile::Lean);
+        $account = SupplierBankAccount::query()->create([
+            'supplier_id' => $invoice->supplier_id,
+            'bank_name' => 'Bank Uji',
+            'account_number' => '123456789',
+            'account_holder' => 'Supplier Uji',
+            'verification_status' => VerificationStatus::Pending,
+        ]);
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('Rekening tujuan belum terverifikasi');
+
+        app(CreatePaymentAction::class)->execute(
+            $invoice,
+            1_000_000,
+            PaymentMethod::BankTransfer,
+            $actor,
+            destinationAccount: $account,
+        );
     }
 
     private function storeProof(string $filename): string

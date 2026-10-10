@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\SupplierDocuments;
 
-use BackedEnum;
 use App\Actions\Supplier\RejectSupplierDocumentAction;
 use App\Actions\Supplier\VerifySupplierDocumentAction;
 use App\Enums\SupplierDocumentStatus;
@@ -11,6 +10,7 @@ use App\Filament\Admin\Resources\SupplierDocuments\Pages\ManageSupplierDocuments
 use App\Filament\Support\SecureFileModal;
 use App\Models\SupplierDocument;
 use App\Services\Access\UserAccessService;
+use BackedEnum;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;

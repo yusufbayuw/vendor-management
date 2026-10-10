@@ -2,12 +2,12 @@
 
 namespace App\Filament\Admin\Resources\Organizations;
 
-use BackedEnum;
 use App\Enums\OperationalProfile;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Organizations\Pages\ManageOrganizations;
 use App\Models\Organization;
 use App\Services\Access\UserAccessService;
+use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
@@ -98,7 +98,7 @@ class OrganizationResource extends Resource
 
         return $user !== null
             && $user->can(SystemPermission::OrganizationManage->value)
-            && app(UserAccessService::class)->canAccessOrganization($user, (int) $record->getKey());
+            && app(UserAccessService::class)->canManageOrganization($user, (int) $record->getKey());
     }
 
     public static function canDelete(Model $record): bool

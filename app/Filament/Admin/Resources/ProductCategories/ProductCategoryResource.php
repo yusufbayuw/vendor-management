@@ -2,13 +2,13 @@
 
 namespace App\Filament\Admin\Resources\ProductCategories;
 
-use BackedEnum;
 use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\Concerns\AuthorizesMasterData;
 use App\Filament\Admin\Resources\ProductCategories\Pages\ManageProductCategories;
 use App\Filament\Admin\Support\MasterDataDuplicateGuard;
 use App\Filament\Admin\Support\MasterDataOptionFactory;
 use App\Models\ProductCategory;
+use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
