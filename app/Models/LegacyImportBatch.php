@@ -17,6 +17,8 @@ class LegacyImportBatch extends Model
         'import_type',
         'original_filename',
         'file_path',
+        'dry_run',
+        'source_preview_batch_id',
         'status',
         'total_rows',
         'imported_rows',
@@ -31,6 +33,7 @@ class LegacyImportBatch extends Model
     {
         return [
             'import_type' => LegacyImportType::class,
+            'dry_run' => 'boolean',
             'summary' => 'array',
             'imported_at' => 'datetime',
         ];

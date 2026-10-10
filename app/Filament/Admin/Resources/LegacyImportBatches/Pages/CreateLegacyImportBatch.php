@@ -2,13 +2,14 @@
 
 namespace App\Filament\Admin\Resources\LegacyImportBatches\Pages;
 
+use App\Enums\SystemPermission;
 use App\Filament\Admin\Resources\LegacyImportBatches\LegacyImportBatchResource;
+use App\Jobs\ProcessLegacyImportBatch;
 use App\Models\LegacyImportBatch;
-use App\Services\Imports\LegacyImportService;
-use DomainException;
+use App\Models\User;
+use App\Services\Access\UserAccessService;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
-use Throwable;
 
 class CreateLegacyImportBatch extends CreateRecord
 {
@@ -17,7 +18,15 @@ class CreateLegacyImportBatch extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $data['original_filename'] = basename((string) $data['file_path']);
-        $data['status'] = 'pending';
+        $user = auth()->user();
+
+        if (! $user instanceof User || ! $user->is_active
+            || ! $user->can(SystemPermission::LegacyImportManage->value)
+            || ! app(UserAccessService::class)->canManageOrganization($user, (int) $data['organization_id'])) {
+            abort(403);
+        }
+
+        $data['status'] = 'queued';
         $data['imported_by'] = auth()->id();
 
         return $data;
@@ -28,22 +37,13 @@ class CreateLegacyImportBatch extends CreateRecord
         /** @var LegacyImportBatch $batch */
         $batch = $this->record;
 
-        try {
-            app(LegacyImportService::class)->execute($batch, auth()->user());
+        ProcessLegacyImportBatch::dispatch($batch->getKey())->afterCommit();
 
-            $batch->refresh();
-
-            Notification::make()
-                ->title($batch->failed_rows > 0 ? 'Import selesai dengan catatan' : 'Import selesai')
-                ->body("Berhasil {$batch->imported_rows} dari {$batch->total_rows} baris; gagal {$batch->failed_rows}.")
-                ->color($batch->failed_rows > 0 ? 'warning' : 'success')
-                ->send();
-        } catch (DomainException $exception) {
-            Notification::make()->danger()->title('Import gagal')->body($exception->getMessage())->send();
-        } catch (Throwable $exception) {
-            report($exception);
-            Notification::make()->danger()->title('Import gagal')->body('Terjadi kesalahan saat memproses file. Detail tersimpan pada batch import.')->send();
-        }
+        Notification::make()
+            ->success()
+            ->title($batch->dry_run ? 'Simulasi import dijadwalkan' : 'Import dijadwalkan')
+            ->body('Batch #'.$batch->getKey().' masuk antrean. Hasil akan tampil pada daftar setelah diproses worker.')
+            ->send();
     }
 
     protected function getRedirectUrl(): string

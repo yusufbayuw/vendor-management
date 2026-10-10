@@ -13,6 +13,19 @@ Import data lama diperlakukan sebagai **migration**, bukan replay workflow.
 - Placeholder transaksi tidak menggantikan master data. Jika PO upstream harus dibuat otomatis, `supplier_code` dan `kitchen_code` harus menunjuk master yang benar-benar sudah ada.
 - Supplier existing dapat masuk sebagai `admin_managed` dan aktif secara operasional tanpa akun portal.
 
+## Eksekusi asynchronous dan dry-run
+
+- Unggah CSV/XLSX di **Administrasi → Import Data Lama**. Pilihan **Dry-run** aktif secara default.
+- Halaman membuat batch dengan status `queued`; **queue worker** memproses file. Permintaan web tidak lagi membaca seluruh file.
+- Setelah simulasi selesai, status `preview_completed`, jumlah baris valid, error (maksimal 100 rincian), dan jumlah placeholder perkiraan disimpan di ringkasan batch. Simulasi menjalankan logic domain dalam transaksi yang **dibatalkan sepenuhnya**, termasuk record, audit, dan provenance. Tidak mengirim notifikasi workflow.
+- Jika `failed_rows = 0`, pilih **Jalankan Import** pada batch simulasi. Sistem membuat batch nyata baru yang tertaut ke preview (hanya satu real run untuk setiap preview), lalu menjadwalkannya melalui queue.
+- Import asli menjaga transaksi per baris; jika sebagian baris gagal, hasilnya `completed_with_errors` dan baris sukses tetap tersimpan. **Dry-run tidak menjamin tidak ada konflik baru** bila database berubah setelah preview.
+- CSV dan XLSX diproses per baris, tidak mengumpulkan seluruh worksheet. Pembaca XLSX membatasi ukuran sheet XML dan tabel shared strings untuk mencegah file kompresi yang terlalu besar.
+- Batas saat ini: 20 MB per file dan 10.000 baris data per batch. Untuk file lebih besar, pecah menjadi beberapa batch menurut urutan master → transaksi.
+- Queue harus asynchronous di production, misalnya `QUEUE_CONNECTION=database`; jangan gunakan `sync` karena akan mengeksekusi job pada request yang sama.
+- Worker yang dianjurkan: `php artisan queue:work --queue=default --sleep=3 --tries=1 --timeout=600`. Set `DB_QUEUE_RETRY_AFTER=660` untuk database queue dan restart worker setelah mengubahnya. Gunakan Supervisor/systemd dan monitor `failed_jobs`.
+- Pelaksana import wajib masih aktif, memiliki izin `legacy_import.manage`, dan scope organisasi/global saat worker mengeksekusi.
+
 ## Format file
 
 Mendukung `.csv` dan `.xlsx`. Untuk XLSX, sheet pertama dibaca. Baris pertama harus berisi header.
