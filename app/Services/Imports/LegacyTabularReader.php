@@ -3,8 +3,8 @@
 namespace App\Services\Imports;
 
 use DomainException;
-use Illuminate\Support\Str;
 use Generator;
+use Illuminate\Support\Str;
 use XMLReader;
 use ZipArchive;
 

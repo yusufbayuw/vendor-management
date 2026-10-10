@@ -4,7 +4,6 @@ namespace Tests\Feature\Foundation;
 
 use App\Enums\AccessScopeType;
 use App\Enums\InvoiceStatus;
-use App\Enums\SystemPermission;
 use App\Enums\LegacyImportType;
 use App\Enums\OperationalProfile;
 use App\Enums\PaymentStatus;
@@ -12,6 +11,8 @@ use App\Enums\PurchaseOrderStatus;
 use App\Enums\PurchaseRequestStatus;
 use App\Enums\SupplierManagementMode;
 use App\Enums\SupplierStatus;
+use App\Enums\SystemPermission;
+use App\Jobs\ProcessLegacyImportBatch;
 use App\Models\ApprovalRequest;
 use App\Models\DataProvenance;
 use App\Models\Invoice;
@@ -27,17 +28,16 @@ use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\UserAccessScope;
-use App\Jobs\ProcessLegacyImportBatch;
-use App\Services\Imports\LegacyTabularReader;
+use App\Services\Access\UserAccessService;
 use App\Services\Files\VendorFileStorage;
 use App\Services\Imports\LegacyImportService;
+use App\Services\Imports\LegacyTabularReader;
 use App\Services\Supplier\SupplierOperationalEligibilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Queue;
 use Spatie\Permission\Models\Permission;
-use ZipArchive;
 use Tests\TestCase;
+use ZipArchive;
 
 class LegacyImportServiceTest extends TestCase
 {
@@ -282,7 +282,7 @@ class LegacyImportServiceTest extends TestCase
         $job = new ProcessLegacyImportBatch($batch->getKey());
 
         try {
-            $job->handle(app(LegacyImportService::class), app(\App\Services\Access\UserAccessService::class));
+            $job->handle(app(LegacyImportService::class), app(UserAccessService::class));
             $this->fail('Unprivileged import operator must be denied.');
         } catch (\DomainException $e) {
             $this->assertStringContainsString('permission', $e->getMessage());
@@ -295,7 +295,7 @@ class LegacyImportServiceTest extends TestCase
             'scope_id' => $organization->getKey(),
         ]);
 
-        $job->handle(app(LegacyImportService::class), app(\App\Services\Access\UserAccessService::class));
+        $job->handle(app(LegacyImportService::class), app(UserAccessService::class));
 
         $this->assertSame('completed', $batch->fresh()->status);
         $this->assertDatabaseHas('suppliers', ['code' => 'SUP-QUEUE-001']);
