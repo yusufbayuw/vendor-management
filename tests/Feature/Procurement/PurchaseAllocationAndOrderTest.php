@@ -20,8 +20,10 @@ use App\Models\SppgKitchen;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\UserAccessScope;
 use DomainException;
 use Illuminate\Database\Eloquent\Collection;
+use App\Enums\AccessScopeType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -170,6 +172,12 @@ class PurchaseAllocationAndOrderTest extends TestCase
     private function makeApprovedPurchaseRequest(array $quantities, OperationalProfile $profile = OperationalProfile::Standard): array
     {
         $actor = User::factory()->create();
+        $actor->givePermissionTo(Permission::findOrCreate(SystemPermission::PurchaseOrderApprove->value, 'web'));
+        UserAccessScope::query()->create([
+            'user_id' => $actor->getKey(),
+            'scope_type' => AccessScopeType::Global,
+            'scope_id' => 0,
+        ]);
         $organization = Organization::query()->create(['code' => fake()->unique()->bothify('ORG-###'), 'name' => 'Organisasi', 'operational_profile' => $profile]);
         $kitchen = SppgKitchen::query()->create([
             'organization_id' => $organization->id,
