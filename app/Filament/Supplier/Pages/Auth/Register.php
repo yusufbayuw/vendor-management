@@ -387,6 +387,17 @@ class Register extends BaseRegister
         return $user;
     }
 
+    /**
+     * Supplier email is optional, and handleRegistration() already sends our
+     * VerifySupplierEmail notification using the application's signed
+     * verification.verify route. Do not let Filament send a second notification
+     * using its panel-specific route, which is not enabled for this panel.
+     */
+    protected function sendEmailVerificationNotification(Model $user): void
+    {
+        // Intentionally handled by handleRegistration().
+    }
+
     private function generateUsername(array $data, ?string $phone): string
     {
         $sourceName = (string) (($data['display_name'] ?? null) ?: $data['legal_name']);
