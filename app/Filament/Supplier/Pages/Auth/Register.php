@@ -61,7 +61,7 @@ class Register extends BaseRegister
                                 $phone = LoginIdentifier::normalizePhone((string) $value);
 
                                 if ($phone !== null && User::query()->where('phone', $phone)->exists()) {
-                                    $fail('Nomor WhatsApp / HP ini sudah digunakan oleh akun lain.');
+                                    $fail('Nomor WhatsApp / HP sudah terdaftar. Silakan masuk ke portal atau pulihkan akun Anda.');
                                 }
                             };
                         }),
@@ -70,7 +70,21 @@ class Register extends BaseRegister
                         ->helperText('Tidak wajib. Jika diisi, email dapat dipakai untuk menerima pemberitahuan.')
                         ->email()
                         ->maxLength(255)
-                        ->unique(User::class, 'email'),
+                        ->rule(static function (): Closure {
+                            return static function (string $attribute, mixed $value, Closure $fail): void {
+                                if (blank($value)) {
+                                    return;
+                                }
+
+                                // User::email lowercases and trims on persistence. Validate
+                                // the same canonical value to avoid a late unique-key error.
+                                $email = Str::lower(trim((string) $value));
+
+                                if (User::query()->where('email', $email)->exists()) {
+                                    $fail('Email sudah terdaftar. Silakan masuk ke portal atau pulihkan akun Anda.');
+                                }
+                            };
+                        }),
                     TextInput::make('legal_name')
                         ->label('Nama usaha / nama resmi')
                         ->helperText('Jika punya NIB/NPWP, isi sesuai dokumen. Jika belum punya, isi nama usaha atau toko yang biasa digunakan.')
