@@ -5,16 +5,16 @@ namespace Tests\Feature\Supplier;
 use App\Enums\SystemRole;
 use App\Filament\Supplier\Pages\Auth\Register;
 use App\Models\Supplier;
-use App\Services\Auth\PhoneVerificationService;
 use App\Models\User;
 use App\Notifications\VerifySupplierEmail;
+use App\Services\Auth\PhoneVerificationService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Livewire\Livewire;
 use Mockery;
 use RuntimeException;
-use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -81,7 +81,6 @@ class SupplierRegistrationEmailVerificationTest extends TestCase
 
         Notification::assertNotSentTo($user, VerifySupplierEmail::class);
     }
-
 
     public function test_retry_with_existing_email_or_phone_cannot_duplicate_supplier_ownership(): void
     {
