@@ -20,6 +20,9 @@ jobs:
           extensions: mbstring, pdo_sqlite, sqlite3, gd
           coverage: none
 
+      - name: Lint production preflight
+        run: php -l scripts/production-preflight.php
+
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
