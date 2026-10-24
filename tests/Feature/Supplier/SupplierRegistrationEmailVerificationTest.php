@@ -138,6 +138,45 @@ class SupplierRegistrationEmailVerificationTest extends TestCase
         $this->assertNull(User::query()->sole()->phone_verified_at);
     }
 
+    public function test_failure_after_user_and_supplier_creation_rolls_back_all_records_before_retry(): void
+    {
+        $failOnce = true;
+
+        DB::listen(static function ($query) use (&$failOnce): void {
+            if ($failOnce && str_starts_with(strtolower(ltrim($query->sql)), 'insert')
+                && str_contains($query->sql, 'supplier_users')) {
+                $failOnce = false;
+
+                throw new RuntimeException('Simulated pivot write failure');
+            }
+        });
+
+        try {
+            Livewire::test(Register::class)
+                ->set('data', $this->registrationData(null, '081200000096'))
+                ->call('register');
+
+            $this->fail('The simulated transaction failure must be propagated.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Simulated pivot write failure', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('suppliers', 0);
+        $this->assertDatabaseCount('supplier_users', 0);
+
+        // Retrying the exact same registration must create exactly one owner.
+        Livewire::test(Register::class)
+            ->set('data', $this->registrationData(null, '081200000096'))
+            ->call('register')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('suppliers', 1);
+        $this->assertDatabaseCount('supplier_users', 1);
+        $this->assertTrue(User::query()->sole()->suppliers()->sole()->pivot->is_owner);
+    }
+
     /** @return array<string, mixed> */
     private function registrationData(?string $email, string $phone): array
     {
