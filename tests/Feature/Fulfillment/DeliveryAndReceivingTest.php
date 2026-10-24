@@ -165,6 +165,67 @@ class DeliveryAndReceivingTest extends TestCase
         $this->assertTrue($po->discrepancies()->where('type', DiscrepancyType::RejectedGoods->value)->exists());
     }
 
+    public function test_rejected_goods_can_be_replaced_without_overscheduling_before_qc(): void
+    {
+        [$po, $poItem, $actor] = $this->makeAcknowledgedPo(100);
+
+        $first = app(CreateDeliveryScheduleAction::class)->execute(
+            $po, [$poItem->id => 100], now()->addDay(), $actor,
+        );
+        app(ConfirmDeliveryScheduleAction::class)->execute($first, $actor);
+
+        $receipt = app(RecordGoodsReceiptAction::class)->execute(
+            $first->refresh(),
+            [$first->items->first()->id => 100],
+            $actor,
+        );
+
+        // Goods physically received but not yet inspected must remain reserved.
+        try {
+            app(CreateDeliveryScheduleAction::class)->execute(
+                $po->refresh(), [$poItem->id => 5], now()->addDays(2), $actor,
+            );
+            $this->fail('Uninspected goods must not free delivery capacity.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('melebihi sisa PO', $exception->getMessage());
+        }
+
+        $receiptItem = $receipt->items->first();
+        app(InspectGoodsReceiptAction::class)->execute($receipt, [
+            $receiptItem->id => [
+                'accepted_qty' => 95,
+                'rejected_qty' => 5,
+                'condition' => 'rusak sebagian',
+                'rejection_reason' => 'Kemasan bocor.',
+            ],
+        ], $actor);
+
+        $this->assertSame(PurchaseOrderStatus::PartiallyDelivered, $po->refresh()->status);
+
+        $replacement = app(CreateDeliveryScheduleAction::class)->execute(
+            $po->refresh(), [$poItem->id => 5], now()->addDays(2), $actor,
+        );
+        app(ConfirmDeliveryScheduleAction::class)->execute($replacement, $actor);
+
+        $replacementReceipt = app(RecordGoodsReceiptAction::class)->execute(
+            $replacement->refresh(),
+            [$replacement->items->first()->id => 5],
+            $actor,
+        );
+        $replacementItem = $replacementReceipt->items->first();
+        app(InspectGoodsReceiptAction::class)->execute($replacementReceipt, [
+            $replacementItem->id => [
+                'accepted_qty' => 5,
+                'rejected_qty' => 0,
+                'condition' => 'baik',
+            ],
+        ], $actor);
+
+        $this->assertSame(100.0, (float) $poItem->refresh()->accepted_qty);
+        $this->assertSame(PurchaseOrderStatus::Fulfilled, $po->refresh()->status);
+        $this->assertSame(2, $po->deliverySchedules()->count());
+    }
+
     public function test_lean_exception_close_is_one_intentional_interaction_with_audit_record(): void
     {
         [$po, $poItem, $actor] = $this->makeAcknowledgedPo(100, OperationalProfile::Lean);
