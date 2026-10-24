@@ -1,0 +1,40 @@
+name: One-time Livewire Composer resolution
+
+on:
+  push:
+    branches:
+      - security/livewire-4-4-8-ghsa-mhf7-20261024
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    if: "!contains(github.event.head_commit.message, '[resolved-livewire]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: true
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, intl, gd
+          coverage: none
+      - name: Resolve only patched Livewire
+        env:
+          COMPOSER_NO_INTERACTION: '1'
+        run: |
+          composer update livewire/livewire:4.4.8 --with-dependencies --minimal-changes --no-scripts --no-progress
+          composer validate --no-check-publish --strict
+          composer audit --no-interaction
+          php -r '$lock=json_decode(file_get_contents("composer.lock"),true); foreach($lock["packages"] as $p){ if($p["name"]==="livewire/livewire"){ if($p["version"]!=="v4.4.8"){fwrite(STDERR,"Unexpected Livewire version");exit(1);} echo "Resolved Livewire v4.4.8\n"; exit(0); }} exit(1);'
+          git diff --stat -- composer.lock
+      - name: Commit Composer-generated lock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          test -n "$(git status --porcelain -- composer.lock)"
+          git add composer.lock
+          git commit -m "fix(security): resolve Livewire v4.4.8 [resolved-livewire]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
