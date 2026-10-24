@@ -96,7 +96,7 @@ class InvoiceResource extends Resource
                 Action::make('adjustment')
                     ->label('Adjustment')
                     ->color('warning')
-                    ->visible(static fn (Invoice $record): bool => in_array($record->status, [InvoiceStatus::Draft, InvoiceStatus::Submitted, InvoiceStatus::UnderReview], true) && static::hasScopedPermission($record, SystemPermission::InvoiceReview))
+                    ->visible(static fn (Invoice $record): bool => $record->status === InvoiceStatus::Draft && static::hasScopedPermission($record, SystemPermission::InvoiceReview))
                     ->schema([
                         Select::make('type')->label('Jenis')->options(static::adjustmentTypeOptions())->required(),
                         Select::make('direction')->label('Arah')->options([
