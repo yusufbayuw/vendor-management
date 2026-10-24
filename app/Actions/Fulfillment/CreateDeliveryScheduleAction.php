@@ -19,6 +19,33 @@ class CreateDeliveryScheduleAction
 {
     public function __construct(private readonly DocumentNumberService $documentNumbers) {}
 
+    /**
+     * Compute remaining PO quantity consistently for both domain validation
+     * and supplier portal defaults/options.
+     */
+    public function remainingSchedulableQuantity(PurchaseOrderItem $poItem): float
+    {
+        // A schedule stays reserved until its received quantity has passed QC.
+        // Inspected rejected quantities may then be scheduled for replacement.
+        $outstandingSchedules = DeliveryScheduleItem::query()
+            ->where('purchase_order_item_id', $poItem->getKey())
+            ->whereHas('deliverySchedule', fn ($query) => $query->where('status', '!=', DeliveryScheduleStatus::Cancelled->value))
+            ->withSum([
+                'goodsReceiptItems as inspected_received_qty' => fn ($query) => $query
+                    ->whereHas('goodsReceipt', fn ($query) => $query->where('status', GoodsReceiptStatus::Completed->value)),
+            ], 'received_qty')
+            ->get()
+            ->sum(static fn (DeliveryScheduleItem $scheduleItem): float => max(
+                0,
+                (float) $scheduleItem->planned_qty - (float) ($scheduleItem->inspected_received_qty ?? 0),
+            ));
+
+        return max(
+            0,
+            (float) $poItem->ordered_qty - (float) $poItem->accepted_qty - $outstandingSchedules,
+        );
+    }
+
     /** @param array<int, float|int|string> $items purchase_order_item_id => planned quantity */
     public function execute(
         PurchaseOrder $purchaseOrder,
@@ -66,26 +93,7 @@ class CreateDeliveryScheduleAction
                     ->lockForUpdate()
                     ->findOrFail($purchaseOrderItemId);
 
-                // Only reserve quantities still awaiting completed QC. Once goods
-                // have been inspected, accepted units count toward the PO, while
-                // rejected units can be scheduled again for replacement.
-                $outstandingSchedules = DeliveryScheduleItem::query()
-                    ->where('purchase_order_item_id', $poItem->getKey())
-                    ->whereHas('deliverySchedule', fn ($query) => $query->where('status', '!=', DeliveryScheduleStatus::Cancelled->value))
-                    ->withSum([
-                        'goodsReceiptItems as inspected_received_qty' => fn ($query) => $query
-                            ->whereHas('goodsReceipt', fn ($query) => $query->where('status', GoodsReceiptStatus::Completed->value)),
-                    ], 'received_qty')
-                    ->get()
-                    ->sum(static fn (DeliveryScheduleItem $scheduleItem): float => max(
-                        0,
-                        (float) $scheduleItem->planned_qty - (float) ($scheduleItem->inspected_received_qty ?? 0),
-                    ));
-
-                $remaining = max(
-                    0,
-                    (float) $poItem->ordered_qty - (float) $poItem->accepted_qty - $outstandingSchedules,
-                );
+                $remaining = $this->remainingSchedulableQuantity($poItem);
 
                 if ($quantity - $remaining > 0.0001) {
                     throw new DomainException(sprintf(
