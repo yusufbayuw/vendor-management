@@ -3,10 +3,13 @@
 namespace Tests\Feature\Procurement;
 
 use App\Actions\Procurement\AllocateAndIssuePurchaseOrdersAction;
+use App\Actions\Procurement\AcknowledgePurchaseOrderAction;
 use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
 use App\Actions\Procurement\CreateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\GeneratePurchaseOrdersAction;
+use App\Actions\Procurement\IssuePurchaseOrderAction;
 use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
+use App\Actions\Supplier\SuspendSupplierAction;
 use App\Enums\AccessScopeType;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
@@ -166,6 +169,61 @@ class PurchaseAllocationAndOrderTest extends TestCase
         $this->assertCount(1, $first);
         $this->assertCount(1, $second);
         $this->assertSame(1, $request->purchaseOrders()->count());
+    }
+
+    public function test_suspended_supplier_cannot_receive_an_order_approved_before_suspension(): void
+    {
+        [$request, $items, $actor] = $this->makeApprovedPurchaseRequest([100]);
+        $supplier = $this->supplier('SUP-SUSPENDED-PO');
+
+        app(AllocatePurchaseRequestItemAction::class)->execute(
+            $items->first(), $supplier, 100, 40_000, $actor,
+        );
+
+        $order = app(GeneratePurchaseOrdersAction::class)->execute($request, $actor)->sole();
+        $order->forceFill([
+            'status' => PurchaseOrderStatus::Approved,
+            'approved_at' => now(),
+            'approved_by' => $actor->getKey(),
+        ])->save();
+
+        app(SuspendSupplierAction::class)->execute($supplier, 'Dokumen tidak lagi memenuhi syarat.');
+
+        try {
+            app(IssuePurchaseOrderAction::class)->execute($order);
+            $this->fail('PO must not be issued to a suspended supplier.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('supplier', strtolower($exception->getMessage()));
+        }
+
+        $this->assertSame(PurchaseOrderStatus::Approved, $order->refresh()->status);
+        $this->assertNull($order->issued_at);
+    }
+
+    public function test_suspension_does_not_prevent_acknowledging_an_already_issued_po(): void
+    {
+        [$request, $items, $actor] = $this->makeApprovedPurchaseRequest([100]);
+        $supplier = $this->supplier('SUP-ISSUED-PO');
+
+        app(AllocatePurchaseRequestItemAction::class)->execute(
+            $items->first(), $supplier, 100, 40_000, $actor,
+        );
+
+        $order = app(GeneratePurchaseOrdersAction::class)->execute($request, $actor)->sole();
+        $order->forceFill([
+            'status' => PurchaseOrderStatus::Approved,
+            'approved_at' => now(),
+            'approved_by' => $actor->getKey(),
+        ])->save();
+
+        app(IssuePurchaseOrderAction::class)->execute($order);
+        $this->assertSame(PurchaseOrderStatus::Issued, $order->refresh()->status);
+
+        app(SuspendSupplierAction::class)->execute($supplier, 'Penangguhan berlaku untuk pesanan baru.');
+        app(AcknowledgePurchaseOrderAction::class)->execute($order->refresh(), $actor, 'Pesanan lama tetap dipenuhi.');
+
+        $this->assertSame(PurchaseOrderStatus::Acknowledged, $order->refresh()->status);
+        $this->assertSame(1, $order->responses()->count());
     }
 
     /** @return array{PurchaseRequest, Collection<int, PurchaseRequestItem>, User} */
