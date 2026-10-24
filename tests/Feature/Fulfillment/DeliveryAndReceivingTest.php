@@ -181,6 +181,11 @@ class DeliveryAndReceivingTest extends TestCase
         );
 
         // Goods physically received but not yet inspected must remain reserved.
+        $this->assertSame(
+            0.0,
+            app(CreateDeliveryScheduleAction::class)->remainingSchedulableQuantity($poItem->refresh()),
+        );
+
         try {
             app(CreateDeliveryScheduleAction::class)->execute(
                 $po->refresh(), [$poItem->id => 5], now()->addDays(2), $actor,
@@ -201,6 +206,10 @@ class DeliveryAndReceivingTest extends TestCase
         ], $actor);
 
         $this->assertSame(PurchaseOrderStatus::PartiallyDelivered, $po->refresh()->status);
+        $this->assertSame(
+            5.0,
+            app(CreateDeliveryScheduleAction::class)->remainingSchedulableQuantity($poItem->refresh()),
+        );
 
         $replacement = app(CreateDeliveryScheduleAction::class)->execute(
             $po->refresh(), [$poItem->id => 5], now()->addDays(2), $actor,
