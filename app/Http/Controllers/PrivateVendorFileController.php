@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
 use App\Models\DeliverySchedule;
 use App\Models\GoodsReceiptAttachment;
 use App\Models\Invoice;
 use App\Models\PaymentAttachment;
+use App\Models\Supplier;
 use App\Models\SupplierDocument;
 use App\Models\User;
 use App\Services\Access\UserAccessService;
@@ -191,6 +193,14 @@ class PrivateVendorFileController extends Controller
 
     private function ownsSupplier(User $user, int $supplierId): bool
     {
+        // Suspended supplier history is readable only by a phone-verified account.
+        // Preserve existing document access during pre-verification onboarding
+        // for other supplier states; internal staff permissions remain separate.
+        if (! $user->hasVerifiedPhone()
+            && Supplier::query()->whereKey($supplierId)->where('status', SupplierStatus::Suspended->value)->exists()) {
+            return false;
+        }
+
         return $user->suppliers()
             ->whereKey($supplierId)
             ->wherePivot('is_active', true)
