@@ -67,18 +67,11 @@ class InvoiceFileReplacementTest extends TestCase
         $disk->put('invoices/original.pdf', "%PDF-1.4\n% original\n");
         $disk->put('invoices/attempt.pdf', "%PDF-1.4\n% blocked\n");
 
-        foreach ([$taniActor, $ayamActor->replicate()->forceFill(['is_active' => false])] as $actor) {
-            // Use persisted identities only; permission + pivot must both apply.
-            if (! $actor->exists) {
-                continue;
-            }
-
-            try {
-                app(ReplaceDraftInvoiceFileAction::class)->execute($invoice, $actor, 'invoices/attempt.pdf');
-                $this->fail('Unauthorized identity must be denied.');
-            } catch (DomainException $exception) {
-                $this->assertStringContainsString('berwenang', $exception->getMessage());
-            }
+        try {
+            app(ReplaceDraftInvoiceFileAction::class)->execute($invoice, $taniActor, 'invoices/attempt.pdf');
+            $this->fail('Unrelated supplier identity must be denied.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('berwenang', $exception->getMessage());
         }
 
         $ayamActor->forceFill(['phone_verified_at' => null])->save();
