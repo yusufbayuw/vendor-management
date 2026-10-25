@@ -71,6 +71,7 @@ class ProcurementLifecycleHappyPathTest extends TestCase
         $approver = User::factory()->create(['name' => 'Approver']);
         $procurement = User::factory()->create(['name' => 'Procurement']);
         $supplierActor = User::factory()->create(['name' => 'Supplier Operator']);
+        $supplierActor->givePermissionTo(Permission::findOrCreate(SystemPermission::PurchaseOrderAcknowledge->value, 'web'));
         $receiver = User::factory()->create(['name' => 'Receiver QC']);
         $finance = User::factory()->create(['name' => 'Finance']);
         $paymentVerifier = User::factory()->create(['name' => 'Payment Verifier']);
@@ -132,6 +133,8 @@ class ProcurementLifecycleHappyPathTest extends TestCase
             true,
             true,
         );
+
+        $supplier->users()->attach($supplierActor->getKey(), ['is_owner' => false, 'is_active' => true]);
 
         SupplierBankAccount::query()->create([
             'supplier_id' => $supplier->getKey(),
