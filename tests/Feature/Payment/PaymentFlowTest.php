@@ -142,6 +142,31 @@ class PaymentFlowTest extends TestCase
         $this->assertSame(PurchaseOrderStatus::Invoiced, $invoice->purchaseOrder->refresh()->status);
     }
 
+    public function test_repeated_stale_payment_submission_does_not_create_another_pending_approval(): void
+    {
+        [$invoice, $actor] = $this->makeApprovedInvoice(1_000_000, OperationalProfile::Standard);
+        $payment = app(CreatePaymentAction::class)->execute(
+            $invoice, 1_000_000, PaymentMethod::BankTransfer, $actor,
+        );
+        app(AttachPaymentProofAction::class)->execute($payment, $this->storeProof('replay-proof.pdf'), $actor);
+
+        app(SubmitPaymentForVerificationAction::class)->execute($payment, $actor);
+        $approval = $payment->approvalRequests()->sole();
+
+        try {
+            // Deliberately reuse the stale Eloquent instance, as a repeat HTTP request would.
+            app(SubmitPaymentForVerificationAction::class)->execute($payment, $actor);
+            $this->fail('Repeated submit must not create another approval.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('draft', $exception->getMessage());
+        }
+
+        $this->assertSame(PaymentStatus::Submitted, $payment->refresh()->status);
+        $this->assertSame(1, $payment->approvalRequests()->count());
+        $this->assertSame($approval->getKey(), $payment->approvalRequests()->sole()->getKey());
+        $this->assertSame(0, $approval->actions()->count());
+    }
+
     public function test_payment_cannot_be_submitted_without_proof(): void
     {
         [$invoice, $actor] = $this->makeApprovedInvoice(1_000_000, OperationalProfile::Lean);
