@@ -8,6 +8,7 @@ use App\Enums\SystemPermission;
 use App\Filament\Supplier\Resources\Invoices\Pages\ManageInvoices;
 use App\Filament\Support\SecureFileModal;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Services\Files\VendorFileStorage;
 use App\Services\Supplier\SupplierPortalAccessService;
 use App\Services\Usability\WorkflowGuidanceService;
@@ -58,6 +59,17 @@ class InvoiceResource extends Resource
                     fn (Invoice $record): ?string => $record->invoice_file,
                 )),
             TextColumn::make('payments_count')->label('Pembayaran'),
+            TextColumn::make('payment_history')
+                ->label('Riwayat Pembayaran')
+                ->state(fn (Invoice $record): string => $record->payments
+                    ->map(static fn (Payment $payment): string => sprintf(
+                        '%s: Rp %s (%s)',
+                        $payment->number,
+                        number_format((float) $payment->amount, 2, ',', '.'),
+                        $payment->status->value,
+                    ))
+                    ->implode('; ') ?: '-')
+                ->wrap(),
             TextColumn::make('status')->label('Status')->badge()
                 ->formatStateUsing(fn ($state) => str($state instanceof InvoiceStatus ? $state->value : (string) $state)->replace('_', ' ')->title()),
             TextColumn::make('next_action')
@@ -111,7 +123,7 @@ class InvoiceResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['purchaseOrder', 'kitchen'])
+            ->with(['purchaseOrder', 'kitchen', 'payments'])
             ->withCount('payments')
             ->whereIn('supplier_id', static::readableSupplierIds());
     }
