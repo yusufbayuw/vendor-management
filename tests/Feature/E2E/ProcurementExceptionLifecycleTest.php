@@ -72,6 +72,7 @@ class ProcurementExceptionLifecycleTest extends TestCase
         $approver = User::factory()->create(['name' => 'Approver Exception']);
         $procurement = User::factory()->create(['name' => 'Procurement Exception']);
         $supplierActor = User::factory()->create(['name' => 'Supplier Exception']);
+        $supplierActor->givePermissionTo(Permission::findOrCreate(SystemPermission::PurchaseOrderAcknowledge->value, 'web'));
         $receiver = User::factory()->create(['name' => 'Receiver Exception']);
         $finance = User::factory()->create(['name' => 'Finance Exception']);
         $paymentVerifier = User::factory()->create(['name' => 'Payment Verifier Exception']);
@@ -133,6 +134,8 @@ class ProcurementExceptionLifecycleTest extends TestCase
             true,
             true,
         );
+
+        $supplier->users()->attach($supplierActor->getKey(), ['is_owner' => false, 'is_active' => true]);
 
         SupplierBankAccount::query()->create([
             'supplier_id' => $supplier->getKey(),

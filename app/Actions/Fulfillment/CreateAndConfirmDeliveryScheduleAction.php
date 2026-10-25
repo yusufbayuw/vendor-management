@@ -41,7 +41,7 @@ class CreateAndConfirmDeliveryScheduleAction
 
         return DB::transaction(function () use ($purchaseOrder, $items, $plannedDeliveryAt, $actor, $supplierNotes): DeliverySchedule {
             if ($purchaseOrder->status === PurchaseOrderStatus::Issued) {
-                $purchaseOrder = $this->acknowledgePurchaseOrder->execute(
+                $purchaseOrder = $this->acknowledgePurchaseOrder->executeLean(
                     $purchaseOrder,
                     $actor,
                     'PO diterima melalui pembuatan jadwal pengiriman.',

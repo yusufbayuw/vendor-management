@@ -240,7 +240,7 @@ class PurchaseOrderResource extends Resource
                     ->action(static function (PurchaseOrder $record, array $data): void {
                         static::requireScopedPermission($record, SystemPermission::PurchaseOrderAcknowledge);
                         static::runDomainAction(
-                            fn () => app(AcknowledgePurchaseOrderAction::class)->execute($record, auth()->user(), $data['notes'] ?? 'Dikonfirmasi oleh admin atas nama supplier.'),
+                            fn () => app(AcknowledgePurchaseOrderAction::class)->executeInternal($record, auth()->user(), $data['notes'] ?? 'Dikonfirmasi oleh admin atas nama supplier.'),
                             'PO berhasil dikonfirmasi secara internal.',
                         );
                     }),

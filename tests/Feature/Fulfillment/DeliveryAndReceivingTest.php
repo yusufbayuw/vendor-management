@@ -9,6 +9,7 @@ use App\Actions\Fulfillment\CreateDeliveryScheduleAction;
 use App\Actions\Fulfillment\InspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordAndInspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordGoodsReceiptAction;
+use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Enums\AccessScopeType;
 use App\Enums\ApprovalDecisionSource;
 use App\Enums\DeliveryScheduleStatus;
@@ -17,7 +18,6 @@ use App\Enums\DiscrepancyType;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
-use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
 use App\Models\Organization;
 use App\Models\Product;
@@ -316,8 +316,14 @@ class DeliveryAndReceivingTest extends TestCase
             'legal_name' => 'Supplier',
             'email' => fake()->unique()->safeEmail(),
             'phone' => '08123456789',
-            'status' => SupplierStatus::Active,
         ]);
+        $supplier = app(ActivateSupplierWithOverrideAction::class)->execute(
+            $supplier,
+            $actor,
+            'Supplier fixture internal eligible untuk pengujian fulfillment.',
+            true,
+            true,
+        );
         $unit = Unit::query()->create(['code' => fake()->unique()->bothify('KG-###'), 'name' => 'Kilogram', 'symbol' => 'kg']);
         $category = ProductCategory::query()->create(['code' => fake()->unique()->bothify('CAT-###'), 'name' => 'Protein']);
         $product = Product::query()->create([
