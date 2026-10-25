@@ -2,6 +2,7 @@
 
 namespace App\Filament\Supplier\Resources\Invoices;
 
+use App\Actions\Billing\ReplaceDraftInvoiceFileAction;
 use App\Actions\Billing\SubmitInvoiceAction;
 use App\Enums\InvoiceStatus;
 use App\Enums\SystemPermission;
@@ -83,18 +84,14 @@ class InvoiceResource extends Resource
                         ->required(),
                 ])
                 ->action(function (Invoice $record, array $data): void {
-                    abort_unless(static::owned($record), 403);
-
-                    $oldPath = $record->invoice_file;
-                    $newPath = (string) $data['invoice_file'];
-
-                    $record->forceFill(['invoice_file' => $newPath])->save();
-
-                    if (filled($oldPath) && $oldPath !== $newPath) {
-                        app(VendorFileStorage::class)->delete($oldPath);
-                    }
-
-                    Notification::make()->success()->title('File invoice berhasil disimpan.')->send();
+                    static::run(
+                        fn () => app(ReplaceDraftInvoiceFileAction::class)->execute(
+                            $record,
+                            auth()->user(),
+                            (string) $data['invoice_file'],
+                        ),
+                        'File invoice berhasil disimpan.',
+                    );
                 }),
             Action::make('submit')->label('Ajukan Invoice')->color('primary')->requiresConfirmation()
                 ->visible(fn (Invoice $record) => $record->status === InvoiceStatus::Draft && static::owned($record))
