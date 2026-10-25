@@ -4,6 +4,7 @@ namespace App\Filament\Admin\Resources\Invoices;
 
 use App\Actions\Billing\AddInvoiceAdjustmentAction;
 use App\Actions\Billing\ApproveInvoiceAction;
+use App\Actions\Billing\ReturnInvoiceForRevisionAction;
 use App\Actions\Billing\SubmitInvoiceAction;
 use App\Actions\Payment\AttachPaymentProofAction;
 use App\Actions\Payment\CreateAttachAndVerifyPaymentAction;
@@ -72,6 +73,7 @@ class InvoiceResource extends Resource
                 TextColumn::make('po_amount')->label('Nilai PO')->money('IDR')->sortable(),
                 TextColumn::make('adjustment_amount')->label('Adjustment')->money('IDR')->toggleable(),
                 TextColumn::make('payable_amount')->label('Payable')->money('IDR')->sortable(),
+                TextColumn::make('notes')->label('Revisi / Catatan')->wrap()->toggleable(),
                 TextColumn::make('invoice_file')
                     ->label('File Invoice')
                     ->icon('heroicon-o-paper-clip')
@@ -142,6 +144,22 @@ class InvoiceResource extends Resource
                             $data['comments'] ?? null,
                             $data['override_reason'] ?? null,
                         ), 'Keputusan approval invoice berhasil disimpan.');
+                    }),
+                Action::make('returnForRevision')
+                    ->label('Kembalikan untuk Revisi')
+                    ->color('warning')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->visible(static fn (Invoice $record): bool => in_array($record->status, [InvoiceStatus::Submitted, InvoiceStatus::UnderReview], true) && static::hasScopedPermission($record, SystemPermission::InvoiceApprove))
+                    ->schema([
+                        Textarea::make('reason')->label('Alasan revisi')->required()->rows(3),
+                    ])
+                    ->requiresConfirmation()
+                    ->action(static function (Invoice $record, array $data): void {
+                        static::requireScopedPermission($record, SystemPermission::InvoiceApprove);
+                        static::runDomainAction(
+                            fn () => app(ReturnInvoiceForRevisionAction::class)->execute($record, auth()->user(), $data['reason']),
+                            'Invoice telah dikembalikan ke draft untuk direvisi.',
+                        );
                     }),
                 Action::make('createPayment')
                     ->label(static fn (Invoice $record): string => static::canLeanPayAndVerify($record, static::outstandingAmount($record))

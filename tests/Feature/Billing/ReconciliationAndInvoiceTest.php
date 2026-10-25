@@ -5,20 +5,27 @@ namespace Tests\Feature\Billing;
 use App\Actions\Billing\AddInvoiceAdjustmentAction;
 use App\Actions\Billing\CreateAndSubmitInvoiceAction;
 use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
+use App\Actions\Billing\ReturnInvoiceForRevisionAction;
 use App\Actions\Billing\SubmitInvoiceAction;
 use App\Actions\Fulfillment\ApprovePurchaseOrderExceptionCloseAction;
 use App\Actions\Fulfillment\RequestPurchaseOrderExceptionCloseAction;
 use App\Enums\AccessScopeType;
+use App\Enums\ApprovalStatus;
 use App\Enums\DiscrepancyStatus;
 use App\Enums\DiscrepancyType;
+use App\Enums\GovernanceProcess;
 use App\Enums\InvoiceAdjustmentDirection;
 use App\Enums\InvoiceAdjustmentType;
 use App\Enums\InvoiceStatus;
 use App\Enums\OperationalProfile;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
+use App\Models\GovernancePolicy;
 use App\Models\Organization;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\PurchaseAllocation;
@@ -135,6 +142,137 @@ class ReconciliationAndInvoiceTest extends TestCase
         $this->assertSame(3_999_000.0, (float) $invoice->refresh()->payable_amount);
         $this->assertSame(3_999_000.0, (float) $approval->refresh()->amount);
         $this->assertSame(1, $invoice->adjustments()->count());
+    }
+
+    public function test_return_for_revision_rejects_old_approval_and_resubmits_new_threshold_snapshot(): void
+    {
+        [$po, $author] = $this->makePo(PurchaseOrderStatus::Fulfilled, 100, 100);
+        $organization = $po->kitchen->organization;
+
+        GovernancePolicy::query()->create([
+            'organization_id' => $organization->getKey(),
+            'process' => GovernanceProcess::InvoiceApproval,
+            'amount_threshold' => null,
+            'self_approval_allowed' => false,
+            'minimum_approvers' => 1,
+            'requires_override_reason' => false,
+            'is_active' => true,
+        ]);
+        GovernancePolicy::query()->create([
+            'organization_id' => $organization->getKey(),
+            'process' => GovernanceProcess::InvoiceApproval,
+            'amount_threshold' => 4_000_000,
+            'self_approval_allowed' => false,
+            'minimum_approvers' => 2,
+            'requires_override_reason' => false,
+            'is_active' => true,
+        ]);
+
+        $reviewer = User::factory()->create();
+        $reviewer->givePermissionTo(Permission::findOrCreate(SystemPermission::InvoiceApprove->value, 'web'));
+        UserAccessScope::query()->create([
+            'user_id' => $reviewer->getKey(),
+            'scope_type' => AccessScopeType::Global,
+            'scope_id' => 0,
+        ]);
+
+        $invoice = app(CreateInvoiceFromPurchaseOrderAction::class)->execute($po, $author);
+        app(SubmitInvoiceAction::class)->execute($invoice, $author);
+        $original = $invoice->approvalRequests()->sole();
+
+        $this->assertSame(4_000_000.0, (float) $original->amount);
+        $this->assertSame(2, $original->required_approvers);
+
+        try {
+            app(ReturnInvoiceForRevisionAction::class)->execute(
+                $invoice, User::factory()->create(), 'Koreksi nilai.',
+            );
+            $this->fail('Unscoped actor must not return the invoice.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('izin', $exception->getMessage());
+        }
+
+        app(ReturnInvoiceForRevisionAction::class)->execute(
+            $invoice, $reviewer, 'Kurangi item yang tidak dapat ditagihkan.',
+        );
+
+        $this->assertSame(InvoiceStatus::Draft, $invoice->refresh()->status);
+        $this->assertNull($invoice->issued_at);
+        $this->assertSame(ApprovalStatus::Rejected, $original->refresh()->status);
+        $this->assertCount(1, $original->actions);
+        $this->assertStringContainsString('Kurangi item', $invoice->notes);
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_type' => $invoice->getMorphClass(),
+            'auditable_id' => $invoice->getKey(),
+            'event' => 'invoice_returned_for_revision',
+        ]);
+
+        app(AddInvoiceAdjustmentAction::class)->execute(
+            $invoice,
+            InvoiceAdjustmentType::Correction,
+            InvoiceAdjustmentDirection::Deduction,
+            1_000_000,
+            'Koreksi barang ditolak.',
+            $author,
+        );
+
+        app(SubmitInvoiceAction::class)->execute($invoice->refresh(), $author);
+        $new = $invoice->approvalRequests()->latest('id')->firstOrFail();
+
+        $this->assertSame(InvoiceStatus::Submitted, $invoice->refresh()->status);
+        $this->assertNotNull($invoice->issued_at);
+        $this->assertSame(2, $invoice->approvalRequests()->count());
+        $this->assertNotSame($original->getKey(), $new->getKey());
+        $this->assertSame(ApprovalStatus::Rejected, $original->refresh()->status);
+        $this->assertSame(ApprovalStatus::Pending, $new->status);
+        $this->assertSame(3_000_000.0, (float) $new->amount);
+        $this->assertSame(1, $new->required_approvers);
+    }
+
+    public function test_return_for_revision_refuses_approved_or_payment_committed_invoice(): void
+    {
+        [$po, $author] = $this->makePo(PurchaseOrderStatus::Fulfilled, 100, 100);
+        $invoice = app(CreateInvoiceFromPurchaseOrderAction::class)->execute($po, $author);
+        app(SubmitInvoiceAction::class)->execute($invoice, $author);
+
+        $reviewer = User::factory()->create();
+        $reviewer->givePermissionTo(Permission::findOrCreate(SystemPermission::InvoiceApprove->value, 'web'));
+        UserAccessScope::query()->create([
+            'user_id' => $reviewer->getKey(),
+            'scope_type' => AccessScopeType::Global,
+            'scope_id' => 0,
+        ]);
+
+        $invoice->forceFill(['status' => InvoiceStatus::Approved])->save();
+
+        try {
+            app(ReturnInvoiceForRevisionAction::class)->execute($invoice, $reviewer, 'Terlambat.');
+            $this->fail('Approved invoice must not be revised.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('menunggu persetujuan', $exception->getMessage());
+        }
+
+        // Defensive guard for legacy/imported data even when status is stale.
+        $invoice->forceFill(['status' => InvoiceStatus::Submitted])->save();
+        Payment::query()->create([
+            'number' => 'PAY-REVISION-GUARD',
+            'invoice_id' => $invoice->getKey(),
+            'payment_date' => today(),
+            'amount' => 500_000,
+            'payment_method' => PaymentMethod::BankTransfer,
+            'status' => PaymentStatus::Draft,
+            'created_by' => $author->getKey(),
+        ]);
+
+        try {
+            app(ReturnInvoiceForRevisionAction::class)->execute($invoice, $reviewer, 'Ada pembayaran.');
+            $this->fail('Invoice with any payment record must not be revised.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('riwayat pembayaran', $exception->getMessage());
+        }
+
+        $this->assertSame(InvoiceStatus::Submitted, $invoice->refresh()->status);
+        $this->assertSame(ApprovalStatus::Pending, $invoice->approvalRequests()->sole()->status);
     }
 
     /** @return array{PurchaseOrder, User} */
