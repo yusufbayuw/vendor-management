@@ -316,8 +316,15 @@ class DeliveryAndReceivingTest extends TestCase
             'legal_name' => 'Supplier',
             'email' => fake()->unique()->safeEmail(),
             'phone' => '08123456789',
-            'status' => SupplierStatus::Active,
         ]);
+        $supplier = app(\App\Actions\Supplier\ActivateSupplierWithOverrideAction::class)->execute(
+            $supplier,
+            $actor,
+            'Supplier fixture internal eligible untuk pengujian fulfillment.',
+            true,
+            true,
+        );
+        $supplier->users()->attach($actor->getKey(), ['is_owner' => false, 'is_active' => true]);
         $unit = Unit::query()->create(['code' => fake()->unique()->bothify('KG-###'), 'name' => 'Kilogram', 'symbol' => 'kg']);
         $category = ProductCategory::query()->create(['code' => fake()->unique()->bothify('CAT-###'), 'name' => 'Protein']);
         $product = Product::query()->create([
