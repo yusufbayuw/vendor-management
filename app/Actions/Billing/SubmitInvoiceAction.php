@@ -22,13 +22,15 @@ class SubmitInvoiceAction
 
     public function execute(Invoice $invoice, User $actor): Invoice
     {
-        if ($invoice->status !== InvoiceStatus::Draft) {
-            throw new DomainException('Hanya invoice draft yang dapat diajukan.');
-        }
-
-        $invoice->loadMissing('kitchen.organization');
-
         return DB::transaction(function () use ($invoice, $actor): Invoice {
+            $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->getKey());
+
+            if ($invoice->status !== InvoiceStatus::Draft) {
+                throw new DomainException('Hanya invoice draft yang dapat diajukan.');
+            }
+
+            $invoice->loadMissing('kitchen.organization');
+
             $invoice->forceFill([
                 'status' => InvoiceStatus::Submitted,
                 'issued_at' => now(),
