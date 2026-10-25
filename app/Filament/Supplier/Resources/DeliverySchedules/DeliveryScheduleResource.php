@@ -68,10 +68,14 @@ class DeliveryScheduleResource extends Resource
         ])->recordActions([
             Action::make('confirm')->label('Konfirmasi')->color('success')->requiresConfirmation()
                 ->visible(fn (DeliverySchedule $record) => in_array($record->status, [DeliveryScheduleStatus::Draft, DeliveryScheduleStatus::Planned], true) && static::allowed($record))
-                ->action(fn (DeliverySchedule $record) => static::run(
-                    fn () => app(ConfirmDeliveryScheduleAction::class)->execute($record, auth()->user()),
-                    'Jadwal dikonfirmasi.',
-                )),
+                ->action(function (DeliverySchedule $record): void {
+                    abort_unless(static::allowed($record), 403);
+
+                    static::run(
+                        fn () => app(ConfirmDeliveryScheduleAction::class)->execute($record, auth()->user()),
+                        'Jadwal dikonfirmasi.',
+                    );
+                }),
             Action::make('depart')->label('Berangkat')->color('primary')
                 ->visible(fn (DeliverySchedule $record) => $record->status === DeliveryScheduleStatus::Confirmed && static::allowed($record))
                 ->schema([
@@ -87,16 +91,20 @@ class DeliveryScheduleResource extends Resource
                         ->visibility('private')
                         ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
                         ->maxSize(10240),
-                ])->action(fn (DeliverySchedule $record, array $data) => static::run(
-                    fn () => app(MarkDeliveryInTransitAction::class)->execute($record, $data),
-                    'Pengiriman diberangkatkan.',
-                )),
+                ])->action(function (DeliverySchedule $record, array $data): void {
+                    abort_unless(static::allowed($record), 403);
+
+                    static::run(
+                        fn () => app(MarkDeliveryInTransitAction::class)->execute($record, $data),
+                        'Pengiriman diberangkatkan.',
+                    );
+                }),
         ]);
     }
 
     public static function getEloquentQuery(): Builder
     {
-        $supplierIds = static::supplierIds();
+        $supplierIds = static::readableSupplierIds();
 
         return parent::getEloquentQuery()->with('purchaseOrder.kitchen')
             ->whereHas('purchaseOrder', fn (Builder $q) => $q->whereIn('supplier_id', $supplierIds));
@@ -107,7 +115,7 @@ class DeliveryScheduleResource extends Resource
         $user = auth()->user();
 
         return $user !== null
-            && app(SupplierPortalAccessService::class)->hasActiveSupplier($user)
+            && app(SupplierPortalAccessService::class)->hasReadableSupplier($user)
             && $user->can(SystemPermission::DeliveryManage->value);
     }
 
@@ -153,6 +161,12 @@ class DeliveryScheduleResource extends Resource
 
         return auth()->user()?->can(SystemPermission::DeliveryManage->value)
             && in_array($schedule->purchaseOrder->supplier_id, static::supplierIds(), true);
+    }
+
+    /** @return array<int, int> */
+    private static function readableSupplierIds(): array
+    {
+        return app(SupplierPortalAccessService::class)->readableSupplierIds(auth()->user());
     }
 
     private static function supplierIds(): array

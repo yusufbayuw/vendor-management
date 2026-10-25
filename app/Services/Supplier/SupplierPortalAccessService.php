@@ -2,6 +2,7 @@
 
 namespace App\Services\Supplier;
 
+use App\Enums\SupplierStatus;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -20,6 +21,31 @@ class SupplierPortalAccessService
             ->pluck('id')
             ->map(static fn ($id): int => (int) $id)
             ->all();
+    }
+
+    /**
+     * Transaction-history access follows active supplier membership, not the
+     * supplier's ability to accept new work. Suspended suppliers retain their
+     * own historic records, but deactivated or unverified users do not.
+     *
+     * @return array<int, int>
+     */
+    public function readableSupplierIds(?User $user): array
+    {
+        if (! $this->userCanUsePortal($user)) {
+            return [];
+        }
+
+        return $this->suppliersFor($user)
+            ->filter(fn (Supplier $supplier): bool => $supplier->status === SupplierStatus::Suspended || $this->isOperationallyEligible($supplier))
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    public function hasReadableSupplier(?User $user): bool
+    {
+        return $this->readableSupplierIds($user) !== [];
     }
 
     public function hasActiveSupplier(?User $user): bool

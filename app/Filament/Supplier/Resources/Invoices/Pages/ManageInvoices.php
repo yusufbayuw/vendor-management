@@ -28,7 +28,7 @@ class ManageInvoices extends ManageRecords
     {
         return [
             Action::make('createInvoice')->label('Buat Invoice')->color('primary')
-                ->visible(fn () => auth()->user()?->can('invoice.submit') ?? false)
+                ->visible(fn (): bool => (auth()->user()?->can('invoice.submit') ?? false) && InvoiceResource::supplierIds() !== [])
                 ->schema([
                     Section::make('Tagihan')
                         ->schema([
@@ -71,6 +71,8 @@ class ManageInvoices extends ManageRecords
                         ->collapsible()
                         ->collapsed(),
                 ])->action(function (array $data): void {
+                    abort_unless(InvoiceResource::supplierIds() !== [] && (auth()->user()?->can('invoice.submit') ?? false), 403);
+
                     $po = PurchaseOrder::query()->with('kitchen.organization')->whereIn('supplier_id', InvoiceResource::supplierIds())->findOrFail($data['purchase_order_id']);
                     try {
                         $isLean = $po->kitchen?->organization?->operational_profile === OperationalProfile::Lean;

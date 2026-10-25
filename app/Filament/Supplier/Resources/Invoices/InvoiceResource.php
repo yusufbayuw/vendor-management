@@ -8,6 +8,7 @@ use App\Enums\SystemPermission;
 use App\Filament\Supplier\Resources\Invoices\Pages\ManageInvoices;
 use App\Filament\Support\SecureFileModal;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Services\Files\VendorFileStorage;
 use App\Services\Supplier\SupplierPortalAccessService;
 use App\Services\Usability\WorkflowGuidanceService;
@@ -44,7 +45,6 @@ class InvoiceResource extends Resource
             TextColumn::make('po_amount')->label('Nilai PO')->money('IDR'),
             TextColumn::make('adjustment_amount')->label('Adjustment')->money('IDR')->toggleable(),
             TextColumn::make('payable_amount')->label('Payable')->money('IDR'),
-            TextColumn::make('notes')->label('Catatan / Alasan Revisi')->wrap(),
             TextColumn::make('invoice_file')
                 ->label('File Invoice')
                 ->icon('heroicon-o-paper-clip')
@@ -58,7 +58,19 @@ class InvoiceResource extends Resource
                     ]),
                     fn (Invoice $record): ?string => $record->invoice_file,
                 )),
+            TextColumn::make('notes')->label('Catatan / Alasan Revisi')->wrap(),
             TextColumn::make('payments_count')->label('Pembayaran'),
+            TextColumn::make('payment_history')
+                ->label('Riwayat Pembayaran')
+                ->state(fn (Invoice $record): string => $record->payments
+                    ->map(static fn (Payment $payment): string => sprintf(
+                        '%s: Rp %s (%s)',
+                        $payment->number,
+                        number_format((float) $payment->amount, 2, ',', '.'),
+                        $payment->status->value,
+                    ))
+                    ->implode('; ') ?: '-')
+                ->wrap(),
             TextColumn::make('status')->label('Status')->badge()
                 ->formatStateUsing(fn ($state) => str($state instanceof InvoiceStatus ? $state->value : (string) $state)->replace('_', ' ')->title()),
             TextColumn::make('next_action')
@@ -98,19 +110,23 @@ class InvoiceResource extends Resource
                 }),
             Action::make('submit')->label('Ajukan Invoice')->color('primary')->requiresConfirmation()
                 ->visible(fn (Invoice $record) => $record->status === InvoiceStatus::Draft && static::owned($record))
-                ->action(fn (Invoice $record) => static::run(
-                    fn () => app(SubmitInvoiceAction::class)->execute($record, auth()->user()),
-                    'Invoice berhasil diajukan.',
-                )),
+                ->action(function (Invoice $record): void {
+                    abort_unless(static::owned($record), 403);
+
+                    static::run(
+                        fn () => app(SubmitInvoiceAction::class)->execute($record, auth()->user()),
+                        'Invoice berhasil diajukan.',
+                    );
+                }),
         ]);
     }
 
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['purchaseOrder', 'kitchen'])
+            ->with(['purchaseOrder', 'kitchen', 'payments'])
             ->withCount('payments')
-            ->whereIn('supplier_id', static::supplierIds());
+            ->whereIn('supplier_id', static::readableSupplierIds());
     }
 
     public static function canViewAny(): bool
@@ -118,7 +134,7 @@ class InvoiceResource extends Resource
         $user = auth()->user();
 
         return $user !== null
-            && app(SupplierPortalAccessService::class)->hasActiveSupplier($user)
+            && app(SupplierPortalAccessService::class)->hasReadableSupplier($user)
             && $user->can(SystemPermission::InvoiceSubmit->value);
     }
 
@@ -140,6 +156,12 @@ class InvoiceResource extends Resource
     public static function supplierIds(): array
     {
         return app(SupplierPortalAccessService::class)->activeSupplierIds(auth()->user());
+    }
+
+    /** @return array<int, int> */
+    private static function readableSupplierIds(): array
+    {
+        return app(SupplierPortalAccessService::class)->readableSupplierIds(auth()->user());
     }
 
     private static function owned(Invoice $invoice): bool
