@@ -44,7 +44,7 @@ class SupplierRegistrationEmailVerificationTest extends TestCase
 
         $this->assertTrue($user->hasRole(SystemRole::SupplierAdmin->value));
         $this->assertSame(1, $user->suppliers()->count());
-        $this->assertTrue($user->suppliers()->firstOrFail()->pivot->is_owner);
+        $this->assertSame(1, (int) $user->suppliers()->firstOrFail()->pivot->is_owner);
         $this->assertFalse($user->hasVerifiedEmail());
 
         Notification::assertSentToTimes($user, VerifySupplierEmail::class, 1);
@@ -82,7 +82,7 @@ class SupplierRegistrationEmailVerificationTest extends TestCase
         Notification::assertNotSentTo($user, VerifySupplierEmail::class);
     }
 
-    public function test_retry_with_existing_email_or_phone_cannot_duplicate_supplier_ownership(): void
+    public function test_retry_with_existing_email_cannot_duplicate_supplier_ownership(): void
     {
         Livewire::test(Register::class)
             ->set('data', $this->registrationData('supplier.retry@example.test', '081200000093'))
@@ -91,22 +91,38 @@ class SupplierRegistrationEmailVerificationTest extends TestCase
 
         auth()->logout();
 
-        // Different phone, but the email becomes identical when stored by User.
+        // User::email lowercases the value; upper case cannot bypass uniqueness.
         Livewire::test(Register::class)
             ->set('data', $this->registrationData('SUPPLIER.RETRY@EXAMPLE.TEST', '081200000094'))
             ->call('register')
             ->assertHasFormErrors(['email']);
 
-        // Same phone in international format, but a different email.
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('suppliers', 1);
+        $this->assertDatabaseCount('supplier_users', 1);
+        $this->assertSame(1, (int) User::query()->sole()->suppliers()->sole()->pivot->is_owner);
+    }
+
+    public function test_retry_with_equivalent_international_phone_cannot_duplicate_supplier(): void
+    {
         Livewire::test(Register::class)
-            ->set('data', $this->registrationData('other.retry@example.test', '6281200000093'))
+            ->set('data', $this->registrationData('supplier.phone@example.test', '081200000093'))
+            ->call('register')
+            ->assertHasNoFormErrors();
+
+        auth()->logout();
+
+        $this->assertSame('6281200000093', User::query()->sole()->phone);
+
+        // This format must normalize to the same phone as 081200000093.
+        Livewire::test(Register::class)
+            ->set('data', $this->registrationData('other.phone@example.test', '6281200000093'))
             ->call('register')
             ->assertHasFormErrors(['supplier_phone']);
 
-        $this->assertSame(1, User::query()->count());
-        $this->assertSame(1, Supplier::query()->count());
-        $this->assertSame(1, DB::table('supplier_users')->count());
-        $this->assertTrue(User::query()->sole()->suppliers()->sole()->pivot->is_owner);
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('suppliers', 1);
+        $this->assertDatabaseCount('supplier_users', 1);
     }
 
     public function test_failed_phone_otp_dispatch_does_not_create_an_orphan_or_duplicate_on_retry(): void
@@ -174,7 +190,7 @@ class SupplierRegistrationEmailVerificationTest extends TestCase
         $this->assertDatabaseCount('users', 1);
         $this->assertDatabaseCount('suppliers', 1);
         $this->assertDatabaseCount('supplier_users', 1);
-        $this->assertTrue(User::query()->sole()->suppliers()->sole()->pivot->is_owner);
+        $this->assertSame(1, (int) User::query()->sole()->suppliers()->sole()->pivot->is_owner);
     }
 
     /** @return array<string, mixed> */
