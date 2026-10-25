@@ -200,30 +200,91 @@ class PurchaseAllocationAndOrderTest extends TestCase
         $this->assertNull($order->issued_at);
     }
 
-    public function test_suspension_does_not_prevent_acknowledging_an_already_issued_po(): void
+    public function test_suspended_supplier_cannot_acknowledge_issued_po_or_change_history(): void
     {
-        [$request, $items, $actor] = $this->makeApprovedPurchaseRequest([100]);
-        $supplier = $this->supplier('SUP-ISSUED-PO');
+        [$order, $supplier, $supplierActor] = $this->issuedOrderAndSupplierActor('SUP-ACK-SUSPENDED');
+        app(SuspendSupplierAction::class)->execute($supplier, 'Penangguhan berlaku untuk transaksi baru.');
 
-        app(AllocatePurchaseRequestItemAction::class)->execute(
-            $items->first(), $supplier, 100, 40_000, $actor,
-        );
+        try {
+            app(AcknowledgePurchaseOrderAction::class)->execute($order, $supplierActor);
+            $this->fail('Suspended supplier must not acknowledge existing PO.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('eligible', $exception->getMessage());
+        }
 
-        $order = app(GeneratePurchaseOrdersAction::class)->execute($request, $actor)->sole();
-        $order->forceFill([
-            'status' => PurchaseOrderStatus::Approved,
-            'approved_at' => now(),
-            'approved_by' => $actor->getKey(),
-        ])->save();
-
-        app(IssuePurchaseOrderAction::class)->execute($order);
         $this->assertSame(PurchaseOrderStatus::Issued, $order->refresh()->status);
+        $this->assertNull($order->acknowledged_at);
+        $this->assertSame(0, $order->responses()->count());
+    }
 
-        app(SuspendSupplierAction::class)->execute($supplier, 'Penangguhan berlaku untuk pesanan baru.');
-        app(AcknowledgePurchaseOrderAction::class)->execute($order->refresh(), $actor, 'Pesanan lama tetap dipenuhi.');
+    public function test_authorized_supplier_acknowledges_once_and_replay_is_denied(): void
+    {
+        [$order, , $supplierActor] = $this->issuedOrderAndSupplierActor('SUP-ACK-ONCE');
+
+        app(AcknowledgePurchaseOrderAction::class)->execute($order, $supplierActor, 'Diterima.');
 
         $this->assertSame(PurchaseOrderStatus::Acknowledged, $order->refresh()->status);
         $this->assertSame(1, $order->responses()->count());
+        $firstAcknowledgedAt = $order->acknowledged_at;
+
+        try {
+            app(AcknowledgePurchaseOrderAction::class)->execute($order, $supplierActor, 'Replay.');
+            $this->fail('Replay must be rejected.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('sekali', $exception->getMessage());
+        }
+
+        $this->assertSame(1, $order->responses()->count());
+        $this->assertTrue($order->refresh()->acknowledged_at->equalTo($firstAcknowledgedAt));
+    }
+
+    public function test_disabled_actor_and_cross_supplier_actor_cannot_acknowledge_po(): void
+    {
+        [$order, , $supplierActor] = $this->issuedOrderAndSupplierActor('SUP-ACK-SCOPE');
+
+        $other = $this->supplier('SUP-ACK-OTHER');
+        $outsider = User::factory()->create();
+        $outsider->givePermissionTo(Permission::findOrCreate(SystemPermission::PurchaseOrderAcknowledge->value, 'web'));
+        $other->users()->attach($outsider->getKey(), ['is_owner' => false, 'is_active' => true]);
+
+        foreach ([$outsider, $supplierActor->forceFill(['is_active' => false])] as $unauthorized) {
+            $unauthorized->save();
+
+            try {
+                app(AcknowledgePurchaseOrderAction::class)->execute($order, $unauthorized);
+                $this->fail('Unauthorized actor must not acknowledge PO.');
+            } catch (DomainException $exception) {
+                $this->assertNotEmpty($exception->getMessage());
+            }
+
+            $this->assertSame(PurchaseOrderStatus::Issued, $order->refresh()->status);
+            $this->assertSame(0, $order->responses()->count());
+        }
+    }
+
+    /** @return array{\\App\\Models\\PurchaseOrder, Supplier, User} */
+    private function issuedOrderAndSupplierActor(string $code): array
+    {
+        [$request, $items, $procurement] = $this->makeApprovedPurchaseRequest([100]);
+        $supplier = $this->supplier($code);
+
+        app(AllocatePurchaseRequestItemAction::class)->execute(
+            $items->first(), $supplier, 100, 40_000, $procurement,
+        );
+
+        $order = app(GeneratePurchaseOrdersAction::class)->execute($request, $procurement)->sole();
+        $order->forceFill([
+            'status' => PurchaseOrderStatus::Approved,
+            'approved_at' => now(),
+            'approved_by' => $procurement->getKey(),
+        ])->save();
+        app(IssuePurchaseOrderAction::class)->execute($order);
+
+        $member = User::factory()->create();
+        $member->givePermissionTo(Permission::findOrCreate(SystemPermission::PurchaseOrderAcknowledge->value, 'web'));
+        $supplier->users()->attach($member->getKey(), ['is_owner' => false, 'is_active' => true]);
+
+        return [$order->refresh(), $supplier, $member];
     }
 
     /** @return array{PurchaseRequest, Collection<int, PurchaseRequestItem>, User} */
