@@ -23,20 +23,26 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Models\UserAccessScope;
 use DomainException;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class PaymentSubmissionMariaDbConcurrencyTest extends TestCase
 {
-    use DatabaseMigrations;
-
     public function test_two_real_mariadb_connections_submit_once_and_create_one_pending_approval(): void
     {
         if (DB::getDriverName() !== 'mysql' || ! function_exists('pcntl_fork')) {
             $this->markTestSkipped('Requires MariaDB/MySQL and pcntl: DB_CONNECTION=mysql php artisan test tests/Feature/Payment/PaymentSubmissionMariaDbConcurrencyTest.php');
         }
+
+        // A concurrency test must migrate without a wrapping test transaction.
+        // Never run destructive migrations against staging or production databases.
+        $database = (string) DB::connection()->getDatabaseName();
+        if (! preg_match('/^(vendor_ci|test_[a-z0-9_]+|[a-z0-9_]+_test|[a-z0-9_]+_testing)$/i', $database)) {
+            $this->fail('MariaDB concurrency test requires a disposable isolated test database.');
+        }
+
+        $this->artisan('migrate:fresh', ['--force' => true])->assertExitCode(0);
 
         $actor = User::factory()->create();
         $actor->givePermissionTo(Permission::findOrCreate(SystemPermission::PaymentCreate->value, 'web'));
