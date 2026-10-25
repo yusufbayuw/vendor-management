@@ -2,13 +2,17 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Actions\Billing\AddInvoiceAdjustmentAction;
 use App\Actions\Billing\CreateAndSubmitInvoiceAction;
 use App\Actions\Billing\CreateInvoiceFromPurchaseOrderAction;
+use App\Actions\Billing\SubmitInvoiceAction;
 use App\Actions\Fulfillment\ApprovePurchaseOrderExceptionCloseAction;
 use App\Actions\Fulfillment\RequestPurchaseOrderExceptionCloseAction;
 use App\Enums\AccessScopeType;
 use App\Enums\DiscrepancyStatus;
 use App\Enums\DiscrepancyType;
+use App\Enums\InvoiceAdjustmentDirection;
+use App\Enums\InvoiceAdjustmentType;
 use App\Enums\InvoiceStatus;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
@@ -90,6 +94,47 @@ class ReconciliationAndInvoiceTest extends TestCase
 
         $this->expectException(DomainException::class);
         app(CreateInvoiceFromPurchaseOrderAction::class)->execute($po, $actor);
+    }
+
+    public function test_invoice_approval_amount_cannot_change_after_submission(): void
+    {
+        [$po, $actor] = $this->makePo(PurchaseOrderStatus::Fulfilled, 100, 100);
+        $invoice = app(CreateInvoiceFromPurchaseOrderAction::class)->execute($po, $actor);
+
+        app(AddInvoiceAdjustmentAction::class)->execute(
+            $invoice,
+            InvoiceAdjustmentType::Correction,
+            InvoiceAdjustmentDirection::Deduction,
+            1_000,
+            'Penyesuaian nilai yang disepakati sebelum diajukan.',
+            $actor,
+        );
+
+        $this->assertSame(3_999_000.0, (float) $invoice->refresh()->payable_amount);
+
+        app(SubmitInvoiceAction::class)->execute($invoice, $actor);
+
+        $this->assertSame(InvoiceStatus::Submitted, $invoice->refresh()->status);
+        $approval = $invoice->approvalRequests()->sole();
+        $this->assertSame(3_999_000.0, (float) $approval->amount);
+
+        try {
+            app(AddInvoiceAdjustmentAction::class)->execute(
+                $invoice,
+                InvoiceAdjustmentType::Correction,
+                InvoiceAdjustmentDirection::Addition,
+                5_000,
+                'Perubahan setelah approval diminta tidak diizinkan.',
+                $actor,
+            );
+            $this->fail('The submitted invoice approval amount must be immutable.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('sebelum diajukan', $exception->getMessage());
+        }
+
+        $this->assertSame(3_999_000.0, (float) $invoice->refresh()->payable_amount);
+        $this->assertSame(3_999_000.0, (float) $approval->refresh()->amount);
+        $this->assertSame(1, $invoice->adjustments()->count());
     }
 
     /** @return array{PurchaseOrder, User} */

@@ -25,15 +25,19 @@ class AddInvoiceAdjustmentAction
         string $description,
         User $actor,
     ): InvoiceAdjustment {
-        if (! in_array($invoice->status, [InvoiceStatus::Draft, InvoiceStatus::Submitted, InvoiceStatus::UnderReview], true)) {
-            throw new DomainException('Adjustment tidak dapat ditambahkan setelah invoice disetujui.');
-        }
-
         if ($amount <= 0 || blank($description)) {
             throw new DomainException('Nilai adjustment harus lebih dari nol dan memiliki keterangan.');
         }
 
         return DB::transaction(function () use ($invoice, $type, $direction, $amount, $description, $actor): InvoiceAdjustment {
+            $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->getKey());
+
+            // The approval request captures both amount and governance policy.
+            // Freeze invoice adjustments once it has entered that approval flow.
+            if ($invoice->status !== InvoiceStatus::Draft) {
+                throw new DomainException('Adjustment hanya dapat diubah saat invoice masih draft, sebelum diajukan untuk approval.');
+            }
+
             $adjustment = InvoiceAdjustment::query()->create([
                 'invoice_id' => $invoice->getKey(),
                 'type' => $type,
