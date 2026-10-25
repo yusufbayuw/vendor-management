@@ -324,7 +324,6 @@ class DeliveryAndReceivingTest extends TestCase
             true,
             true,
         );
-        $supplier->users()->attach($actor->getKey(), ['is_owner' => false, 'is_active' => true]);
         $unit = Unit::query()->create(['code' => fake()->unique()->bothify('KG-###'), 'name' => 'Kilogram', 'symbol' => 'kg']);
         $category = ProductCategory::query()->create(['code' => fake()->unique()->bothify('CAT-###'), 'name' => 'Protein']);
         $product = Product::query()->create([
