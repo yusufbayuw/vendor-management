@@ -5,6 +5,7 @@ namespace App\Actions\Procurement;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderResponseType;
 use App\Enums\PurchaseOrderStatus;
+use App\Enums\SystemRole;
 use App\Enums\SystemPermission;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderResponse;
@@ -67,8 +68,8 @@ class AcknowledgePurchaseOrderAction
                     throw new DomainException('Konfirmasi otomatis hanya tersedia untuk profil Lean.');
                 }
 
-                // Real supplier operators must never be silently promoted to
-                // internal users simply by presenting a different PO.
+                // Supplier accounts cannot impersonate back-office operators,
+                // including after a membership is revoked or for another supplier.
                 $internal = ! $isSupplierMember;
                 $permission = SystemPermission::DeliveryManage;
             } else {
@@ -80,6 +81,11 @@ class AcknowledgePurchaseOrderAction
             }
 
             if ($internal) {
+                if ($actor->hasAnyRole([SystemRole::SupplierAdmin->value, SystemRole::SupplierOperator->value])
+                    || $actor->suppliers()->wherePivot('is_active', true)->exists()) {
+                    throw new DomainException('Akun supplier tidak dapat mengakses jalur konfirmasi internal.');
+                }
+
                 if (! $this->access->canAccessKitchen($actor, (int) $order->sppg_kitchen_id)) {
                     throw new DomainException('User tidak memiliki scope untuk dapur pada PO ini.');
                 }
