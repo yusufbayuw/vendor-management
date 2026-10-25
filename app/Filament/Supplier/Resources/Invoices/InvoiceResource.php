@@ -58,6 +58,7 @@ class InvoiceResource extends Resource
                     ]),
                     fn (Invoice $record): ?string => $record->invoice_file,
                 )),
+            TextColumn::make('notes')->label('Catatan / Alasan Revisi')->wrap(),
             TextColumn::make('payments_count')->label('Pembayaran'),
             TextColumn::make('payment_history')
                 ->label('Riwayat Pembayaran')
