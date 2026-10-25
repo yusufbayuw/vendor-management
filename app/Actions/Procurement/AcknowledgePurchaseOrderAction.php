@@ -9,45 +9,85 @@ use App\Enums\SystemPermission;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderResponse;
 use App\Models\User;
+use App\Services\Access\UserAccessService;
 use App\Services\Supplier\SupplierOperationalEligibilityService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
 class AcknowledgePurchaseOrderAction
 {
-    public function __construct(private readonly SupplierOperationalEligibilityService $eligibility) {}
+    public function __construct(
+        private readonly SupplierOperationalEligibilityService $eligibility,
+        private readonly UserAccessService $access,
+    ) {}
 
+    /** Supplier portal only: the actor must belong to this exact supplier. */
     public function execute(PurchaseOrder $purchaseOrder, User $actor, ?string $notes = null): PurchaseOrder
     {
-        return DB::transaction(function () use ($purchaseOrder, $actor, $notes): PurchaseOrder {
-            // Lock first, then check current status/identity. Stale or racing requests
-            // cannot append a second response after the first acknowledgement.
-            $lockedOrder = PurchaseOrder::query()
-                ->lockForUpdate()
-                ->findOrFail($purchaseOrder->getKey());
+        return $this->acknowledge($purchaseOrder, $actor, $notes, false);
+    }
 
-            if ($lockedOrder->status !== PurchaseOrderStatus::Issued) {
+    /** Explicit back-office acknowledgement: no supplier membership is implied or fabricated. */
+    public function executeInternal(PurchaseOrder $purchaseOrder, User $actor, ?string $notes = null): PurchaseOrder
+    {
+        return $this->acknowledge($purchaseOrder, $actor, $notes, true);
+    }
+
+    /**
+     * Lean schedules may imply acknowledgement. The supplier path retains
+     * membership checks; an internal operator requires scoped DeliveryManage.
+     */
+    public function executeLean(PurchaseOrder $purchaseOrder, User $actor, ?string $notes = null): PurchaseOrder
+    {
+        return $this->acknowledge($purchaseOrder, $actor, $notes, null);
+    }
+
+    private function acknowledge(PurchaseOrder $purchaseOrder, User $actor, ?string $notes, ?bool $internal): PurchaseOrder
+    {
+        return DB::transaction(function () use ($purchaseOrder, $actor, $notes, $internal): PurchaseOrder {
+            $order = PurchaseOrder::query()->lockForUpdate()->findOrFail($purchaseOrder->getKey());
+
+            if ($order->status !== PurchaseOrderStatus::Issued) {
                 throw new DomainException('PO hanya dapat dikonfirmasi sekali setelah diterbitkan.');
             }
 
-            $lockedOrder->load('kitchen.organization');
-            $isLean = $lockedOrder->kitchen?->organization?->operational_profile === OperationalProfile::Lean;
+            $order->load('kitchen.organization');
+            $isLean = $order->kitchen?->organization?->operational_profile === OperationalProfile::Lean;
+            $isSupplierMember = $actor->suppliers()
+                ->whereKey($order->supplier_id)
+                ->wherePivot('is_active', true)
+                ->exists();
 
-            if (! $actor->is_active || ! (
-                $actor->can(SystemPermission::PurchaseOrderAcknowledge->value)
-                || ($isLean && $actor->can(SystemPermission::DeliveryManage->value))
-            )) {
-                throw new DomainException('User tidak berwenang mengonfirmasi PO supplier.');
+            if (! $actor->is_active) {
+                throw new DomainException('Akun pengguna tidak aktif.');
             }
 
-            if (! $actor->suppliers()
-                ->whereKey($lockedOrder->supplier_id)
-                ->wherePivot('is_active', true)
-                ->exists()) {
+            if ($internal === null) {
+                if (! $isLean) {
+                    throw new DomainException('Konfirmasi otomatis hanya tersedia untuk profil Lean.');
+                }
+
+                // Real supplier operators must never be silently promoted to
+                // internal users simply by presenting a different PO.
+                $internal = ! $isSupplierMember;
+                $permission = SystemPermission::DeliveryManage;
+            } else {
+                $permission = SystemPermission::PurchaseOrderAcknowledge;
+            }
+
+            if (! $actor->can($permission->value)) {
+                throw new DomainException('User tidak berwenang mengonfirmasi PO.');
+            }
+
+            if ($internal) {
+                if (! $this->access->canAccessKitchen($actor, (int) $order->sppg_kitchen_id)) {
+                    throw new DomainException('User tidak memiliki scope untuk dapur pada PO ini.');
+                }
+            } elseif (! $isSupplierMember) {
                 throw new DomainException('User bukan anggota aktif supplier pemilik PO.');
             }
 
-            $supplier = $lockedOrder->supplier()
+            $supplier = $order->supplier()
                 ->with(['approvalAttestation', 'documents', 'users.phoneVerificationCodes'])
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -57,19 +97,19 @@ class AcknowledgePurchaseOrderAction
             }
 
             PurchaseOrderResponse::query()->create([
-                'purchase_order_id' => $lockedOrder->getKey(),
+                'purchase_order_id' => $order->getKey(),
                 'response' => PurchaseOrderResponseType::Accepted,
                 'responded_by' => $actor->getKey(),
                 'responded_at' => now(),
                 'notes' => $notes,
             ]);
 
-            $lockedOrder->forceFill([
+            $order->forceFill([
                 'status' => PurchaseOrderStatus::Acknowledged,
                 'acknowledged_at' => now(),
             ])->save();
 
-            return $lockedOrder->refresh();
+            return $order->refresh();
         }, 3);
     }
 }
