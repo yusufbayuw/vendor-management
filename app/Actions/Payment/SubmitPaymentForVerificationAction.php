@@ -22,7 +22,7 @@ class SubmitPaymentForVerificationAction
 
     public function execute(Payment $payment, User $actor): Payment
     {
-        return DB::transaction(function () use ($payment, $actor): Payment {
+        $submitted = DB::transaction(function () use ($payment, $actor): Payment {
             // Lock the authoritative payment before examining its status.
             // Parallel submitters of the same payment then serialize here.
             $payment = Payment::query()->lockForUpdate()->findOrFail($payment->getKey());
@@ -54,5 +54,11 @@ class SubmitPaymentForVerificationAction
 
             return $payment->refresh();
         }, 3);
+
+        // Preserve the existing action contract: callers may continue using
+        // the supplied Eloquent instance for the next verification step.
+        $payment->refresh();
+
+        return $submitted;
     }
 }
