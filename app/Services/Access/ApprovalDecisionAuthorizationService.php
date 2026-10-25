@@ -24,8 +24,15 @@ class ApprovalDecisionAuthorizationService
             GovernanceProcess::PaymentVerification => SystemPermission::PaymentVerify,
         };
 
-        if (! $actor->is_active || ! $actor->can($permission->value)
-            || ! $this->access->canAccessOrganization($actor, (int) $request->organization_id)) {
+        // Supplier verification and bank changes are organization-wide decisions.
+        // Kitchen scope grants organization visibility, not governance authority.
+        $canDecideInOrganization = match ($request->process) {
+            GovernanceProcess::SupplierVerification,
+            GovernanceProcess::SupplierBankAccountChange => $this->access->canManageOrganization($actor, (int) $request->organization_id),
+            default => $this->access->canAccessOrganization($actor, (int) $request->organization_id),
+        };
+
+        if (! $actor->is_active || ! $actor->can($permission->value) || ! $canDecideInOrganization) {
             throw new DomainException('User tidak memiliki izin dan cakupan untuk memutuskan approval ini.');
         }
 
