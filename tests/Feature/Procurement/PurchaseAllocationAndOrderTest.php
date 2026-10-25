@@ -262,6 +262,81 @@ class PurchaseAllocationAndOrderTest extends TestCase
         }
     }
 
+    public function test_scoped_internal_operator_can_acknowledge_without_supplier_membership(): void
+    {
+        [$order] = $this->issuedOrderAndSupplierActor('SUP-INTERNAL-OK');
+        $operator = User::factory()->create();
+        $operator->givePermissionTo(Permission::findOrCreate(SystemPermission::PurchaseOrderAcknowledge->value, 'web'));
+        UserAccessScope::query()->create([
+            'user_id' => $operator->getKey(),
+            'scope_type' => AccessScopeType::SppgKitchen,
+            'scope_id' => $order->sppg_kitchen_id,
+        ]);
+
+        $this->assertFalse($operator->suppliers()->exists());
+        app(AcknowledgePurchaseOrderAction::class)->executeInternal($order, $operator, 'Dikonfirmasi melalui telepon.');
+
+        $this->assertSame(PurchaseOrderStatus::Acknowledged, $order->refresh()->status);
+        $this->assertSame($operator->getKey(), $order->responses()->sole()->responded_by);
+
+        try {
+            app(AcknowledgePurchaseOrderAction::class)->executeInternal($order, $operator, 'Replay.');
+            $this->fail('Internal replay must be refused.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('sekali', $exception->getMessage());
+        }
+        $this->assertSame(1, $order->responses()->count());
+    }
+
+    public function test_internal_operator_requires_kitchen_scope_and_eligible_supplier(): void
+    {
+        [$order, $supplier] = $this->issuedOrderAndSupplierActor('SUP-INTERNAL-SCOPE');
+        $operator = User::factory()->create();
+        $operator->givePermissionTo(Permission::findOrCreate(SystemPermission::PurchaseOrderAcknowledge->value, 'web'));
+
+        try {
+            app(AcknowledgePurchaseOrderAction::class)->executeInternal($order, $operator);
+            $this->fail('Unscoped internal actor must be denied.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('scope', $exception->getMessage());
+        }
+
+        UserAccessScope::query()->create([
+            'user_id' => $operator->getKey(),
+            'scope_type' => AccessScopeType::SppgKitchen,
+            'scope_id' => $order->sppg_kitchen_id,
+        ]);
+        app(SuspendSupplierAction::class)->execute($supplier, 'Suspended after PO issuance.');
+
+        try {
+            app(AcknowledgePurchaseOrderAction::class)->executeInternal($order->refresh(), $operator);
+            $this->fail('Suspended supplier must not be acknowledged by internal actor.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('eligible', $exception->getMessage());
+        }
+
+        $this->assertSame(PurchaseOrderStatus::Issued, $order->refresh()->status);
+        $this->assertSame(0, $order->responses()->count());
+    }
+
+    public function test_supplier_member_cannot_invoke_internal_takeover(): void
+    {
+        [$order, , $member] = $this->issuedOrderAndSupplierActor('SUP-ACK-INT-DENY');
+        UserAccessScope::query()->create([
+            'user_id' => $member->getKey(),
+            'scope_type' => AccessScopeType::SppgKitchen,
+            'scope_id' => $order->sppg_kitchen_id,
+        ]);
+
+        try {
+            app(AcknowledgePurchaseOrderAction::class)->executeInternal($order, $member);
+            $this->fail('Supplier member must use the supplier path.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('supplier', strtolower($exception->getMessage()));
+        }
+        $this->assertSame(0, $order->responses()->count());
+    }
+
     /** @return array{\\App\\Models\\PurchaseOrder, Supplier, User} */
     private function issuedOrderAndSupplierActor(string $code): array
     {
