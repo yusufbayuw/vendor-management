@@ -5,8 +5,8 @@ namespace App\Actions\Procurement;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderResponseType;
 use App\Enums\PurchaseOrderStatus;
-use App\Enums\SystemRole;
 use App\Enums\SystemPermission;
+use App\Enums\SystemRole;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderResponse;
 use App\Models\User;
@@ -70,7 +70,7 @@ class AcknowledgePurchaseOrderAction
 
                 // Supplier accounts cannot impersonate back-office operators,
                 // including after a membership is revoked or for another supplier.
-                $internal = ! $isSupplierMember;
+                $internal = $isSupplierMember === false;
                 $permission = SystemPermission::DeliveryManage;
             } else {
                 $permission = SystemPermission::PurchaseOrderAcknowledge;
