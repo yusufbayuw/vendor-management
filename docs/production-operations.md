@@ -95,6 +95,10 @@ The registered reminder `vendor:send-reminders` executes daily at 07:00 **Asia/J
 
 All following commands are examples for a **trusted operator** on a secure server, with restrictive filesystem permissions and a storage target separate from the production disk. Protect backups at rest and in transit. Create a restricted MariaDB defaults file containing credentials (`chmod 600`), instead of including passwords on the process command line. Verify actual binary names (`mariadb-dump` vs `mysqldump`) on the host.
 
+**Consistency gate:** `--single-transaction` makes the InnoDB SQL dump internally consistent, but it **does not synchronize files uploaded to storage** with that database snapshot. For an application-consistent database + `storage/app` pair, the operator must obtain approval for a short write-quiescence/maintenance window, **drain and pause queue writers**, verify that no import or upload is in flight, take both copies, and resume only after successful integrity checks. Alternatively use an approved coordinated DB-and-filesystem snapshot strategy. Do not assume a running site plus consecutive SQL and tar commands is an atomic backup. Record the chosen strategy and its time window in the release evidence. Do not pause live services without explicit owner/operator approval.
+
+`BACKUP_ROOT` below is a **restricted temporary destination**, not proof of off-host backup. Complete a protected transfer to an independent destination and verify its checksum **there** before calling the backup successful. Include `storage/app` to capture private vendor uploads and any remaining legitimate legacy file storage, not only the vendor subdirectory.
+
 ```bash
 set -euo pipefail
 umask 077
@@ -105,20 +109,24 @@ mariadb-dump --defaults-extra-file="$HOME/.vendor-backup.cnf" \
   --single-transaction --quick --routines --triggers --events "$DB_NAME" \
   | gzip -9 > "$BACKUP_ROOT/db-$STAMP.sql.gz"
 tar -C "$APP_ROOT" -czf "$BACKUP_ROOT/storage-$STAMP.tar.gz" storage/app
-sha256sum "$BACKUP_ROOT/db-$STAMP.sql.gz" "$BACKUP_ROOT/storage-$STAMP.tar.gz" \
-  > "$BACKUP_ROOT/checksums-$STAMP.txt"
+(
+  cd "$BACKUP_ROOT"
+  sha256sum "db-$STAMP.sql.gz" "storage-$STAMP.tar.gz" > "checksums-$STAMP.txt"
+)
 chmod 600 "$BACKUP_ROOT"/*"$STAMP"*
 ```
 
-Validate archive integrity using `gzip -t`, `tar -tzf` and stored SHA-256 hashes. Back up app/release SHA, package lock hash, database schema metadata, queue configuration and secrets **references** (not secret values). Store `.env`/keys separately in an encrypted authorized secret recovery system; an encrypted backup is still sensitive data. Configure scheduled backups, off-host retention, access control, restore ownership, and alarms on backup failure. Choose RPO/RTO with the PM; no RPO/RTO claim is valid before a timed restore drill.
+Validate archive integrity using `gzip -t`, `tar -tzf` and stored SHA-256 hashes **before transfer**. On the independent backup host, verify the transferred files using `(cd "$OFFSITE_BACKUP_DIR" && sha256sum -c "checksums-$STAMP.txt")`. The checksum manifest intentionally uses **relative file names** so verification works after transfer. The receiving host must be separately secured, encrypted, access-limited and outside the failure domain of the primary server; do not print its credentials or private archive contents in tickets. Record only the timestamp, opaque archive ID, checksum verification **result**, approximate size and destination class (not secret paths). A local copy is only an intermediate artifact, not a completed off-host backup.
+
+Back up app/release SHA, package lock hash, database schema metadata, queue configuration and secrets **references** (not secret values). Store `.env`/keys separately in an encrypted authorized secret recovery system; an encrypted backup is still sensitive data. Configure scheduled backups, off-host retention, access control, restore ownership, and alarms on backup failure. Choose RPO/RTO with the PM; no RPO/RTO claim is valid before a timed restore drill.
 
 ## 6. Mandatory isolated restore drill (never production)
 
-1. Provision a temporary restricted MariaDB **restore database** and separate staging filesystem. Confirm the active DB name is not the restore target.
+1. Provision a temporary restricted MariaDB **restore database** and separate staging filesystem on an **isolated host**. The operator must independently verify the connection hostname, database identifier, and permissions (the restore credential must have **no production database access**), with a separate approval before any import. Confirm the active DB name is not the restore target.
 2. Verify backups' SHA-256 and archive integrity. Restore with `gunzip -c <backup> | mariadb --defaults-extra-file=<secured-file> <restore-db>` **only after manually validating the target**; restore `storage/app` into the isolated staging path, preserving permissions and private files.
 3. Use a distinct staging `.env` / signing keys and isolated queues. Prevent real email, SMS, Web Push and supplier notifications from being dispatched during restore; staging must not contact production integrations.
 4. Read-check representative organization/supplier/document records and a private attachment against expected snapshots without exporting real rows to issue logs. Validate `migrate:status`, permissions, storage accessibility and relevant workflows on staging.
-5. Record date/time, tested backup IDs/hashes, DB and file validation results, elapsed recovery time, operator and corrective actions. Destroy the isolated environment under the approved retention policy.
+5. Measure actual elapsed restore time from the first restore operation until both database and private document checks pass. Record date/time, tested backup IDs (hash verification **pass/fail**, not the archive contents), DB row-count reconciliation (aggregate only), representative private-file read result, elapsed recovery time, operator and corrective actions. Compare the observed RTO and backup age/RPO with targets **approved by the PM**; do not invent a target or claim compliance without one. Destroy the isolated environment under the approved retention policy.
 
 **Release gate:** A green CI and preflight do not replace an actual restore drill. If restore was not performed, production readiness is *not verified*.
 
@@ -128,7 +136,7 @@ Validate archive integrity using `gzip -t`, `tar -tzf` and stored SHA-256 hashes
 
 **Production smoke (non-destructive):** verify TLS certificate and HTTPS redirect, `GET /up`, expected panels rendering without JS console errors, application/queue/scheduler status, no anomalous spikes in `failed_jobs`, disk/DB health, backup freshness and existing-user sign-in by an authorized operator. Avoid test payments and test supplier records on the real database.
 
-**Monitoring:** alert on HTTP health errors, TLS expiry, PHP/nginx failures, abnormal 5xx rate, database availability, disk/inode saturation, queue age/backlog/failures, cron/scheduler missed execution, backup-age/hash/integrity failures, security/permission-denied spikes and new `composer audit` advisories. Keep logs access-restricted and rotated; redact signed URLs, sessions, credentials and supplier private data.
+**Monitoring (minimal footprint):** use the existing aaPanel scheduled tasks/notifications, Supervisor process restarts, nginx/PHP/MariaDB logs and one independent HTTPS uptime check; no additional metrics stack is required for initial launch. Set explicit notification recipients and on-call owners. Alert on HTTP `/up` failures and TLS expiry, PHP/nginx errors/5xx, MariaDB unavailability, disk **and inode** saturation, queue backlog age and failed-job counts, missing scheduler heartbeat/reminder execution, missing or invalid offsite backup, and repeated unexpected authorization failures. Agree warning/critical thresholds and check cadence with the operator; record test-alert delivery. Suggested read-only checks for the operator include `supervisorctl status`, `php artisan schedule:list`, aggregate counts for `jobs` and `failed_jobs`, `df -h`, `df -i`, MariaDB `SELECT 1`, and `curl -fsS --max-time 10 https://YOUR-STAGING-HOST/up`. These commands check configuration/current state **only**; a real scheduled job and alert-delivery exercise are still required. Do not paste queue payloads, full failure traces or personal data into GitHub. Keep logs access-restricted and rotated; redact signed URLs, sessions, credentials and supplier private data.
 
 **Rollback:** stop release and notify PM; preserve diagnostic metadata. Roll back code/assets using the previous verified commit/release and matching `composer.lock`, then clear framework caches and restart workers under a maintenance window. Do **not** automatically reverse DB migrations or import batches. If database restoration is required, request explicit incident/PM approval, account for writes made since backup, and restore the paired database + private file archive to a validated target. Perform post-rollback smoke and record final status.
 
@@ -139,3 +147,8 @@ Validate archive integrity using `gzip -t`, `tar -tzf` and stored SHA-256 hashes
 - Backup archive hashes and independent restore-drill outcome with recovery measurements.
 - Verified rollback procedure/previous release and alerting ownership.
 - Remaining defects recorded as issues with severity, scoped owner and release blocker classification.
+
+
+## 9. Operator evidence record
+
+Use [release-readiness-evidence-template.md](release-readiness-evidence-template.md) for a time-stamped, redacted PASS/FAIL/BLOCKED/NOT TESTED matrix. **CI success does not upgrade a host-level or disaster-recovery gate to PASS.** Every PASS needs an actual environment, operator, execution time and verifiable redacted result. Only the operator on the approved staging/backup host may run the destructive restore drill, and only after the target database is independently verified not to be production.

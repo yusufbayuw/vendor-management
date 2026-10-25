@@ -44,6 +44,7 @@ class InvoiceResource extends Resource
             TextColumn::make('po_amount')->label('Nilai PO')->money('IDR'),
             TextColumn::make('adjustment_amount')->label('Adjustment')->money('IDR')->toggleable(),
             TextColumn::make('payable_amount')->label('Payable')->money('IDR'),
+            TextColumn::make('notes')->label('Catatan / Alasan Revisi')->wrap(),
             TextColumn::make('invoice_file')
                 ->label('File Invoice')
                 ->icon('heroicon-o-paper-clip')
