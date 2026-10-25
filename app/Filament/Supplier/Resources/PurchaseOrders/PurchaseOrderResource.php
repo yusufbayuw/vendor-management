@@ -60,6 +60,8 @@ class PurchaseOrderResource extends Resource
                 ->visible(fn (PurchaseOrder $record) => $record->status === PurchaseOrderStatus::Issued && ! static::isLean($record) && static::allowed($record, SystemPermission::PurchaseOrderAcknowledge))
                 ->schema([Textarea::make('notes')->label('Catatan')->rows(3)])
                 ->action(function (PurchaseOrder $record, array $data): void {
+                    abort_unless(static::allowed($record, SystemPermission::PurchaseOrderAcknowledge), 403);
+
                     static::run(fn () => app(AcknowledgePurchaseOrderAction::class)->execute($record, auth()->user(), $data['notes'] ?? null), 'PO berhasil dikonfirmasi.');
                 }),
             Action::make('schedule')->label('Jadwalkan Kirim')->color('warning')
@@ -85,6 +87,8 @@ class PurchaseOrderResource extends Resource
                         ->required(),
                     Textarea::make('notes')->label('Catatan')->rows(3),
                 ])->action(function (PurchaseOrder $record, array $data): void {
+                    abort_unless(static::allowed($record, SystemPermission::DeliveryManage), 403);
+
                     static::run(function () use ($record, $data): void {
                         $items = [];
                         foreach ($data['items'] ?? [] as $row) {
@@ -126,7 +130,7 @@ class PurchaseOrderResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->whereIn('supplier_id', static::supplierIds())
+        return $query->whereIn('supplier_id', static::readableSupplierIds())
             ->whereNotIn('status', [PurchaseOrderStatus::Draft->value, PurchaseOrderStatus::PendingApproval->value, PurchaseOrderStatus::Approved->value]);
     }
 
@@ -135,7 +139,7 @@ class PurchaseOrderResource extends Resource
         $user = auth()->user();
 
         return $user !== null
-            && app(SupplierPortalAccessService::class)->hasActiveSupplier($user)
+            && app(SupplierPortalAccessService::class)->hasReadableSupplier($user)
             && ($user->can(SystemPermission::PurchaseOrderAcknowledge->value) || $user->can(SystemPermission::DeliveryManage->value));
     }
 
@@ -165,6 +169,12 @@ class PurchaseOrderResource extends Resource
     {
         return auth()->user()?->can($permission->value)
             && in_array($po->supplier_id, static::supplierIds(), true);
+    }
+
+    /** @return array<int, int> */
+    private static function readableSupplierIds(): array
+    {
+        return app(SupplierPortalAccessService::class)->readableSupplierIds(auth()->user());
     }
 
     private static function supplierIds(): array
