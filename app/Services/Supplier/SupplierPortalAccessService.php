@@ -2,6 +2,7 @@
 
 namespace App\Services\Supplier;
 
+use App\Enums\SupplierStatus;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -36,6 +37,7 @@ class SupplierPortalAccessService
         }
 
         return $this->suppliersFor($user)
+            ->filter(fn (Supplier $supplier): bool => $supplier->status === SupplierStatus::Suspended || $this->isOperationallyEligible($supplier))
             ->pluck('id')
             ->map(static fn ($id): int => (int) $id)
             ->all();
