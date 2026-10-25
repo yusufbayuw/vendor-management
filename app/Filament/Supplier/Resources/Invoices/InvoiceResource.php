@@ -97,10 +97,14 @@ class InvoiceResource extends Resource
                 }),
             Action::make('submit')->label('Ajukan Invoice')->color('primary')->requiresConfirmation()
                 ->visible(fn (Invoice $record) => $record->status === InvoiceStatus::Draft && static::owned($record))
-                ->action(fn (Invoice $record) => static::run(
-                    fn () => app(SubmitInvoiceAction::class)->execute($record, auth()->user()),
-                    'Invoice berhasil diajukan.',
-                )),
+                ->action(function (Invoice $record): void {
+                    abort_unless(static::owned($record), 403);
+
+                    static::run(
+                        fn () => app(SubmitInvoiceAction::class)->execute($record, auth()->user()),
+                        'Invoice berhasil diajukan.',
+                    );
+                }),
         ]);
     }
 
@@ -109,7 +113,7 @@ class InvoiceResource extends Resource
         return parent::getEloquentQuery()
             ->with(['purchaseOrder', 'kitchen'])
             ->withCount('payments')
-            ->whereIn('supplier_id', static::supplierIds());
+            ->whereIn('supplier_id', static::readableSupplierIds());
     }
 
     public static function canViewAny(): bool
@@ -117,7 +121,7 @@ class InvoiceResource extends Resource
         $user = auth()->user();
 
         return $user !== null
-            && app(SupplierPortalAccessService::class)->hasActiveSupplier($user)
+            && app(SupplierPortalAccessService::class)->hasReadableSupplier($user)
             && $user->can(SystemPermission::InvoiceSubmit->value);
     }
 
@@ -139,6 +143,12 @@ class InvoiceResource extends Resource
     public static function supplierIds(): array
     {
         return app(SupplierPortalAccessService::class)->activeSupplierIds(auth()->user());
+    }
+
+    /** @return array<int, int> */
+    private static function readableSupplierIds(): array
+    {
+        return app(SupplierPortalAccessService::class)->readableSupplierIds(auth()->user());
     }
 
     private static function owned(Invoice $invoice): bool
