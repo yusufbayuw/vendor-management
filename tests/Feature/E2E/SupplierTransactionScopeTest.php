@@ -3,11 +3,14 @@
 namespace Tests\Feature\E2E;
 
 use App\Enums\DeliveryScheduleStatus;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
 use App\Enums\SupplierStatus;
 use App\Filament\Supplier\Resources\DeliverySchedules\DeliveryScheduleResource;
 use App\Filament\Supplier\Resources\Invoices\InvoiceResource;
 use App\Filament\Supplier\Resources\PurchaseOrders\PurchaseOrderResource;
 use App\Models\DeliverySchedule;
+use App\Models\Payment;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\Supplier;
@@ -87,6 +90,25 @@ class SupplierTransactionScopeTest extends TestCase
             'created_by' => $user->getKey(),
         ]);
 
+        Payment::query()->create([
+            'number' => 'PAY-SUSPENDED-OWN',
+            'invoice_id' => $ayamPo->invoice()->firstOrFail()->getKey(),
+            'payment_date' => today(),
+            'amount' => 250_000,
+            'payment_method' => PaymentMethod::BankTransfer,
+            'status' => PaymentStatus::Verified,
+            'created_by' => $user->getKey(),
+        ]);
+        Payment::query()->create([
+            'number' => 'PAY-OTHER-SUPPLIER',
+            'invoice_id' => $taniPo->invoice()->firstOrFail()->getKey(),
+            'payment_date' => today(),
+            'amount' => 300_000,
+            'payment_method' => PaymentMethod::BankTransfer,
+            'status' => PaymentStatus::Verified,
+            'created_by' => $user->getKey(),
+        ]);
+
         $ayam->forceFill(['status' => SupplierStatus::Suspended])->save();
 
         $access = app(SupplierPortalAccessService::class);
@@ -102,7 +124,10 @@ class SupplierTransactionScopeTest extends TestCase
         $this->get(route('filament.supplier.resources.invoices.index'))
             ->assertOk()
             ->assertSee($ayamPo->invoice()->firstOrFail()->number)
-            ->assertDontSee($taniPo->invoice()->firstOrFail()->number);
+            ->assertDontSee($taniPo->invoice()->firstOrFail()->number)
+            ->assertSee('PAY-SUSPENDED-OWN')
+            ->assertDontSee('PAY-OTHER-SUPPLIER')
+            ->assertDontSee('Buat Invoice');
 
         $this->get(route('filament.supplier.resources.delivery-schedules.index'))
             ->assertOk()
