@@ -9,6 +9,7 @@ use App\Actions\Fulfillment\CreateDeliveryScheduleAction;
 use App\Actions\Fulfillment\InspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordAndInspectGoodsReceiptAction;
 use App\Actions\Fulfillment\RecordGoodsReceiptAction;
+use App\Actions\Supplier\ActivateSupplierWithOverrideAction;
 use App\Enums\AccessScopeType;
 use App\Enums\ApprovalDecisionSource;
 use App\Enums\DeliveryScheduleStatus;
@@ -317,7 +318,7 @@ class DeliveryAndReceivingTest extends TestCase
             'email' => fake()->unique()->safeEmail(),
             'phone' => '08123456789',
         ]);
-        $supplier = app(\App\Actions\Supplier\ActivateSupplierWithOverrideAction::class)->execute(
+        $supplier = app(ActivateSupplierWithOverrideAction::class)->execute(
             $supplier,
             $actor,
             'Supplier fixture internal eligible untuk pengujian fulfillment.',
