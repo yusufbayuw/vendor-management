@@ -22,6 +22,30 @@ class SupplierPortalAccessService
             ->all();
     }
 
+    /**
+     * Transaction-history access follows active supplier membership, not the
+     * supplier's ability to accept new work. Suspended suppliers retain their
+     * own historic records, but deactivated or unverified users do not.
+     *
+     * @return array<int, int>
+     */
+    public function readableSupplierIds(?User $user): array
+    {
+        if (! $this->userCanUsePortal($user)) {
+            return [];
+        }
+
+        return $this->suppliersFor($user)
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    public function hasReadableSupplier(?User $user): bool
+    {
+        return $this->readableSupplierIds($user) !== [];
+    }
+
     public function hasActiveSupplier(?User $user): bool
     {
         return $this->userCanUsePortal($user)
