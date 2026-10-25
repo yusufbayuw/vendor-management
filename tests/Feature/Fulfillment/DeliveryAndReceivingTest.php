@@ -18,7 +18,6 @@ use App\Enums\DiscrepancyType;
 use App\Enums\GoodsReceiptStatus;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
-use App\Enums\SupplierStatus;
 use App\Enums\SystemPermission;
 use App\Models\Organization;
 use App\Models\Product;
