@@ -5,12 +5,10 @@ namespace App\Filament\Supplier\Resources\PurchaseOrders;
 use App\Actions\Fulfillment\CreateAndConfirmDeliveryScheduleAction;
 use App\Actions\Fulfillment\CreateDeliveryScheduleAction;
 use App\Actions\Procurement\AcknowledgePurchaseOrderAction;
-use App\Enums\DeliveryScheduleStatus;
 use App\Enums\OperationalProfile;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\SystemPermission;
 use App\Filament\Supplier\Resources\PurchaseOrders\Pages\ManagePurchaseOrders;
-use App\Models\DeliveryScheduleItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Services\Supplier\SupplierPortalAccessService;
@@ -209,12 +207,7 @@ class PurchaseOrderResource extends Resource
 
     private static function remaining(PurchaseOrderItem $item): float
     {
-        $scheduled = (float) DeliveryScheduleItem::query()
-            ->where('purchase_order_item_id', $item->getKey())
-            ->whereHas('deliverySchedule', fn (Builder $q) => $q->where('status', '!=', DeliveryScheduleStatus::Cancelled->value))
-            ->sum('planned_qty');
-
-        return max(0, (float) $item->ordered_qty - $scheduled);
+        return app(CreateDeliveryScheduleAction::class)->remainingSchedulableQuantity($item);
     }
 
     private static function qty(float $value): string
