@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Procurement;
 
-use App\Actions\Procurement\AllocateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\AcknowledgePurchaseOrderAction;
+use App\Actions\Procurement\AllocateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\AllocatePurchaseRequestItemAction;
 use App\Actions\Procurement\CreateAndIssuePurchaseOrdersAction;
 use App\Actions\Procurement\GeneratePurchaseOrdersAction;
